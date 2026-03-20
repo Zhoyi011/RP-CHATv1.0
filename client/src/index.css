@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 手机端优化 */
+@media (max-width: 768px) {
+  /* 防止字体过大 */
+  html {
+    font-size: 14px;
+  }
+  
+  /* 点击元素去掉默认高亮 */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* 按钮和可点击元素优化 */
+  button, 
+  [role="button"],
+  .cursor-pointer {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  
+  /* 列表项点击反馈 */
+  .clickable:active {
+    opacity: 0.7;
+    background-color: rgba(0,0,0,0.05);
+  }
+}
+
+/* 手机横屏优化 */
+@media (max-width: 768px) and (orientation: landscape) {
+  .message-bubble {
+    max-width: 50%;
+  }
+}
+
+/* 防止滚动条导致布局偏移 */
+html {
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 确保高度正确 */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}

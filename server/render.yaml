@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: rp-chat-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGODB_URI
+        sync: false  # 在 Render 网页上手动设置
+      - key: JWT_SECRET
+        sync: false
