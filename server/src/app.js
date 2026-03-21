@@ -29,12 +29,18 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 
-// ===== 限流 =====
+// ===== 限流配置 =====
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 500,
-  message: '请求过于频繁，请稍后再试',
-  keyGenerator: (req) => req.ip || req.connection.remoteAddress
+  windowMs: 60 * 1000, // 1分钟
+  max: 100, // 每个IP最多100个请求
+  message: { error: '请求过于频繁，请稍后再试' }, // 返回 JSON
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress,
+  skip: (req) => {
+    // 跳过语音房相关接口的限流
+    return req.path.includes('/voice') || req.path.includes('/socket.io');
+  }
 });
 app.use('/api', limiter);
 
@@ -128,29 +134,41 @@ const onlineUsers = new Map();
 // ========== 语音房间存储 ==========
 const voiceRooms = new Map(); // roomId -> Map(socketId -> userInfo)
 
+// ========== 定期清理无效连接 ==========
+setInterval(() => {
+  const now = Date.now();
+  voiceRooms.forEach((roomUsers, roomId) => {
+    roomUsers.forEach((userInfo, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket) {
+        roomUsers.delete(socketId);
+        console.log(`清理无效连接: ${userInfo.userId}`);
+      }
+    });
+    if (roomUsers.size === 0) {
+      voiceRooms.delete(roomId);
+      console.log(`📭 语音房 ${roomId} 已空，已移除`);
+    }
+  });
+}, 30000); // 每30秒清理一次
+
 // ========== Socket 事件处理 ==========
 io.on('connection', (socket) => {
   console.log('🟢 新客户端连接:', socket.id);
   
   // ========== 文字聊天室 ==========
-  
-  // 用户加入房间
   socket.on('join-room', async ({ roomId, userId, personaId }) => {
     try {
       socket.join(roomId);
-      
       onlineUsers.set(socket.id, { userId, roomId, personaId, socketId: socket.id });
-      
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === roomId);
       io.to(roomId).emit('room-online-count', { roomId, count: roomUsers.length });
-      
       console.log(`👤 用户 ${userId} 使用角色 ${personaId} 加入房间 ${roomId}`);
     } catch (error) {
       console.error('加入房间失败:', error);
     }
   });
   
-  // 发送消息
   socket.on('send-message', async (data) => {
     const { roomId, userId, personaId, content, isAction } = data;
     
@@ -201,7 +219,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // 切换角色
   socket.on('switch-persona', ({ userId, newPersonaId }) => {
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
@@ -211,7 +228,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // 离开房间
   socket.on('leave-room', () => {
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
@@ -224,8 +240,6 @@ io.on('connection', (socket) => {
   });
   
   // ========== 语音房 ==========
-  
-  // 加入语音房间
   socket.on('join-voice-room', ({ roomId, userId, personaId, personaName, username, avatar }) => {
     console.log(`🎙️ 用户 ${username} (${userId}) 加入语音房 ${roomId}`);
     
@@ -235,7 +249,6 @@ io.on('connection', (socket) => {
     
     const roomUsers = voiceRooms.get(roomId);
     
-    // 检查是否是房主（房间创建者）
     let isCreator = false;
     const VoiceRoom = require('./models/VoiceRoom');
     VoiceRoom.findById(roomId).then(room => {
@@ -257,16 +270,13 @@ io.on('connection', (socket) => {
     };
     roomUsers.set(socket.id, userInfo);
     
-    // 加入房间
     socket.join(`voice-${roomId}`);
     socket.data.voiceRoomId = roomId;
     socket.data.userId = userId;
     socket.data.userInfo = userInfo;
     
-    // 通知房间内其他用户
     socket.to(`voice-${roomId}`).emit('user-joined-voice', userInfo);
     
-    // 发送当前房间用户列表给新加入的用户
     const userList = Array.from(roomUsers.values()).map(u => ({
       userId: u.userId,
       personaId: u.personaId,
@@ -279,12 +289,10 @@ io.on('connection', (socket) => {
     }));
     socket.emit('voice-users', { users: userList });
     
-    // 更新语音房的 memberCount
     const VoiceRoomModel = require('./models/VoiceRoom');
     VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
   });
   
-  // 离开语音房间
   socket.on('leave-voice-room', ({ roomId, userId }) => {
     console.log(`🎙️ 用户 ${userId} 离开语音房 ${roomId}`);
     
@@ -308,7 +316,6 @@ io.on('connection', (socket) => {
         voiceRooms.delete(roomId);
         console.log(`📭 语音房 ${roomId} 已空，已移除`);
       } else {
-        // 更新语音房的 memberCount
         const VoiceRoomModel = require('./models/VoiceRoom');
         VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
       }
@@ -320,16 +327,13 @@ io.on('connection', (socket) => {
     delete socket.data.userInfo;
   });
   
-  // WebRTC 信令转发
   socket.on('voice-signal', ({ roomId, targetUserId, signal }) => {
-    // 转发信令给目标用户
     socket.to(`voice-${roomId}`).emit('voice-signal', {
       fromUserId: socket.data.userId,
       signal
     });
   });
   
-  // 麦克风状态改变
   socket.on('voice-mute', ({ roomId, userId, muted }) => {
     const roomUsers = voiceRooms.get(roomId);
     if (roomUsers) {
@@ -344,12 +348,14 @@ io.on('connection', (socket) => {
     socket.to(`voice-${roomId}`).emit('voice-mute-changed', { userId, muted });
   });
   
-  // 语音聊天消息
   socket.on('voice-message', ({ roomId, message }) => {
     socket.to(`voice-${roomId}`).emit('voice-message', message);
   });
   
-  // 语音活动检测（说话状态）
+  socket.on('voice-heartbeat', () => {
+    socket.emit('voice-heartbeat-ack');
+  });
+  
   socket.on('voice-speaking', ({ roomId, userId, isSpeaking }) => {
     const roomUsers = voiceRooms.get(roomId);
     if (roomUsers) {
@@ -368,7 +374,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('🔌 客户端断开:', socket.id);
     
-    // 处理文字聊天室离开
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
       onlineUsers.delete(socket.id);
@@ -377,7 +382,6 @@ io.on('connection', (socket) => {
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
     }
     
-    // 处理语音房离开
     const voiceRoomId = socket.data.voiceRoomId;
     if (voiceRoomId) {
       const roomUsers = voiceRooms.get(voiceRoomId);
@@ -408,6 +412,5 @@ io.on('connection', (socket) => {
   });
 });
 
-// 导出 io 供其他模块使用
 module.exports.io = io;
 module.exports.server = server;

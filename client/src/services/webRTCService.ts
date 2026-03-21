@@ -10,8 +10,8 @@ class WebRTCService {
   private audioElements: Map<string, HTMLAudioElement> = new Map();
   private speakingDetection: Map<string, ReturnType<typeof setInterval>> = new Map();
   private onSpeakingChange: ((userId: string, isSpeaking: boolean) => void) | null = null;
+  private isInitializing = false;
 
-  // 配置
   private configuration: RTCConfiguration = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -23,10 +23,20 @@ class WebRTCService {
     iceCandidatePoolSize: 10,
   };
 
-  // 获取本地麦克风流
   async getLocalStream(): Promise<MediaStream> {
     if (this.localStream) return this.localStream;
+    if (this.isInitializing) {
+      return new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (this.localStream) {
+            clearInterval(check);
+            resolve(this.localStream);
+          }
+        }, 100);
+      });
+    }
     
+    this.isInitializing = true;
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -36,18 +46,16 @@ class WebRTCService {
           sampleRate: 48000,
         },
       });
-      
-      // 开始检测说话状态
       this.startSpeakingDetection();
-      
       return this.localStream;
     } catch (error) {
       console.error('获取麦克风失败:', error);
       throw error;
+    } finally {
+      this.isInitializing = false;
     }
   }
 
-  // 关闭本地麦克风
   closeLocalStream() {
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
@@ -56,7 +64,6 @@ class WebRTCService {
     this.stopSpeakingDetection();
   }
 
-  // 静音/取消静音本地麦克风
   setMute(muted: boolean) {
     if (this.localStream) {
       this.localStream.getAudioTracks().forEach(track => {
@@ -65,14 +72,12 @@ class WebRTCService {
     }
   }
 
-  // 获取静音状态
   isMuted(): boolean {
     if (!this.localStream) return true;
     const track = this.localStream.getAudioTracks()[0];
     return track ? !track.enabled : true;
   }
 
-  // 检测说话状态
   private startSpeakingDetection() {
     if (!this.localStream) return;
     
@@ -86,7 +91,8 @@ class WebRTCService {
     
     const checkSpeaking = () => {
       analyser.getByteFrequencyData(dataArray);
-      const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      const values = Array.from(dataArray);
+      const average = values.reduce((a, b) => a + b, 0) / values.length;
       const isSpeaking = average > 20;
       
       if (this.onSpeakingChange) {
@@ -103,36 +109,30 @@ class WebRTCService {
     this.speakingDetection.clear();
   }
 
-  // 设置说话状态回调
   setOnSpeakingChange(callback: (userId: string, isSpeaking: boolean) => void) {
     this.onSpeakingChange = callback;
   }
 
-  // 创建 PeerConnection
   createPeerConnection(userId: string, onTrack: (stream: MediaStream) => void): RTCPeerConnection {
     const pc = new RTCPeerConnection(this.configuration);
     
-    // 添加本地流
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
         pc.addTrack(track, this.localStream!);
       });
     }
     
-    // 处理远程流
     pc.ontrack = (event) => {
       console.log('收到远程流:', userId);
       onTrack(event.streams[0]);
     };
     
-    // ICE 候选
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.onIceCandidate?.(userId, event.candidate);
       }
     };
     
-    // 连接状态变化
     pc.onconnectionstatechange = () => {
       console.log(`连接状态变化 [${userId}]:`, pc.connectionState);
     };
@@ -141,15 +141,12 @@ class WebRTCService {
     return pc;
   }
 
-  // ICE 候选回调
   onIceCandidate: ((userId: string, candidate: RTCIceCandidate) => void) | null = null;
 
-  // 获取 PeerConnection
   getPeerConnection(userId: string): RTCPeerConnection | undefined {
     return this.peerConnections.get(userId);
   }
 
-  // 关闭 PeerConnection
   closePeerConnection(userId: string) {
     const pc = this.peerConnections.get(userId);
     if (pc) {
@@ -165,9 +162,8 @@ class WebRTCService {
     }
   }
 
-  // 关闭所有连接
   closeAllConnections() {
-    this.peerConnections.forEach((pc, userId) => {
+    this.peerConnections.forEach((pc) => {
       pc.close();
     });
     this.peerConnections.clear();
@@ -181,7 +177,6 @@ class WebRTCService {
     this.closeLocalStream();
   }
 
-  // 创建音频元素播放远程流
   createAudioElement(userId: string, stream: MediaStream): HTMLAudioElement {
     let audioEl = this.audioElements.get(userId);
     if (audioEl) {
@@ -195,7 +190,6 @@ class WebRTCService {
     audioEl.autoplay = true;
     audioEl.volume = 1.0;
     
-    // 检测远程用户的说话状态
     const audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
@@ -206,7 +200,8 @@ class WebRTCService {
     
     const checkSpeaking = () => {
       analyser.getByteFrequencyData(dataArray);
-      const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      const values = Array.from(dataArray);
+      const average = values.reduce((a, b) => a + b, 0) / values.length;
       const isSpeaking = average > 15;
       
       if (this.onSpeakingChange) {
@@ -223,7 +218,6 @@ class WebRTCService {
     return audioEl;
   }
 
-  // 设置音量
   setVolume(userId: string, volume: number) {
     const audioEl = this.audioElements.get(userId);
     if (audioEl) {
@@ -231,7 +225,6 @@ class WebRTCService {
     }
   }
 
-  // 获取所有连接的用户ID
   getConnectedUsers(): string[] {
     return Array.from(this.peerConnections.keys());
   }
