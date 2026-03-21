@@ -104,7 +104,6 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
             <span className="text-xs mt-1">搜索</span>
           </button>
 
-          // 群聊按钮 - 确保 onClick 正确
           <button
             onClick={() => navigate('/chat')}
             className="w-full py-3 flex flex-col items-center justify-center text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-xl transition-colors relative"
@@ -115,7 +114,6 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           <span className="text-xs mt-1">群聊</span>
         </button>
 
-    //私聊按钮
 <button
   onClick={() => navigate('/chat?tab=private')}
   className="w-full py-3 flex flex-col items-center justify-center text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-colors"
