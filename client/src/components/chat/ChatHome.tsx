@@ -9,6 +9,7 @@ import CreateRoom from './CreateRoom';
 import PrivateChat from './PrivateChat';
 import UserList from '../user/UserList';
 import ChatInput from './ChatInput';
+import GroupInfoModal from './GroupInfoModal';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
 import { 
@@ -109,7 +110,6 @@ const MessageList: React.FC<{
                     {new Date(msg.createdAt).toLocaleTimeString()}
                   </span>
                 )}
-                {/* ✅ 消息气泡 - 添加换行样式防止溢出 */}
                 <div className={`px-4 py-2 rounded-2xl max-w-full ${
                   isSelf 
                     ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-tr-none' 
@@ -119,7 +119,6 @@ const MessageList: React.FC<{
                     {msg.content}
                   </div>
                   
-                  {/* 链接部分 */}
                   {urls.length > 0 && (
                     <div className="mt-1 space-y-1">
                       {urls.map(url => {
@@ -191,75 +190,6 @@ const MessageList: React.FC<{
   );
 };
 
-// ========== 群组管理菜单组件 ==========
-const RoomSettingsMenu: React.FC<{
-  roomId: string;
-  isAdmin: boolean;
-  isOwner: boolean;
-  onClose: () => void;
-}> = ({ roomId, isAdmin, isOwner, onClose }) => {
-  const navigate = useNavigate();
-
-  return (
-    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 z-20 py-1 overflow-hidden">
-      {isAdmin && (
-        <>
-          <button
-            onClick={() => {
-              navigate(`/room/${roomId}/pending`);
-              onClose();
-            }}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition"
-          >
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            待审核申请
-          </button>
-          <button
-            onClick={() => {
-              navigate(`/room/${roomId}/members`);
-              onClose();
-            }}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition"
-          >
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            成员列表
-          </button>
-          <button
-            onClick={() => {
-              navigate(`/room/${roomId}/settings`);
-              onClose();
-            }}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition"
-          >
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            群设置
-          </button>
-        </>
-      )}
-      <button
-        onClick={() => {
-          // TODO: 实现退出群聊逻辑
-          alert('退出群聊功能开发中');
-          onClose();
-        }}
-        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-        退出群聊
-      </button>
-    </div>
-  );
-};
-
 // ========== 主组件 ==========
 const ChatHome = () => {
   const navigate = useNavigate();
@@ -277,10 +207,10 @@ const ChatHome = () => {
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showRoomMenu, setShowRoomMenu] = useState(false);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -359,7 +289,7 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
- // ========== 加载房间成员和权限 ==========
+// ========== 加载房间成员和权限 ==========
 useEffect(() => {
   if (!selectedRoom || !user) return;
 
@@ -368,38 +298,41 @@ useEffect(() => {
       const token = localStorage.getItem('token');
       if (!token) return;
       
-      console.log('🔍 加载房间权限:', selectedRoom._id);
-      
       const response = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/members`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
+      // 即使获取失败也不报错，只是没有管理员权限
       if (!response.ok) {
-        console.error('获取成员列表失败:', response.status);
+        console.warn('获取成员列表失败，用户可能不是群成员:', response.status);
+        setIsRoomAdmin(false);
+        setIsRoomOwner(false);
         return;
       }
       
       const members = await response.json();
-      console.log('📋 成员列表:', members);
+      setRoomMembers(members);
       
       const currentMember = members.find((m: any) => m.userId._id === user.uid);
-      console.log('👤 当前用户:', {
-        uid: user.uid,
-        member: currentMember,
-        role: currentMember?.role
-      });
-      
       setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
       setIsRoomOwner(currentMember?.role === 'owner');
       
+      console.log('权限检查:', {
+        roomId: selectedRoom._id,
+        userId: user.uid,
+        role: currentMember?.role,
+        isAdmin: currentMember?.role === 'admin' || currentMember?.role === 'owner',
+        isOwner: currentMember?.role === 'owner'
+      });
     } catch (error) {
-      console.error('❌ 加载成员权限失败:', error);
+      console.error('加载成员权限失败:', error);
+      setIsRoomAdmin(false);
+      setIsRoomOwner(false);
     }
   };
   
   loadRoomPermissions();
 }, [selectedRoom, user]);
-
   // ========== Socket 连接和事件监听 ==========
   useEffect(() => {
     if (!authChecked || !user) return;
@@ -556,7 +489,6 @@ useEffect(() => {
     setSelectedRoom(room);
     setSelectedUser(null);
     setShowUserList(false);
-    setShowRoomMenu(false);
     if (isMobile) setShowChatWindow(true);
   }, [selectedPersona, isMobile]);
 
@@ -604,7 +536,6 @@ useEffect(() => {
   const handleBackToList = useCallback(() => {
     setShowChatWindow(false);
     setSelectedUser(null);
-    setShowRoomMenu(false);
   }, []);
 
   // ========== 渲染加载状态 ==========
@@ -838,25 +769,16 @@ useEffect(() => {
             </div>
           </div>
           
-          {(isRoomAdmin || isRoomOwner) && (
-            <div className="relative">
-              <button
-                onClick={() => setShowRoomMenu(!showRoomMenu)}
-                className="p-2 hover:bg-gray-100 rounded-full transition"
-              >
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                </svg>
-              </button>
-              {showRoomMenu && selectedRoom && (
-                <RoomSettingsMenu
-                  roomId={selectedRoom._id}
-                  isAdmin={isRoomAdmin}
-                  isOwner={isRoomOwner}
-                  onClose={() => setShowRoomMenu(false)}
-                />
-              )}
-            </div>
+          {/* 右上角三个点 - 所有人可见 */}
+          {selectedRoom && (
+            <button
+              onClick={() => setShowGroupInfo(true)}
+              className="p-2 hover:bg-gray-100 rounded-full transition"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
           )}
         </div>
 
@@ -923,6 +845,21 @@ useEffect(() => {
             {!showChatWindow ? renderChatList() : renderChatWindow()}
           </div>
         </MobileLayout>
+      )}
+
+      {/* 群资料弹窗 */}
+      {showGroupInfo && selectedRoom && (
+        <GroupInfoModal
+          roomId={selectedRoom._id}
+          roomName={selectedRoom.name}
+          roomDescription={selectedRoom.description || ''}
+          roomAnnouncement={(selectedRoom as any).announcement || ''}
+          onClose={() => setShowGroupInfo(false)}
+          onOpenSettings={() => {
+            setShowGroupInfo(false);
+            navigate(`/room/${selectedRoom._id}/settings`);
+          }}
+        />
       )}
     </>
   );

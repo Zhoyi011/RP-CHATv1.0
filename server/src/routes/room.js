@@ -79,7 +79,6 @@ router.get('/list', authMiddleware, async (req, res) => {
       'members.userId': req.userId
     }).sort({ createdAt: -1 });
     
-    // 获取每个房间的消息数量和未读数
     const roomsWithStats = await Promise.all(rooms.map(async (room) => {
       const messageCount = await Message.countDocuments({ roomId: room._id });
       const lastRead = await UserReadRecord.findOne({
@@ -201,11 +200,6 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
     
     if (!room) {
       return res.status(404).json({ error: '聊天室不存在' });
-    }
-    
-    // 检查是否是成员
-    if (!room.isMember(req.userId)) {
-      return res.status(403).json({ error: '你不是该群成员' });
     }
     
     res.json(room);
@@ -426,6 +420,45 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
   }
 });
 
+// ✅ 退出群聊（新增）
+router.post('/:roomId/leave', authMiddleware, async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.roomId);
+    
+    if (!room) {
+      return res.status(404).json({ error: '聊天室不存在' });
+    }
+    
+    const memberIndex = room.members.findIndex(m => m.userId.toString() === req.userId);
+    if (memberIndex === -1) {
+      return res.status(400).json({ error: '你不是该群成员' });
+    }
+    
+    // 如果是群主
+    if (room.members[memberIndex].role === 'owner') {
+      // 检查是否还有其他成员
+      if (room.members.length === 1) {
+        // 只有群主一个人，直接删除房间
+        await Room.findByIdAndDelete(req.params.roomId);
+        // 同时删除相关消息
+        await Message.deleteMany({ roomId: req.params.roomId });
+        return res.json({ message: '群聊已解散' });
+      } else {
+        return res.status(400).json({ error: '群主不能直接退出，请先转让群主或解散群聊' });
+      }
+    }
+    
+    // 移除成员
+    room.members.splice(memberIndex, 1);
+    await room.save();
+    
+    res.json({ message: '已退出群聊' });
+  } catch (error) {
+    console.error('退出群聊失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // 更新群信息
 router.put('/:roomId/settings', authMiddleware, async (req, res) => {
   try {
@@ -489,7 +522,7 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取群成员列表
+// 获取群成员列表（✅ 移除成员限制，任何人都可以查看）
 router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
@@ -500,12 +533,8 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    if (!room.isMember(req.userId)) {
-      return res.status(403).json({ error: '你不是该群成员' });
-    }
-    
+    // ✅ 移除成员检查，任何人都可以查看成员列表（用于群资料弹窗）
     res.json(room.members);
-    
   } catch (error) {
     console.error('获取成员列表失败:', error);
     res.status(500).json({ error: '服务器错误' });
