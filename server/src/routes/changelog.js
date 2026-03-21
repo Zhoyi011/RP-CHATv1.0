@@ -9,14 +9,7 @@ const jwt = require('jsonwebtoken');
 const GITHUB_OWNER = 'Zhoyi011';
 const GITHUB_REPO = 'RP-CHATv1.0';
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits`;
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // 从环境变量读取，安全！
-
-// 需要过滤的关键词
-const RELEVANT_KEYWORDS = [
-  'feat', 'add', '新增', '添加', 'feature', '功能',
-  'fix', '修复', '优化', 'improve', '更新', 'update',
-  'docs', '文档', 'style', '样式', 'refactor', '重构'
-];
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // 从环境变量读取
 
 // 验证token中间件
 const authMiddleware = (req, res, next) => {
@@ -44,24 +37,63 @@ const getGitHubHeaders = () => {
   
   if (GITHUB_TOKEN) {
     headers['Authorization'] = `token ${GITHUB_TOKEN}`;
-    console.log('🔑 使用 GitHub Token 认证');
-  } else {
-    console.log('⚠️ 未配置 GitHub Token，可能受 API 限流影响');
   }
   
   return headers;
 };
 
-// ========== 从 GitHub 拉取并保存 commits ==========
+// 获取 commit 类型（用于显示图标）
+const getCommitType = (message) => {
+  const msg = message.toLowerCase();
+  if (msg.startsWith('feat') || msg.startsWith('add') || msg.includes('新增')) return 'feat';
+  if (msg.startsWith('fix') || msg.includes('修复')) return 'fix';
+  if (msg.startsWith('docs') || msg.includes('文档')) return 'docs';
+  if (msg.startsWith('style') || msg.includes('样式')) return 'style';
+  if (msg.startsWith('refactor') || msg.includes('重构')) return 'refactor';
+  if (msg.startsWith('chore') || msg.includes('调整')) return 'chore';
+  if (msg.startsWith('perf') || msg.includes('性能')) return 'perf';
+  if (msg.startsWith('test') || msg.includes('测试')) return 'test';
+  return 'other';
+};
+
+// 获取 commit 图标
+const getCommitIcon = (type) => {
+  const icons = {
+    feat: '✨',
+    add: '➕',
+    fix: '🐛',
+    docs: '📝',
+    style: '🎨',
+    refactor: '♻️',
+    chore: '🔧',
+    perf: '⚡',
+    test: '🧪',
+    other: '💬'
+  };
+  return icons[type] || '💬';
+};
+
+// 格式化 commit 消息（提取标题）
+const formatCommitMessage = (message) => {
+  // 取第一行作为标题
+  const firstLine = message.split('\n')[0];
+  // 如果太长，截断
+  if (firstLine.length > 80) {
+    return firstLine.substring(0, 77) + '...';
+  }
+  return firstLine;
+};
+
+// ========== 从 GitHub 拉取并保存所有 commits ==========
 async function fetchAndSaveGitHubCommits() {
   try {
-    console.log('📡 正在从 GitHub 获取更新记录...');
+    console.log('📡 正在从 GitHub 获取所有更新记录...');
     
-    // 检查是否被限流，避免重复请求
+    // 检查是否被限流
     const rateLimitRecord = await Changelog.findOne({ sha: 'rate_limit' });
     if (rateLimitRecord && rateLimitRecord.date) {
       const timeSinceLastAttempt = Date.now() - new Date(rateLimitRecord.date).getTime();
-      if (timeSinceLastAttempt < 5 * 60 * 1000) { // 5分钟内不重试
+      if (timeSinceLastAttempt < 5 * 60 * 1000) {
         console.log('⏭️ 距离上次限流不足5分钟，跳过同步');
         return 0;
       }
@@ -71,7 +103,7 @@ async function fetchAndSaveGitHubCommits() {
     const lastAutoEntry = await Changelog.findOne({ type: 'auto' })
       .sort({ date: -1 });
     
-    const params = { per_page: 30 };
+    const params = { per_page: 100 }; // 获取更多记录
     if (lastAutoEntry && lastAutoEntry.date) {
       params.since = lastAutoEntry.date.toISOString();
       console.log(`📅 上次同步时间: ${params.since}`);
@@ -80,7 +112,7 @@ async function fetchAndSaveGitHubCommits() {
     const response = await axios.get(GITHUB_API, {
       params,
       headers: getGitHubHeaders(),
-      timeout: 10000
+      timeout: 15000
     });
     
     // 检查限流信息
@@ -89,35 +121,35 @@ async function fetchAndSaveGitHubCommits() {
       console.log(`📊 GitHub API 剩余请求次数: ${remaining}`);
     }
     
-    // 过滤相关 commits
-    const newCommits = response.data.filter(commit => {
-      const msg = commit.commit.message.toLowerCase();
-      return RELEVANT_KEYWORDS.some(kw => 
-        msg.startsWith(kw.toLowerCase()) || 
-        msg.includes(kw.toLowerCase())
-      );
-    });
+    // 不过滤，保存所有 commits
+    const allCommits = response.data;
+    console.log(`📝 从 GitHub 获取到 ${allCommits.length} 条新记录`);
     
     // 保存新的 commits 到数据库
     let savedCount = 0;
-    for (const commit of newCommits) {
+    for (const commit of allCommits) {
       const exists = await Changelog.findOne({ sha: commit.sha });
       if (!exists) {
+        const commitType = getCommitType(commit.commit.message);
+        const formattedMessage = formatCommitMessage(commit.commit.message);
+        
         await Changelog.create({
           type: 'auto',
           sha: commit.sha,
           message: commit.commit.message,
+          formattedMessage: formattedMessage,  // 格式化后的消息
+          commitType: commitType,              // commit 类型
           date: commit.commit.author.date,
           author: commit.commit.author.name,
           url: commit.html_url
         });
         savedCount++;
-        console.log(`  ✅ 新增: ${commit.commit.message.substring(0, 50)}...`);
+        console.log(`  ✅ 新增: ${formattedMessage} (${commitType})`);
       }
     }
     
-    // 清除限流记录（如果成功）
-    if (savedCount > 0 || newCommits.length === 0) {
+    // 清除限流记录
+    if (savedCount > 0 || allCommits.length === 0) {
       await Changelog.deleteOne({ sha: 'rate_limit' });
     }
     
@@ -140,7 +172,6 @@ async function fetchAndSaveGitHubCommits() {
         console.error(`⏰ 限流将在 ${resetDate.toLocaleString()} 重置`);
       }
       
-      // 记录限流状态，避免短时间内重复请求
       await Changelog.findOneAndUpdate(
         { sha: 'rate_limit' },
         { 
@@ -166,7 +197,7 @@ router.get('/', async (req, res) => {
     // 从数据库获取所有更新日志
     const entries = await Changelog.find()
       .sort({ date: -1 })
-      .limit(100);
+      .limit(200); // 显示最近 200 条
     
     // 检查是否需要后台同步（每小时最多一次）
     const lastAuto = await Changelog.findOne({ type: 'auto' }).sort({ date: -1 });
@@ -175,17 +206,14 @@ router.get('/', async (req, res) => {
     let shouldSync = false;
     
     if (!lastAuto) {
-      // 没有记录，需要同步
       shouldSync = true;
     } else if (rateLimited) {
-      // 被限流了，等待一段时间
       const timeSinceLimit = Date.now() - new Date(rateLimited.date).getTime();
-      shouldSync = timeSinceLimit > 60 * 60 * 1000; // 1小时后重试
+      shouldSync = timeSinceLimit > 60 * 60 * 1000;
     } else {
-      // 检查上次同步时间
       const lastSyncTime = new Date(lastAuto.date).getTime();
       const hoursSinceLastSync = (Date.now() - lastSyncTime) / (1000 * 60 * 60);
-      shouldSync = hoursSinceLastSync > 1; // 每小时最多同步一次
+      shouldSync = hoursSinceLastSync > 1;
     }
     
     if (shouldSync) {
@@ -204,7 +232,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 手动添加更新日志（需要管理员权限）
+// 手动添加更新日志
 router.post('/manual', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -223,7 +251,8 @@ router.post('/manual', authMiddleware, async (req, res) => {
       title: title.trim(),
       content: content.trim(),
       date: new Date(),
-      author: user.username
+      author: user.username,
+      commitType: 'manual'
     });
     
     console.log(`📝 手动添加更新: ${title} (by ${user.username})`);
@@ -238,7 +267,7 @@ router.post('/manual', authMiddleware, async (req, res) => {
   }
 });
 
-// 删除手动更新（需要管理员权限）
+// 删除手动更新
 router.delete('/manual/:id', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -266,7 +295,7 @@ router.delete('/manual/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// 手动触发 GitHub 同步（管理员）
+// 手动触发 GitHub 同步
 router.post('/sync-github', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -274,9 +303,7 @@ router.post('/sync-github', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '需要管理员权限' });
     }
     
-    // 清除限流记录
     await Changelog.deleteOne({ sha: 'rate_limit' });
-    
     const count = await fetchAndSaveGitHubCommits();
     res.json({
       message: `同步完成，新增 ${count} 条记录`,
@@ -288,6 +315,6 @@ router.post('/sync-github', authMiddleware, async (req, res) => {
   }
 });
 
-// 导出函数供 app.js 使用
+// 导出函数
 module.exports = router;
 module.exports.fetchAndSaveGitHubCommits = fetchAndSaveGitHubCommits;
