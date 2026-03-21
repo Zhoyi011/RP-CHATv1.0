@@ -34,7 +34,7 @@ const adminMiddleware = (req, res, next) => {
 
 // ========== 聊天室路由 ==========
 
-// 创建聊天室
+// 创建聊天室 ✅ 修复：添加群主角色关联
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -43,12 +43,17 @@ router.post('/create', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '房间名称至少需要2个字符' });
     }
     
+    // 获取用户当前使用的角色
+    const activePersona = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
+    const personaId = activePersona?.personaId?._id || null;
+    
     const room = new Room({
       name,
       description: description || '',
       createdBy: req.userId,
       members: [{
         userId: req.userId,
+        personaId: personaId,
         role: 'owner',
         joinedAt: new Date()
       }]
@@ -56,9 +61,14 @@ router.post('/create', authMiddleware, async (req, res) => {
     
     await room.save();
     
+    // 获取完整的成员信息用于返回
+    const populatedRoom = await Room.findById(room._id)
+      .populate('members.userId', 'username email avatar')
+      .populate('members.personaId', 'name avatar displayName');
+    
     res.status(201).json({
       message: '聊天室创建成功',
-      room
+      room: populatedRoom
     });
     
   } catch (error) {
@@ -196,7 +206,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
       .populate('members.userId', 'username email avatar')
-      .populate('members.personaId', 'name avatar');
+      .populate('members.personaId', 'name avatar displayName');
     
     if (!room) {
       return res.status(404).json({ error: '聊天室不存在' });
@@ -267,7 +277,7 @@ router.post('/:roomId/mark-read', authMiddleware, async (req, res) => {
   }
 });
 
-// 申请加入群组
+// 申请加入群组 ✅ 修复：确保有角色
 router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   try {
     const { personaId, message } = req.body;
@@ -289,9 +299,16 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '已有待审核申请' });
     }
     
+    // 如果没传角色，使用当前激活的角色
+    let finalPersonaId = personaId;
+    if (!finalPersonaId) {
+      const activePersona = await ActivePersona.findOne({ userId: req.userId });
+      finalPersonaId = activePersona?.personaId;
+    }
+    
     room.pendingMembers.push({
       userId: req.userId,
-      personaId,
+      personaId: finalPersonaId,
       message: message || '',
       appliedAt: new Date()
     });
@@ -305,7 +322,7 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   }
 });
 
-// 审核加入申请
+// 审核加入申请 ✅ 修复：确保成员有角色
 router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   try {
     const { userId, approve, rejectReason } = req.body;
@@ -325,11 +342,16 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
     }
     
     if (approve) {
-      const activePersona = await ActivePersona.findOne({ userId: pending.userId });
+      // 使用申请时选择的角色，如果没有则使用当前激活的角色
+      let personaId = pending.personaId;
+      if (!personaId) {
+        const activePersona = await ActivePersona.findOne({ userId: pending.userId });
+        personaId = activePersona?.personaId;
+      }
       
       room.members.push({
         userId: pending.userId,
-        personaId: activePersona?.personaId || pending.personaId,
+        personaId: personaId,
         role: 'member',
         joinedAt: new Date()
       });
@@ -420,7 +442,7 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 退出群聊（新增）
+// 退出群聊
 router.post('/:roomId/leave', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId);
@@ -436,11 +458,8 @@ router.post('/:roomId/leave', authMiddleware, async (req, res) => {
     
     // 如果是群主
     if (room.members[memberIndex].role === 'owner') {
-      // 检查是否还有其他成员
       if (room.members.length === 1) {
-        // 只有群主一个人，直接删除房间
         await Room.findByIdAndDelete(req.params.roomId);
-        // 同时删除相关消息
         await Message.deleteMany({ roomId: req.params.roomId });
         return res.json({ message: '群聊已解散' });
       } else {
@@ -448,7 +467,6 @@ router.post('/:roomId/leave', authMiddleware, async (req, res) => {
       }
     }
     
-    // 移除成员
     room.members.splice(memberIndex, 1);
     await room.save();
     
@@ -522,7 +540,7 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取群成员列表（✅ 移除成员限制，任何人都可以查看）
+// 获取群成员列表（任何人都可以查看）
 router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
@@ -533,7 +551,6 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    // ✅ 移除成员检查，任何人都可以查看成员列表（用于群资料弹窗）
     res.json(room.members);
   } catch (error) {
     console.error('获取成员列表失败:', error);

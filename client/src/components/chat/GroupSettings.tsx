@@ -239,7 +239,7 @@ const GroupSettings = () => {
   };
 
   const handleReport = () => {
-    alert('举报功能开发中，请通过邮件联系我们：support@rp-chat.com');
+    alert('举报功能开发中，请通过邮件联系我们：zhoyi.lee@gmail.com');
   };
 
   const getRoleBadge = (role: string) => {
