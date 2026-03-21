@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const searchRoutes = require('./routes/search');
 require('dotenv').config();
 
 const app = express();
@@ -41,10 +40,7 @@ const limiter = rateLimit({
   message: '请求过于频繁，请稍后再试',
   standardHeaders: true,
   legacyHeaders: false,
-  // 解决 X-Forwarded-For 警告
-  keyGenerator: (req) => {
-    return req.ip || req.connection.remoteAddress;
-  }
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress
 });
 app.use('/api', limiter);
 
@@ -54,12 +50,26 @@ mongoose.connect(process.env.MONGODB_URI, {
   socketTimeoutMS: 45000,
   connectTimeoutMS: 30000
 })
-.then(() => console.log('✅ MongoDB 连接成功'))
+.then(async () => {
+  console.log('✅ MongoDB 连接成功');
+  
+  // 初始化更新日志（从 GitHub 拉取一次）
+  try {
+    const { fetchAndSaveGitHubCommits } = require('./routes/changelog');
+    // 延迟 3 秒启动，不阻塞服务器启动
+    setTimeout(async () => {
+      console.log('📡 正在初始化更新日志...');
+      await fetchAndSaveGitHubCommits();
+    }, 3000);
+  } catch (err) {
+    console.error('⚠️ 初始化更新日志失败:', err.message);
+  }
+})
 .catch(err => console.error('❌ MongoDB 连接失败:', err.message));
 
 // ===== 测试路由 =====
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'RP Chat API 运行正常!' });
+  res.json({ message: 'RP Chat API 运行正常!', timestamp: new Date().toISOString() });
 });
 
 // ===== 路由 =====
@@ -68,12 +78,19 @@ const personaRoutes = require('./routes/persona');
 const roomRoutes = require('./routes/room');
 const userRoutes = require('./routes/user');
 const changelogRoutes = require('./routes/changelog');
+const searchRoutes = require('./routes/search');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/persona', personaRoutes);
 app.use('/api/room', roomRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/changelog', changelogRoutes);
+app.use('/api/search', searchRoutes);
+
+// ===== 404 处理 =====
+app.use((req, res) => {
+  res.status(404).json({ error: '接口不存在' });
+});
 
 // ===== 错误处理中间件 =====
 app.use((err, req, res, next) => {
@@ -121,7 +138,7 @@ io.on('connection', (socket) => {
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === roomId);
       io.to(roomId).emit('room-online-count', { roomId, count: roomUsers.length });
       
-      console.log(`用户 ${userId} 使用皮 ${personaId} 加入房间 ${roomId}`);
+      console.log(`👤 用户 ${userId} 使用角色 ${personaId} 加入房间 ${roomId}`);
     } catch (error) {
       console.error('加入房间失败:', error);
     }
@@ -132,16 +149,15 @@ io.on('connection', (socket) => {
     const { roomId, userId, personaId, content, isAction } = data;
     
     try {
-      console.log('📨 收到消息:', { roomId, userId, personaId, content });
+      console.log('📨 收到消息:', { roomId, userId, personaId, content: content.substring(0, 50) });
       
-      // 验证必要字段
       if (!roomId || !userId || !personaId || !content) {
         console.error('消息缺少必要字段');
         socket.emit('error', { message: '消息格式错误' });
         return;
       }
       
-      // 先根据 Firebase UID 查找对应的 MongoDB 用户 ID
+      // 根据 Firebase UID 查找 MongoDB 用户
       const User = require('./models/User');
       const user = await User.findOne({ firebaseUid: userId });
       
@@ -191,7 +207,6 @@ io.on('connection', (socket) => {
         }
       };
       
-      console.log('📢 广播消息到房间:', roomId);
       io.to(roomId).emit('new-message', messageToSend);
       
     } catch (error) {
@@ -200,7 +215,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // 切换皮
+  // 切换角色
   socket.on('switch-persona', ({ userId, newPersonaId }) => {
     try {
       const userInfo = onlineUsers.get(socket.id);
@@ -208,12 +223,13 @@ io.on('connection', (socket) => {
         userInfo.personaId = newPersonaId;
         onlineUsers.set(socket.id, userInfo);
         
-        // 通知房间
         socket.to(userInfo.roomId).emit('persona-switched', {
           userId,
           newPersonaId,
           message: '用户切换了角色'
         });
+        
+        console.log(`🎭 用户 ${userId} 切换到角色 ${newPersonaId}`);
       }
     } catch (error) {
       console.error('切换角色失败:', error);
@@ -226,9 +242,8 @@ io.on('connection', (socket) => {
       const userInfo = onlineUsers.get(socket.id);
       if (userInfo) {
         socket.leave(userInfo.roomId);
-        
-        // 更新房间在线人数
         onlineUsers.delete(socket.id);
+        
         const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === userInfo.roomId);
         io.to(userInfo.roomId).emit('room-online-count', { 
           roomId: userInfo.roomId, 
@@ -239,6 +254,8 @@ io.on('connection', (socket) => {
           userId: userInfo.userId,
           message: '用户离开了聊天室'
         });
+        
+        console.log(`👋 用户 ${userInfo.userId} 离开房间 ${userInfo.roomId}`);
       }
     } catch (error) {
       console.error('离开房间失败:', error);
@@ -250,8 +267,8 @@ io.on('connection', (socket) => {
     try {
       const userInfo = onlineUsers.get(socket.id);
       if (userInfo) {
-        // 更新房间在线人数
         onlineUsers.delete(socket.id);
+        
         const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === userInfo.roomId);
         io.to(userInfo.roomId).emit('room-online-count', { 
           roomId: userInfo.roomId, 
@@ -262,15 +279,15 @@ io.on('connection', (socket) => {
           userId: userInfo.userId,
           message: '用户断开了连接'
         });
+        
+        console.log(`🔴 用户 ${userInfo.userId} 断开连接`);
       }
-      console.log('🔴 客户端断开:', socket.id);
+      console.log('🔌 客户端断开:', socket.id);
     } catch (error) {
       console.error('断开连接处理失败:', error);
     }
   });
 });
-
-app.use('/api/search', searchRoutes);
 
 // 导出 io 供其他模块使用
 module.exports.io = io;

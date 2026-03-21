@@ -11,131 +11,17 @@ import UserList from '../user/UserList';
 import ChatInput from './ChatInput';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
-import { roomApi, type Room, type Persona, type Message, type User } from '../../services/api';
+import { 
+  roomApi, 
+  personaApi,
+  authApi,
+  type Room, 
+  type Persona, 
+  type Message, 
+  type User 
+} from '../../services/api';
+import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
-
-// ========== API 基础配置 ==========
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
-
-const getToken = (): string | null => {
-  return localStorage.getItem('token');
-};
-
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = getToken();
-  
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...options.headers,
-  };
-
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || '请求失败');
-  }
-
-  return data as T;
-}
-
-const api = {
-  getRooms: () => request<Room[]>('/room/list'),
-  getMyPersonas: () => request<Persona[]>('/persona/my'),
-  getActivePersona: () => request<{ activePersona: { personaId: Persona } | null }>('/room/active-persona'),
-  setActivePersona: (personaId: string) =>
-    request<{ message: string }>('/room/active-persona', {
-      method: 'POST',
-      body: JSON.stringify({ personaId }),
-    }),
-  getMessages: (roomId: string) =>
-    request<Message[]>(`/room/${roomId}/messages`),
-};
-
-import { io, Socket } from 'socket.io-client';
-
-class SocketService {
-  private socket: Socket | null = null;
-
-  connect(token: string) {
-    this.socket = io('https://rp-chatv1-0.onrender.com', {
-      auth: { token },
-      transports: ['polling', 'websocket'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      timeout: 20000,
-      upgrade: false
-    });
-
-    this.socket.on('connect', () => {
-      console.log('✅ Socket connected');
-    });
-
-    this.socket.on('connect_error', (error: any) => {
-      console.error('❌ Socket connection error:', error);
-    });
-
-    return this.socket;
-  }
-
-  disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-  }
-
-  joinRoom(roomId: string, userId: string, personaId: string) {
-    this.socket?.emit('join-room', { roomId, userId, personaId });
-  }
-
-  leaveRoom() {
-    this.socket?.emit('leave-room');
-  }
-
-  sendMessage(roomId: string, userId: string, personaId: string, content: string, isAction = false) {
-    this.socket?.emit('send-message', { roomId, userId, personaId, content, isAction });
-  }
-
-  switchPersona(userId: string, newPersonaId: string) {
-    this.socket?.emit('switch-persona', { userId, newPersonaId });
-  }
-
-  onNewMessage(callback: (message: Message) => void) {
-    this.socket?.on('new-message', callback);
-  }
-
-  onUserJoined(callback: (data: any) => void) {
-    this.socket?.on('user-joined', callback);
-  }
-
-  onUserLeft(callback: (data: any) => void) {
-    this.socket?.on('user-left', callback);
-  }
-
-  onPersonaSwitched(callback: (data: any) => void) {
-    this.socket?.on('persona-switched', callback);
-  }
-
-  onRoomOnlineCount(callback: (data: { roomId: string; count: number }) => void) {
-    this.socket?.on('room-online-count', callback);
-  }
-
-  removeAllListeners() {
-    this.socket?.removeAllListeners();
-  }
-}
-
-const socketService = new SocketService();
 
 // ========== 消息列表组件 ==========
 const MessageList: React.FC<{
@@ -162,6 +48,7 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
+        // 系统消息
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -172,6 +59,7 @@ const MessageList: React.FC<{
           );
         }
         
+        // 动作消息 (/me)
         if (msg.isAction) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -297,7 +185,7 @@ const MessageList: React.FC<{
   );
 };
 
-// ========== 群组管理组件 ==========
+// ========== 群组管理菜单组件 ==========
 const RoomSettingsMenu: React.FC<{
   roomId: string;
   isAdmin: boolean;
@@ -351,6 +239,8 @@ const RoomSettingsMenu: React.FC<{
       )}
       <button
         onClick={() => {
+          // TODO: 实现退出群聊逻辑
+          alert('退出群聊功能开发中');
           onClose();
         }}
         className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
@@ -390,9 +280,9 @@ const ChatHome = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
 
-  // 所有 Hook 都在顶层
+  // ========== 认证检查 ==========
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       console.log('Auth state changed:', firebaseUser?.email);
       
       if (!firebaseUser) {
@@ -400,12 +290,24 @@ const ChatHome = () => {
       } else {
         setUser(firebaseUser);
         setAuthChecked(true);
+        
+        // 获取并设置 token
+        try {
+          const token = localStorage.getItem('token');
+          if (token) {
+            // 验证 token 是否有效
+            await authApi.getCurrentUser();
+          }
+        } catch (err) {
+          console.error('Token 验证失败:', err);
+        }
       }
     });
 
     return () => unsubscribe();
   }, [navigate]);
 
+  // ========== 加载初始数据 ==========
   useEffect(() => {
     if (!authChecked || !user) return;
     
@@ -413,11 +315,12 @@ const ChatHome = () => {
       try {
         setLoading(true);
         
-        const [roomsData, personasData] = await Promise.all([
-          api.getRooms(),
-          api.getMyPersonas(),
-        ]);
+      const [roomsData, personasData] = await Promise.all([
+      roomApi.getRooms(),
+      personaApi.getMyPersonas(),  
+  ]);
         
+        // 获取每个房间的未读消息数
         const roomsWithUnread = await Promise.all(
           roomsData.map(async (room) => {
             try {
@@ -434,15 +337,18 @@ const ChatHome = () => {
         );
         setRooms(roomsWithUnread);
         
+        // 只显示已审核的角色
         const approvedPersonas = personasData.filter(p => p.status === 'approved');
         setPersonas(approvedPersonas);
         
-        const activePersona = await api.getActivePersona();
+        // 获取当前激活的角色
+        const activePersona = await roomApi.getActivePersona();
         if (activePersona.activePersona) {
           setSelectedPersona(activePersona.activePersona.personaId);
         }
         
       } catch (err: any) {
+        console.error('加载数据失败:', err);
         setError(err.message || '加载数据失败');
       } finally {
         setLoading(false);
@@ -452,7 +358,7 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-  // 加载房间成员和权限
+  // ========== 加载房间成员和权限 ==========
   useEffect(() => {
     if (!selectedRoom || !user) return;
 
@@ -466,19 +372,26 @@ const ChatHome = () => {
     }
   }, [selectedRoom, user, rooms]);
 
+  // ========== Socket 连接和事件监听 ==========
   useEffect(() => {
     if (!authChecked || !user) return;
     
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      console.log('No token found, skipping socket connection');
+      return;
+    }
 
+    console.log('🔌 Connecting socket...');
     socketService.connect(token);
 
-    socketService.onNewMessage((message) => {
-      console.log('收到新消息:', message);
+    // 监听新消息
+    socketService.onNewMessage((message: Message) => {
+      console.log('📨 收到新消息:', message);
       
       const isSelf = message.userId?.firebaseUid === user?.uid || message.userId?._id === user?.uid;
       
+      // 显示通知（如果不是自己发的）
       if (!isSelf) {
         toast.custom((t) => (
           <div 
@@ -503,12 +416,14 @@ const ChatHome = () => {
         notificationService.onNewMessage(message);
       }
 
+      // 更新消息列表
       setMessages(prev => {
         const exists = prev.some(m => m._id === message._id);
         if (exists) return prev;
         return [...prev, message];
       });
       
+      // 更新未读计数
       const messageRoomId = typeof message.roomId === 'string' 
         ? message.roomId 
         : message.roomId?._id;
@@ -522,18 +437,7 @@ const ChatHome = () => {
       }
     });
 
-    socketService.onUserJoined((data) => {
-      console.log('用户加入:', data);
-    });
-
-    socketService.onUserLeft((data) => {
-      console.log('用户离开:', data);
-    });
-
-    socketService.onPersonaSwitched((data) => {
-      console.log('角色切换:', data);
-    });
-
+    // 监听房间在线人数
     socketService.onRoomOnlineCount((data) => {
       setRooms(prevRooms => 
         prevRooms.map(room => 
@@ -544,20 +448,34 @@ const ChatHome = () => {
       );
     });
 
+    // 监听用户加入/离开（可选，用于调试）
+    socketService.onUserJoined((data) => {
+      console.log('👤 用户加入:', data);
+    });
+
+    socketService.onUserLeft((data) => {
+      console.log('👋 用户离开:', data);
+    });
+
+    socketService.onPersonaSwitched((data) => {
+      console.log('🎭 角色切换:', data);
+    });
+
     return () => {
+      console.log('🔌 Cleaning up socket listeners...');
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [authChecked, user, selectedRoom]);
+  }, [authChecked, user]);
 
+  // ========== 加入房间并加载消息 ==========
   useEffect(() => {
     if (!selectedRoom || !selectedPersona || !user) return;
 
     const loadMessages = async () => {
       try {
-        console.log('加载房间消息:', selectedRoom._id);
-        const messagesData = await api.getMessages(selectedRoom._id);
-        console.log('获取到的消息:', messagesData);
+        console.log('📡 加载房间消息:', selectedRoom._id);
+        const messagesData = await roomApi.getMessages(selectedRoom._id);
         
         if (Array.isArray(messagesData)) {
           const processedMessages = messagesData.map(msg => ({
@@ -570,9 +488,11 @@ const ChatHome = () => {
           setMessages(processedMessages);
         }
         
+        // 加入 Socket 房间
         socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
+        
       } catch (err: any) {
-        console.error('加载消息失败:', err);
+        console.error('❌ 加载消息失败:', err);
       }
     };
 
@@ -583,6 +503,7 @@ const ChatHome = () => {
     };
   }, [selectedRoom, selectedPersona, user]);
 
+  // ========== 添加系统消息 ==========
   const addSystemMessage = useCallback((content: string) => {
     const systemMsg: any = {
       _id: 'system-' + Date.now(),
@@ -595,6 +516,7 @@ const ChatHome = () => {
     setMessages(prev => [...prev, systemMsg]);
   }, []);
 
+  // ========== 选择房间 ==========
   const handleSelectRoom = useCallback(async (room: Room) => {
     if (!selectedPersona) {
       alert('请先选择一个角色');
@@ -617,6 +539,7 @@ const ChatHome = () => {
     if (isMobile) setShowChatWindow(true);
   }, [selectedPersona, isMobile]);
 
+  // ========== 选择用户（私聊）==========
   const handleSelectUser = useCallback((targetUser: User) => {
     setSelectedUser(targetUser);
     setSelectedRoom(null);
@@ -624,9 +547,10 @@ const ChatHome = () => {
     if (isMobile) setShowChatWindow(true);
   }, [isMobile]);
 
+  // ========== 切换角色 ==========
   const handleSelectPersona = useCallback(async (persona: Persona) => {
     try {
-      await api.setActivePersona(persona._id);
+      await roomApi.setActivePersona(persona._id);
       setSelectedPersona(persona);
       
       if (selectedRoom && user) {
@@ -637,6 +561,7 @@ const ChatHome = () => {
     }
   }, [selectedRoom, user]);
 
+  // ========== 发送消息 ==========
   const handleSendMessage = useCallback((content: string, isAction = false) => {
     if (!selectedRoom || !selectedPersona || !user) {
       alert('请先选择聊天室和角色');
@@ -654,13 +579,14 @@ const ChatHome = () => {
     );
   }, [selectedRoom, selectedPersona, user]);
 
+  // ========== 返回列表 ==========
   const handleBackToList = useCallback(() => {
     setShowChatWindow(false);
     setSelectedUser(null);
     setShowRoomMenu(false);
   }, []);
 
-  // 渲染
+  // ========== 渲染加载状态 ==========
   if (!authChecked) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
@@ -685,9 +611,10 @@ const ChatHome = () => {
     );
   }
 
-  // 聊天列表组件
+  // ========== 渲染聊天列表 ==========
   const renderChatList = () => (
     <div className="h-full flex flex-col bg-white">
+      {/* 搜索栏 */}
       <div className="p-4 border-b border-gray-100 flex-shrink-0">
         <div className="bg-gray-100 rounded-full px-4 py-2 flex items-center text-gray-400">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -701,6 +628,7 @@ const ChatHome = () => {
         </div>
       </div>
 
+      {/* 创建房间按钮 */}
       {showCreateRoom && (
         <CreateRoom
           onClose={() => setShowCreateRoom(false)}
@@ -720,6 +648,7 @@ const ChatHome = () => {
         </button>
       </div>
 
+      {/* Tab 切换 */}
       <div className="flex border-b border-gray-200 flex-shrink-0">
         <button
           onClick={() => {
@@ -745,6 +674,7 @@ const ChatHome = () => {
         </button>
       </div>
 
+      {/* 角色选择栏 */}
       {!showUserList && (
         <div className="px-4 py-2 border-b border-gray-100 flex-shrink-0">
           <div className="text-sm text-gray-500 mb-2">当前角色：</div>
@@ -774,6 +704,7 @@ const ChatHome = () => {
         </div>
       )}
       
+      {/* 列表内容 */}
       <div className="flex-1 overflow-y-auto">
         {showUserList ? (
           <UserList onSelectUser={handleSelectUser} />
@@ -837,7 +768,7 @@ const ChatHome = () => {
     </div>
   );
 
-  // 聊天窗口组件
+  // ========== 渲染聊天窗口 ==========
   const renderChatWindow = () => {
     if (isMobile && !showChatWindow) return null;
     
@@ -852,6 +783,7 @@ const ChatHome = () => {
     
     return (
       <div className="h-full flex flex-col bg-gray-50" style={{ height: '100%' }}>
+        {/* 聊天头部 */}
         <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           {isMobile && (
             <button 
@@ -907,6 +839,7 @@ const ChatHome = () => {
           )}
         </div>
 
+        {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
           <MessageList 
             messages={messages} 
@@ -917,6 +850,7 @@ const ChatHome = () => {
           />
         </div>
 
+        {/* 输入框 */}
         <ChatInput
           onSendMessage={handleSendMessage}
           disabled={!selectedRoom || !selectedPersona}
@@ -926,6 +860,7 @@ const ChatHome = () => {
     );
   };
 
+  // ========== 主渲染 ==========
   return (
     <>
       <Toaster 
