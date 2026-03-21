@@ -15,7 +15,7 @@ interface Member {
     _id: string;
     name: string;
     avatar?: string;
-  };
+  } | null;
   role: 'owner' | 'admin' | 'member';
   nickname: string;
   title: string;
@@ -97,6 +97,20 @@ const GroupDetail = () => {
     if (role === 'owner') return '👑';
     if (role === 'admin') return '🛡️';
     return null;
+  };
+
+  // 获取显示名称（优先使用角色名，否则使用用户名）
+  const getDisplayName = (member: Member) => {
+    if (member.personaId?.name) {
+      return member.personaId.name;
+    }
+    return member.userId?.username || '未知用户';
+  };
+
+  // 获取头像首字母
+  const getAvatarChar = (member: Member) => {
+    const name = getDisplayName(member);
+    return name.charAt(0).toUpperCase();
   };
 
   // 分离群主、管理员、普通成员
@@ -210,51 +224,75 @@ const GroupDetail = () => {
           
           <div className="space-y-3">
             {/* 群主 */}
-            {owners.map(member => (
-              <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold">
-                  {member.personaId?.name?.charAt(0) || '?'}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{member.personaId?.name}</span>
-                    {getRoleBadge(member.role)}
+            {owners.map(member => {
+              const displayName = getDisplayName(member);
+              const avatarChar = getAvatarChar(member);
+              
+              return (
+                <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold">
+                    {avatarChar}
                   </div>
-                  {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-800">{displayName}</span>
+                      {getRoleBadge(member.role)}
+                    </div>
+                    {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
+                    {!member.personaId && (
+                      <p className="text-xs text-amber-500">未选择角色</p>
+                    )}
+                  </div>
+                  <span className="text-lg">{getRoleIcon(member.role)}</span>
                 </div>
-                <span className="text-lg">{getRoleIcon(member.role)}</span>
-              </div>
-            ))}
+              );
+            })}
             
             {/* 管理员 */}
-            {admins.map(member => (
-              <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold">
-                  {member.personaId?.name?.charAt(0) || '?'}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{member.personaId?.name}</span>
-                    {getRoleBadge(member.role)}
+            {admins.map(member => {
+              const displayName = getDisplayName(member);
+              const avatarChar = getAvatarChar(member);
+              
+              return (
+                <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold">
+                    {avatarChar}
                   </div>
-                  {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-800">{displayName}</span>
+                      {getRoleBadge(member.role)}
+                    </div>
+                    {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
+                    {!member.personaId && (
+                      <p className="text-xs text-amber-500">未选择角色</p>
+                    )}
+                  </div>
+                  <span className="text-lg">{getRoleIcon(member.role)}</span>
                 </div>
-                <span className="text-lg">{getRoleIcon(member.role)}</span>
-              </div>
-            ))}
+              );
+            })}
             
             {/* 普通成员 */}
-            {(showAllMembers ? normalMembers : normalMembers.slice(0, 5)).map(member => (
-              <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold">
-                  {member.personaId?.name?.charAt(0) || '?'}
+            {(showAllMembers ? normalMembers : normalMembers.slice(0, 5)).map(member => {
+              const displayName = getDisplayName(member);
+              const avatarChar = getAvatarChar(member);
+              
+              return (
+                <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold">
+                    {avatarChar}
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-800">{displayName}</span>
+                    {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
+                    {!member.personaId && (
+                      <p className="text-xs text-amber-500">未选择角色</p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <span className="font-medium text-gray-800">{member.personaId?.name}</span>
-                  {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
