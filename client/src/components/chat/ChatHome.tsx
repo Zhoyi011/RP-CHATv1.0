@@ -109,15 +109,17 @@ const MessageList: React.FC<{
                     {new Date(msg.createdAt).toLocaleTimeString()}
                   </span>
                 )}
-                <div className={`px-4 py-2 rounded-2xl ${
+                {/* ✅ 消息气泡 - 添加换行样式防止溢出 */}
+                <div className={`px-4 py-2 rounded-2xl max-w-full ${
                   isSelf 
-                    ? 'bg-green-500 text-white rounded-tr-none' 
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-tr-none' 
                     : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
                 }`}>
-                  <div className="whitespace-pre-wrap break-words">
+                  <div className="break-words whitespace-pre-wrap">
                     {msg.content}
                   </div>
                   
+                  {/* 链接部分 */}
                   {urls.length > 0 && (
                     <div className="mt-1 space-y-1">
                       {urls.map(url => {
@@ -129,7 +131,9 @@ const MessageList: React.FC<{
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-block text-blue-500 hover:underline text-xs break-all"
+                              className={`inline-block text-xs break-all ${
+                                isSelf ? 'text-white/80 hover:text-white' : 'text-blue-500 hover:underline'
+                              }`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!confirm(`是否打开链接：${url}`)) {
@@ -147,7 +151,9 @@ const MessageList: React.FC<{
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-block text-blue-500 hover:underline text-xs break-all"
+                              className={`inline-block text-xs break-all ${
+                                isSelf ? 'text-white/80 hover:text-white' : 'text-blue-500 hover:underline'
+                              }`}
                             >
                               🔗 链接
                             </a>
@@ -172,7 +178,7 @@ const MessageList: React.FC<{
                     navigate(`/persona/${selectedPersona._id}`);
                   }
                 }}
-                className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition"
+                className="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-md"
               >
                 {selectedPersona?.name?.charAt(0) || 'M'}
               </div>
@@ -195,7 +201,7 @@ const RoomSettingsMenu: React.FC<{
   const navigate = useNavigate();
 
   return (
-    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border z-20 py-1">
+    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 z-20 py-1 overflow-hidden">
       {isAdmin && (
         <>
           <button
@@ -203,9 +209,9 @@ const RoomSettingsMenu: React.FC<{
               navigate(`/room/${roomId}/pending`);
               onClose();
             }}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             待审核申请
@@ -215,9 +221,9 @@ const RoomSettingsMenu: React.FC<{
               navigate(`/room/${roomId}/members`);
               onClose();
             }}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
             成员列表
@@ -227,9 +233,9 @@ const RoomSettingsMenu: React.FC<{
               navigate(`/room/${roomId}/settings`);
               onClose();
             }}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -243,7 +249,7 @@ const RoomSettingsMenu: React.FC<{
           alert('退出群聊功能开发中');
           onClose();
         }}
-        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -291,11 +297,9 @@ const ChatHome = () => {
         setUser(firebaseUser);
         setAuthChecked(true);
         
-        // 获取并设置 token
         try {
           const token = localStorage.getItem('token');
           if (token) {
-            // 验证 token 是否有效
             await authApi.getCurrentUser();
           }
         } catch (err) {
@@ -315,12 +319,11 @@ const ChatHome = () => {
       try {
         setLoading(true);
         
-      const [roomsData, personasData] = await Promise.all([
-      roomApi.getRooms(),
-      personaApi.getMyPersonas(),  
-  ]);
+        const [roomsData, personasData] = await Promise.all([
+          roomApi.getRooms(),
+          personaApi.getMyPersonas(),
+        ]);
         
-        // 获取每个房间的未读消息数
         const roomsWithUnread = await Promise.all(
           roomsData.map(async (room) => {
             try {
@@ -337,11 +340,9 @@ const ChatHome = () => {
         );
         setRooms(roomsWithUnread);
         
-        // 只显示已审核的角色
         const approvedPersonas = personasData.filter(p => p.status === 'approved');
         setPersonas(approvedPersonas);
         
-        // 获取当前激活的角色
         const activePersona = await roomApi.getActivePersona();
         if (activePersona.activePersona) {
           setSelectedPersona(activePersona.activePersona.personaId);
@@ -385,17 +386,15 @@ const ChatHome = () => {
     console.log('🔌 Connecting socket...');
     socketService.connect(token);
 
-    // 监听新消息
     socketService.onNewMessage((message: Message) => {
       console.log('📨 收到新消息:', message);
       
       const isSelf = message.userId?.firebaseUid === user?.uid || message.userId?._id === user?.uid;
       
-      // 显示通知（如果不是自己发的）
       if (!isSelf) {
         toast.custom((t) => (
           <div 
-            className={`bg-white rounded-lg shadow-lg p-3 flex items-center gap-3 transform transition-all ${
+            className={`bg-white rounded-xl shadow-lg p-3 flex items-center gap-3 transform transition-all ${
               t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
             }`}
             onClick={() => toast.dismiss(t.id)}
@@ -416,14 +415,12 @@ const ChatHome = () => {
         notificationService.onNewMessage(message);
       }
 
-      // 更新消息列表
       setMessages(prev => {
         const exists = prev.some(m => m._id === message._id);
         if (exists) return prev;
         return [...prev, message];
       });
       
-      // 更新未读计数
       const messageRoomId = typeof message.roomId === 'string' 
         ? message.roomId 
         : message.roomId?._id;
@@ -437,7 +434,6 @@ const ChatHome = () => {
       }
     });
 
-    // 监听房间在线人数
     socketService.onRoomOnlineCount((data) => {
       setRooms(prevRooms => 
         prevRooms.map(room => 
@@ -448,7 +444,6 @@ const ChatHome = () => {
       );
     });
 
-    // 监听用户加入/离开（可选，用于调试）
     socketService.onUserJoined((data) => {
       console.log('👤 用户加入:', data);
     });
@@ -488,7 +483,6 @@ const ChatHome = () => {
           setMessages(processedMessages);
         }
         
-        // 加入 Socket 房间
         socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
         
       } catch (err: any) {
@@ -602,7 +596,7 @@ const ChatHome = () => {
           <p className="text-red-500 mb-4">{error}</p>
           <button 
             onClick={() => window.location.reload()}
-            className="bg-green-500 text-white px-4 py-2 rounded-lg"
+            className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-xl shadow-md"
           >
             重试
           </button>
@@ -639,7 +633,7 @@ const ChatHome = () => {
       <div className="px-4 py-2 flex-shrink-0">
         <button
           onClick={() => setShowCreateRoom(true)}
-          className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-2 rounded-xl hover:from-emerald-600 hover:to-teal-700 transition flex items-center justify-center gap-2 shadow-md"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -655,8 +649,8 @@ const ChatHome = () => {
             setShowUserList(false);
             setSelectedUser(null);
           }}
-          className={`flex-1 py-2 text-sm font-medium ${
-            !showUserList ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'
+          className={`flex-1 py-2 text-sm font-medium transition ${
+            !showUserList ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500'
           }`}
         >
           群聊
@@ -666,8 +660,8 @@ const ChatHome = () => {
             setShowUserList(true);
             setSelectedRoom(null);
           }}
-          className={`flex-1 py-2 text-sm font-medium ${
-            showUserList ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'
+          className={`flex-1 py-2 text-sm font-medium transition ${
+            showUserList ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500'
           }`}
         >
           私聊
@@ -685,7 +679,7 @@ const ChatHome = () => {
                 onClick={() => handleSelectPersona(persona)}
                 className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition flex-shrink-0 ${
                   selectedPersona?._id === persona._id
-                    ? 'bg-green-500 text-white'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -695,7 +689,7 @@ const ChatHome = () => {
             {personas.length === 0 && (
               <button
                 onClick={() => navigate('/persona')}
-                className="text-sm text-green-600 hover:text-green-700"
+                className="text-sm text-emerald-600 hover:text-emerald-700"
               >
                 还没有角色，去申请 →
               </button>
@@ -720,12 +714,12 @@ const ChatHome = () => {
                   key={room._id} 
                   onClick={() => handleSelectRoom(room)}
                   className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 active:bg-gray-100 transition ${
-                    selectedRoom?._id === room._id && !isMobile ? 'bg-green-50' : ''
+                    selectedRoom?._id === room._id && !isMobile ? 'bg-emerald-50' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-lg">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
                         {room.name.charAt(0)}
                       </div>
                       {room.onlineCount ? (
@@ -782,13 +776,13 @@ const ChatHome = () => {
     }
     
     return (
-      <div className="h-full flex flex-col bg-gray-50" style={{ height: '100%' }}>
+      <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
         {/* 聊天头部 */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+        <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           {isMobile && (
             <button 
               onClick={handleBackToList}
-              className="p-1 hover:bg-gray-100 rounded-full"
+              className="p-1 hover:bg-gray-100 rounded-full transition"
             >
               <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -798,7 +792,7 @@ const ChatHome = () => {
           
           <div className="flex items-center gap-3 flex-1">
             <div className="relative flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold shadow-md">
                 {selectedRoom?.name.charAt(0) || '?'}
               </div>
               {selectedRoom?.onlineCount ? (
@@ -821,7 +815,7 @@ const ChatHome = () => {
             <div className="relative">
               <button
                 onClick={() => setShowRoomMenu(!showRoomMenu)}
-                className="p-2 hover:bg-gray-100 rounded-full"
+                className="p-2 hover:bg-gray-100 rounded-full transition"
               >
                 <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />

@@ -14,21 +14,29 @@ const Wallet = () => {
   const { isMobile } = useResponsive();
   const user = auth.currentUser;
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
+  // 加载用户数据
   const loadUserData = async () => {
     try {
       setLoading(true);
       const data = await authApi.getCurrentUser();
       setUserData(data);
+      console.log('💰 钱包数据加载成功:', data.coins, '金币');
     } catch (error) {
       console.error('加载用户数据失败:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // 领取成功后的回调
+  const handleClaimSuccess = () => {
+    console.log('🎉 领取成功，刷新金币数据...');
+    loadUserData(); // 重新加载用户数据
+  };
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
 
   if (loading) {
     return (
@@ -54,7 +62,7 @@ const Wallet = () => {
           <h1 className="text-xl font-bold flex-1">我的钱包</h1>
         </div>
 
-        {/* 金币卡片 - 真实数据 */}
+        {/* 金币卡片 - 显示真实数据 */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <p className="text-sm opacity-90 mb-2">当前金币</p>
           <div className="flex items-center justify-between">
@@ -104,7 +112,9 @@ const Wallet = () => {
 
       {/* 内容区域 */}
       <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
-        {activeTab === 'daily' && <DailyLogin onClaimSuccess={loadUserData} />}
+        {activeTab === 'daily' && (
+          <DailyLogin onClaimSuccess={handleClaimSuccess} />
+        )}
         {activeTab === 'history' && <TransactionHistory />}
         {activeTab === 'wallet' && (
           <div className="bg-white rounded-2xl shadow p-5">

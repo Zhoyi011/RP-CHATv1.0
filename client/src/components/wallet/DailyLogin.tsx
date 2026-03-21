@@ -9,7 +9,7 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
   const [claimed, setClaimed] = useState(false);
   const [streak, setStreak] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
+  const [lastReward, setLastReward] = useState(0);
 
   useEffect(() => {
     checkTodayClaim();
@@ -20,7 +20,6 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
       const stats = await authApi.getUserStats();
       setStreak(stats.loginStreak);
       
-      // 检查今天是否已经领取过
       const today = new Date().toDateString();
       const lastClaim = localStorage.getItem('lastDailyClaim');
       setClaimed(lastClaim === today);
@@ -34,10 +33,12 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
     
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('https://rp-chatv1-0.onrender.com/api/user/daily-reward', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -47,9 +48,14 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
         localStorage.setItem('lastDailyClaim', today);
         setClaimed(true);
         setStreak(data.streak);
+        setLastReward(data.reward);
         
         alert(`领取成功！获得 ${data.reward} 金币，连续登录 ${data.streak} 天`);
-        if (onClaimSuccess) onClaimSuccess();
+        
+        // ✅ 关键：调用回调，通知父组件刷新数据
+        if (onClaimSuccess) {
+          onClaimSuccess();
+        }
       } else {
         alert(data.error || '领取失败');
       }
@@ -61,16 +67,14 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
     }
   };
 
-  // 模拟本周的每日奖励
   const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
   const todayIndex = new Date().getDay() || 7;
-  const rewards = [50, 60, 70, 80, 90, 100, 200];
+  const rewards = [5, 6, 7, 8, 9, 10, 15];
   
   return (
     <div className="bg-white rounded-2xl shadow p-5">
       <h2 className="font-medium text-gray-800 mb-4">每日登录奖励</h2>
       
-      {/* 连续登录天数 */}
       <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl p-4 mb-5">
         <p className="text-sm text-gray-600">连续登录</p>
         <p className="text-3xl font-bold bg-gradient-to-r from-amber-500 to-yellow-500 bg-clip-text text-transparent">
@@ -78,7 +82,6 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
         </p>
       </div>
 
-      {/* 本周奖励 */}
       <div className="grid grid-cols-7 gap-1 mb-5">
         {weekDays.map((day, index) => {
           const dayNumber = index + 1;
@@ -109,7 +112,6 @@ const DailyLogin: React.FC<Props> = ({ onClaimSuccess }) => {
         })}
       </div>
 
-      {/* 领取按钮 */}
       <button
         onClick={handleClaim}
         disabled={claimed || loading}
