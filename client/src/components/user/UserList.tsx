@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { adminApi, type User } from '../../services/api';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface Props {
   onSelectUser?: (user: User) => void;
@@ -12,6 +13,7 @@ const UserList: React.FC<Props> = ({ onSelectUser }) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -22,7 +24,6 @@ const UserList: React.FC<Props> = ({ onSelectUser }) => {
     try {
       setLoading(true);
       const data = await adminApi.getUsers();
-      // 过滤掉当前用户自己
       const filtered = data.filter(u => u.email !== currentUser?.email);
       setUsers(filtered);
     } catch (error) {
@@ -40,7 +41,7 @@ const UserList: React.FC<Props> = ({ onSelectUser }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'online': return 'bg-green-500';
-      case 'away': return 'bg-yellow-500';
+      case 'away': return 'bg-amber-500';
       default: return 'bg-gray-400';
     }
   };
@@ -48,7 +49,7 @@ const UserList: React.FC<Props> = ({ onSelectUser }) => {
   return (
     <div className="h-full flex flex-col bg-white">
       {/* 搜索栏 */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b border-gray-100">
         <div className="bg-gray-100 rounded-full px-4 py-2 flex items-center">
           <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -74,19 +75,16 @@ const UserList: React.FC<Props> = ({ onSelectUser }) => {
             <div
               key={user._id}
               onClick={() => onSelectUser?.(user)}
-              className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
+              className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition"
             >
               <div className="flex items-center gap-3">
-                {/* 头像 */}
                 <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold text-lg">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
                     {user.username.charAt(0).toUpperCase()}
                   </div>
-                  {/* 在线状态圆点 */}
                   <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 ${getStatusColor(user.status)} rounded-full border-2 border-white`}></div>
                 </div>
                 
-                {/* 用户信息 */}
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline">
                     <h3 className="font-medium text-gray-800 truncate">
@@ -101,6 +99,10 @@ const UserList: React.FC<Props> = ({ onSelectUser }) => {
                     加入于 {new Date(user.createdAt).toLocaleDateString()}
                   </p>
                 </div>
+                
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
             </div>
           ))

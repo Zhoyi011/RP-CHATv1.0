@@ -94,7 +94,7 @@ const JoinRoom = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-gray-400">加载中...</div>
       </div>
     );
@@ -103,46 +103,45 @@ const JoinRoom = () => {
   const selected = getSelectedPersona();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
       <div className="max-w-md mx-auto">
         {/* 返回按钮 */}
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          className="mb-4 flex items-center gap-1 text-gray-500 hover:text-emerald-600 transition"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          返回
+          <span>返回</span>
         </button>
         
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          {/* 头部渐变条 */}
-          <div className="h-2 bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500"></div>
+          <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
           
           <div className="p-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">申请加入群组</h2>
-            <div className="bg-gray-50 rounded-xl p-4 mb-4">
+            
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 mb-6">
               <p className="font-medium text-gray-800">{room?.name}</p>
               <p className="text-sm text-gray-500 mt-1">{room?.description}</p>
             </div>
             
-            {/* 角色选择 - 美化版 */}
-            <div className="mb-4">
+            {/* 角色选择 */}
+            <div className="mb-5">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 选择角色 <span className="text-red-500">*</span>
               </label>
               
-              {/* 自定义下拉选择器 */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowPersonaSelect(!showPersonaSelect)}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between hover:border-green-400 transition"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between hover:border-emerald-400 transition"
                 >
                   {selected ? (
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white text-sm font-bold">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-sm font-bold">
                         {selected.name.charAt(0)}
                       </div>
                       <div className="text-left">
@@ -158,7 +157,6 @@ const JoinRoom = () => {
                   </svg>
                 </button>
                 
-                {/* 下拉选项 */}
                 {showPersonaSelect && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
                     {personas.map(persona => (
@@ -168,11 +166,11 @@ const JoinRoom = () => {
                           setSelectedPersona(persona._id);
                           setShowPersonaSelect(false);
                         }}
-                        className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-green-50 transition text-left ${
-                          selectedPersona === persona._id ? 'bg-green-50 border-l-4 border-green-500' : ''
+                        className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-emerald-50 transition text-left ${
+                          selectedPersona === persona._id ? 'bg-emerald-50 border-l-4 border-emerald-500' : ''
                         }`}
                       >
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold">
                           {persona.name.charAt(0)}
                         </div>
                         <div className="flex-1">
@@ -180,7 +178,7 @@ const JoinRoom = () => {
                           <p className="text-xs text-gray-500 line-clamp-1">{persona.description}</p>
                         </div>
                         {selectedPersona === persona._id && (
-                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
                         )}
@@ -200,7 +198,7 @@ const JoinRoom = () => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="说说你为什么想加入这个群组..."
-                className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
                 rows={3}
               />
             </div>
@@ -209,7 +207,7 @@ const JoinRoom = () => {
             <button
               onClick={handleApply}
               disabled={submitting || !selectedPersona}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-xl font-medium hover:from-green-600 hover:to-emerald-700 transition disabled:opacity-50 shadow-lg shadow-green-500/25"
+              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl font-medium hover:from-emerald-600 hover:to-teal-700 transition disabled:opacity-50 shadow-md"
             >
               {submitting ? '提交中...' : '提交申请'}
             </button>

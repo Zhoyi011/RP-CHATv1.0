@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface PendingMember {
   _id: string;
@@ -12,6 +13,7 @@ interface PendingMember {
 const PendingRequests = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
   const [requests, setRequests] = useState<PendingMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [roomName, setRoomName] = useState('');
@@ -24,14 +26,12 @@ const PendingRequests = () => {
     try {
       const token = localStorage.getItem('token');
       
-      // 获取房间信息
       const roomRes = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const roomData = await roomRes.json();
       setRoomName(roomData.name);
       
-      // 获取待审核列表
       const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/pending`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -71,67 +71,74 @@ const PendingRequests = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-gray-400">加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-1">
+          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-100 rounded-lg transition">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1">待审核申请</h1>
+          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            待审核申请
+          </h1>
         </div>
         <p className="text-sm text-gray-500 mt-1">{roomName}</p>
       </div>
 
-      <div className="p-4">
+      <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
         {requests.length === 0 ? (
-          <div className="bg-white rounded-xl shadow p-8 text-center">
-            <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="bg-white rounded-2xl shadow p-8 text-center">
+            <div className="w-20 h-20 mx-auto bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
             <p className="text-gray-400">暂无待审核申请</p>
           </div>
         ) : (
           <div className="space-y-3">
             {requests.map(req => (
-              <div key={req._id} className="bg-white rounded-xl shadow p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-lg">
-                    {req.personaId.name.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold">{req.personaId.name}</p>
-                    <p className="text-sm text-gray-500">{req.userId.username}</p>
-                    {req.message && (
-                      <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded">
-                        "{req.message}"
+              <div key={req._id} className="bg-white rounded-2xl shadow overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+                <div className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                      {req.personaId.name.charAt(0)}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800">{req.personaId.name}</p>
+                      <p className="text-sm text-gray-500">{req.userId.username}</p>
+                      {req.message && (
+                        <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-lg">
+                          "{req.message}"
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-2">
+                        申请于 {new Date(req.appliedAt).toLocaleString()}
                       </p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      申请于 {new Date(req.appliedAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApprove(req.userId._id, true)}
-                      className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-600"
-                    >
-                      通过
-                    </button>
-                    <button
-                      onClick={() => handleApprove(req.userId._id, false)}
-                      className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-red-600"
-                    >
-                      拒绝
-                    </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApprove(req.userId._id, true)}
+                        className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-3 py-1.5 rounded-xl text-sm hover:from-emerald-600 hover:to-teal-700 transition shadow-md"
+                      >
+                        通过
+                      </button>
+                      <button
+                        onClick={() => handleApprove(req.userId._id, false)}
+                        className="bg-red-500 text-white px-3 py-1.5 rounded-xl text-sm hover:bg-red-600 transition shadow-md"
+                      >
+                        拒绝
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

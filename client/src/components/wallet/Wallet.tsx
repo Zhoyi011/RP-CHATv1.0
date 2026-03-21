@@ -1,26 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase/config';
+import { authApi, type User } from '../../services/api';
+import { useResponsive } from '../../hooks/useResponsive';
 import DailyLogin from './DailyLogin';
 import TransactionHistory from './TransactionHistory';
 
-// 模拟金币数据（后续从后端获取）
-const mockCoins = 1280;
-
 const Wallet = () => {
-  const [coins, setCoins] = useState(mockCoins);
+  const [userData, setUserData] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('wallet');
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
   const user = auth.currentUser;
 
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      const data = await authApi.getCurrentUser();
+      setUserData(data);
+    } catch (error) {
+      console.error('加载用户数据失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-gray-400">加载中...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 头部 */}
-      <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+      <div className="bg-gradient-to-r from-amber-500 to-yellow-600 text-white">
         <div className="px-4 py-3 flex items-center">
           <button
             onClick={() => navigate('/profile')}
-            className="mr-3"
+            className="mr-3 p-1 hover:bg-white/20 rounded-full transition"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -29,17 +54,17 @@ const Wallet = () => {
           <h1 className="text-xl font-bold flex-1">我的钱包</h1>
         </div>
 
-        {/* 金币卡片 */}
+        {/* 金币卡片 - 真实数据 */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <p className="text-sm opacity-90 mb-2">当前金币</p>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <svg className="w-8 h-8 text-yellow-300" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-8 h-8 text-amber-300" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
               </svg>
-              <span className="text-3xl font-bold">{coins.toLocaleString()}</span>
+              <span className="text-3xl font-bold">{userData?.coins?.toLocaleString() || 0}</span>
             </div>
-            <button className="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-lg font-medium text-sm hover:bg-yellow-300 transition">
+            <button className="bg-amber-400 text-amber-900 px-4 py-2 rounded-xl font-medium text-sm hover:bg-amber-300 transition shadow-md">
               充值
             </button>
           </div>
@@ -78,34 +103,34 @@ const Wallet = () => {
       </div>
 
       {/* 内容区域 */}
-      <div className="p-4">
-        {activeTab === 'daily' && <DailyLogin />}
+      <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
+        {activeTab === 'daily' && <DailyLogin onClaimSuccess={loadUserData} />}
         {activeTab === 'history' && <TransactionHistory />}
         {activeTab === 'wallet' && (
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="font-medium mb-3">获取金币</h2>
+          <div className="bg-white rounded-2xl shadow p-5">
+            <h2 className="font-medium text-gray-800 mb-4">获取金币</h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
                   <div>
-                    <p className="font-medium">每日登录</p>
+                    <p className="font-medium text-gray-800">每日登录</p>
                     <p className="text-xs text-gray-400">每天首次登录领取</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setActiveTab('daily')}
-                  className="bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-600"
+                  className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-1.5 rounded-xl text-sm hover:from-emerald-600 hover:to-teal-700 transition shadow-md"
                 >
                   领取
                 </button>
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,14 +138,14 @@ const Wallet = () => {
                     </svg>
                   </div>
                   <div>
-                    <p className="font-medium">聊天发言</p>
+                    <p className="font-medium text-gray-800">聊天发言</p>
                     <p className="text-xs text-gray-400">每10条消息获得金币</p>
                   </div>
                 </div>
                 <span className="text-sm text-gray-500">进行中</span>
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
                     <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +153,7 @@ const Wallet = () => {
                     </svg>
                   </div>
                   <div>
-                    <p className="font-medium">邀请好友</p>
+                    <p className="font-medium text-gray-800">邀请好友</p>
                     <p className="text-xs text-gray-400">邀请新用户获得奖励</p>
                   </div>
                 </div>

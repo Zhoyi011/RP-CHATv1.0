@@ -1,74 +1,85 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-// 模拟交易记录
-const mockTransactions = [
-  { id: 1, type: 'daily', amount: 50, desc: '每日登录奖励', date: '2026-03-18', time: '10:30' },
-  { id: 2, type: 'chat', amount: 10, desc: '聊天发言奖励', date: '2026-03-17', time: '15:20' },
-  { id: 3, type: 'purchase', amount: -200, desc: '购买头像框', date: '2026-03-16', time: '09:15' },
-  { id: 4, type: 'daily', amount: 50, desc: '每日登录奖励', date: '2026-03-16', time: '08:00' },
-  { id: 5, type: 'invite', amount: 100, desc: '邀请好友奖励', date: '2026-03-15', time: '14:30' },
-];
+interface Transaction {
+  _id: string;
+  type: 'daily' | 'chat' | 'purchase' | 'invite' | 'reward';
+  amount: number;
+  description: string;
+  date: string;
+}
 
 const TransactionHistory = () => {
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'daily':
-        return (
-          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        );
-      case 'chat':
-        return (
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </div>
-        );
-      case 'purchase':
-        return (
-          <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          </div>
-        );
-      case 'invite':
-        return (
-          <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-            <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </div>
-        );
-      default:
-        return null;
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadTransactions();
+  }, []);
+
+  const loadTransactions = async () => {
+    try {
+      // TODO: 后端需要实现交易记录接口
+      // 暂时使用模拟数据，后续替换为真实 API
+      const mockTransactions: Transaction[] = [
+        { _id: '1', type: 'daily', amount: 50, description: '每日登录奖励', date: new Date().toISOString() },
+        { _id: '2', type: 'chat', amount: 10, description: '聊天发言奖励', date: new Date(Date.now() - 86400000).toISOString() },
+      ];
+      setTransactions(mockTransactions);
+    } catch (error) {
+      console.error('获取交易记录失败:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h2 className="font-medium mb-3">交易记录</h2>
-      
-      <div className="space-y-3">
-        {mockTransactions.map((tx) => (
-          <div key={tx.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-            {getTypeIcon(tx.type)}
-            
-            <div className="flex-1">
-              <p className="font-medium text-sm">{tx.desc}</p>
-              <p className="text-xs text-gray-400">{tx.date} {tx.time}</p>
-            </div>
-            
-            <p className={`font-bold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {tx.amount > 0 ? '+' : ''}{tx.amount}
-            </p>
-          </div>
-        ))}
+  const getTypeIcon = (type: string) => {
+    const icons: Record<string, { icon: string; bg: string; color: string }> = {
+      daily: { icon: '📅', bg: 'bg-emerald-100', color: 'text-emerald-600' },
+      chat: { icon: '💬', bg: 'bg-blue-100', color: 'text-blue-600' },
+      purchase: { icon: '🛒', bg: 'bg-purple-100', color: 'text-purple-600' },
+      invite: { icon: '👥', bg: 'bg-amber-100', color: 'text-amber-600' },
+      reward: { icon: '🎁', bg: 'bg-pink-100', color: 'text-pink-600' },
+    };
+    return icons[type] || { icon: '💰', bg: 'bg-gray-100', color: 'text-gray-600' };
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl shadow p-5">
+        <div className="text-center py-8 text-gray-400">加载中...</div>
       </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-5">
+      <h2 className="font-medium text-gray-800 mb-4">交易记录</h2>
+      
+      {transactions.length === 0 ? (
+        <div className="text-center py-8 text-gray-400">暂无交易记录</div>
+      ) : (
+        <div className="space-y-3">
+          {transactions.map((tx) => {
+            const { icon, bg, color } = getTypeIcon(tx.type);
+            return (
+              <div key={tx._id} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition">
+                <div className={`w-10 h-10 ${bg} rounded-full flex items-center justify-center text-lg`}>
+                  {icon}
+                </div>
+                
+                <div className="flex-1">
+                  <p className="font-medium text-sm text-gray-800">{tx.description}</p>
+                  <p className="text-xs text-gray-400">{new Date(tx.date).toLocaleDateString()}</p>
+                </div>
+                
+                <p className={`font-bold ${tx.amount > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {tx.amount > 0 ? '+' : ''}{tx.amount}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
