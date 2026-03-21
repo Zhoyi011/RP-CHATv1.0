@@ -10,7 +10,8 @@ import Wallet from './components/wallet/Wallet'
 import Profile from './components/profile/Profile'
 import Changelog from './components/common/Changelog'
 import SearchPage from './components/common/SearchPage'
-// 新增的群组页面
+import GroupDetail from './components/chat/GroupDetail';
+import GroupSettings from './components/chat/GroupSettings';
 import JoinRoom from './components/chat/JoinRoom'
 import PendingRequests from './components/chat/PendingRequests'
 import RoomMembers from './components/chat/RoomMembers'
@@ -31,7 +32,8 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/search" element={<SearchPage />} />
-        {/* 群组相关路由 */}
+        <Route path="/group/:roomId" element={<GroupDetail />} />
+        <Route path="/group/:roomId/settings" element={<GroupSettings />} />
         <Route path="/join/:roomId" element={<JoinRoom />} />
         <Route path="/room/:roomId/pending" element={<PendingRequests />} />
         <Route path="/room/:roomId/members" element={<RoomMembers />} />

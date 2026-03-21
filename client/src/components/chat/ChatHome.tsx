@@ -9,7 +9,6 @@ import CreateRoom from './CreateRoom';
 import PrivateChat from './PrivateChat';
 import UserList from '../user/UserList';
 import ChatInput from './ChatInput';
-import GroupInfoModal from './GroupInfoModal';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
 import { 
@@ -210,7 +209,6 @@ const ChatHome = () => {
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
-  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -289,50 +287,50 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-// ========== 加载房间成员和权限 ==========
-useEffect(() => {
-  if (!selectedRoom || !user) return;
+  // ========== 加载房间成员和权限 ==========
+  useEffect(() => {
+    if (!selectedRoom || !user) return;
 
-  const loadRoomPermissions = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/members`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      // 即使获取失败也不报错，只是没有管理员权限
-      if (!response.ok) {
-        console.warn('获取成员列表失败，用户可能不是群成员:', response.status);
+    const loadRoomPermissions = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        const response = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/members`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+          console.warn('获取成员列表失败，用户可能不是群成员:', response.status);
+          setIsRoomAdmin(false);
+          setIsRoomOwner(false);
+          return;
+        }
+        
+        const members = await response.json();
+        setRoomMembers(members);
+        
+        const currentMember = members.find((m: any) => m.userId._id === user.uid);
+        setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
+        setIsRoomOwner(currentMember?.role === 'owner');
+        
+        console.log('权限检查:', {
+          roomId: selectedRoom._id,
+          userId: user.uid,
+          role: currentMember?.role,
+          isAdmin: currentMember?.role === 'admin' || currentMember?.role === 'owner',
+          isOwner: currentMember?.role === 'owner'
+        });
+      } catch (error) {
+        console.error('加载成员权限失败:', error);
         setIsRoomAdmin(false);
         setIsRoomOwner(false);
-        return;
       }
-      
-      const members = await response.json();
-      setRoomMembers(members);
-      
-      const currentMember = members.find((m: any) => m.userId._id === user.uid);
-      setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
-      setIsRoomOwner(currentMember?.role === 'owner');
-      
-      console.log('权限检查:', {
-        roomId: selectedRoom._id,
-        userId: user.uid,
-        role: currentMember?.role,
-        isAdmin: currentMember?.role === 'admin' || currentMember?.role === 'owner',
-        isOwner: currentMember?.role === 'owner'
-      });
-    } catch (error) {
-      console.error('加载成员权限失败:', error);
-      setIsRoomAdmin(false);
-      setIsRoomOwner(false);
-    }
-  };
-  
-  loadRoomPermissions();
-}, [selectedRoom, user]);
+    };
+    
+    loadRoomPermissions();
+  }, [selectedRoom, user]);
+
   // ========== Socket 连接和事件监听 ==========
   useEffect(() => {
     if (!authChecked || !user) return;
@@ -769,11 +767,12 @@ useEffect(() => {
             </div>
           </div>
           
-          {/* 右上角三个点 - 所有人可见 */}
+          {/* ✅ 右上角三个点 - 跳转到群详情页 */}
           {selectedRoom && (
             <button
-              onClick={() => setShowGroupInfo(true)}
+              onClick={() => navigate(`/group/${selectedRoom._id}`)}
               className="p-2 hover:bg-gray-100 rounded-full transition"
+              title="群资料"
             >
               <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -845,21 +844,6 @@ useEffect(() => {
             {!showChatWindow ? renderChatList() : renderChatWindow()}
           </div>
         </MobileLayout>
-      )}
-
-      {/* 群资料弹窗 */}
-      {showGroupInfo && selectedRoom && (
-        <GroupInfoModal
-          roomId={selectedRoom._id}
-          roomName={selectedRoom.name}
-          roomDescription={selectedRoom.description || ''}
-          roomAnnouncement={(selectedRoom as any).announcement || ''}
-          onClose={() => setShowGroupInfo(false)}
-          onOpenSettings={() => {
-            setShowGroupInfo(false);
-            navigate(`/room/${selectedRoom._id}/settings`);
-          }}
-        />
       )}
     </>
   );
