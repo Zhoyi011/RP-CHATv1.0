@@ -359,19 +359,46 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-  // ========== 加载房间成员和权限 ==========
-  useEffect(() => {
-    if (!selectedRoom || !user) return;
+ // ========== 加载房间成员和权限 ==========
+useEffect(() => {
+  if (!selectedRoom || !user) return;
 
-    const currentRoom = rooms.find(r => r._id === selectedRoom._id);
-    if (currentRoom && 'members' in currentRoom) {
-      const members = (currentRoom as any).members || [];
-      setRoomMembers(members);
-      const currentMember = members.find((m: any) => m.userId === user.uid);
+  const loadRoomPermissions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      console.log('🔍 加载房间权限:', selectedRoom._id);
+      
+      const response = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/members`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) {
+        console.error('获取成员列表失败:', response.status);
+        return;
+      }
+      
+      const members = await response.json();
+      console.log('📋 成员列表:', members);
+      
+      const currentMember = members.find((m: any) => m.userId._id === user.uid);
+      console.log('👤 当前用户:', {
+        uid: user.uid,
+        member: currentMember,
+        role: currentMember?.role
+      });
+      
       setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
       setIsRoomOwner(currentMember?.role === 'owner');
+      
+    } catch (error) {
+      console.error('❌ 加载成员权限失败:', error);
     }
-  }, [selectedRoom, user, rooms]);
+  };
+  
+  loadRoomPermissions();
+}, [selectedRoom, user]);
 
   // ========== Socket 连接和事件监听 ==========
   useEffect(() => {
