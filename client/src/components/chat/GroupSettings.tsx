@@ -15,7 +15,7 @@ interface Member {
     _id: string;
     name: string;
     avatar?: string;
-  };
+  } | null;
   role: 'owner' | 'admin' | 'member';
   nickname: string;
   title: string;
@@ -31,6 +31,7 @@ const GroupSettings = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'basic' | 'members' | 'pending'>('basic');
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -55,7 +56,12 @@ const GroupSettings = () => {
 
   const loadData = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
       
       // 加载房间信息
       const roomRes = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}`, {
@@ -78,17 +84,28 @@ const GroupSettings = () => {
       const membersData = await membersRes.json();
       setMembers(Array.isArray(membersData) ? membersData : []);
       
-      // 加载待审核数量
-      const pendingRes = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/pending`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const pendingData = await pendingRes.json();
-      setPendingCount(Array.isArray(pendingData) ? pendingData.length : 0);
+      // 加载待审核列表
+      await loadPendingRequests();
       
     } catch (error) {
       console.error('加载数据失败:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingRequests = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPendingRequests(Array.isArray(data) ? data : []);
+      setPendingCount(Array.isArray(data) ? data.length : 0);
+      console.log('📋 待审核申请:', data);
+    } catch (error) {
+      console.error('加载待审核列表失败:', error);
     }
   };
 
@@ -239,13 +256,46 @@ const GroupSettings = () => {
   };
 
   const handleReport = () => {
-    alert('举报功能开发中，请通过邮件联系我们：zhoyi.lee@gmail.com');
+    alert('举报功能开发中，请通过邮件联系我们：support@rp-chat.com');
+  };
+
+  const handleApproveRequest = async (userId: string, approve: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/approve-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId, approve })
+      });
+      
+      if (res.ok) {
+        alert(approve ? '已批准加入' : '已拒绝申请');
+        await loadPendingRequests();
+        await loadData(); // 刷新成员列表
+      } else {
+        const data = await res.json();
+        alert(data.error || '操作失败');
+      }
+    } catch (error) {
+      console.error('操作失败:', error);
+      alert('操作失败，请重试');
+    }
   };
 
   const getRoleBadge = (role: string) => {
     if (role === 'owner') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">群主</span>;
     if (role === 'admin') return <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">管理员</span>;
     return <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">成员</span>;
+  };
+
+  const getDisplayName = (member: Member) => {
+    if (member.personaId?.name) {
+      return member.personaId.name;
+    }
+    return member.userId?.username || '未知用户';
   };
 
   if (loading) {
@@ -302,7 +352,10 @@ const GroupSettings = () => {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('pending')}
+              onClick={() => {
+                setActiveTab('pending');
+                loadPendingRequests(); // 点击时刷新
+              }}
               className={`py-3 text-sm font-medium transition relative ${
                 activeTab === 'pending' ? 'text-emerald-600' : 'text-gray-500'
               }`}
@@ -353,6 +406,7 @@ const GroupSettings = () => {
                 onChange={(e) => setFormData({ ...formData, announcement: e.target.value })}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
                 rows={3}
+                placeholder="群公告..."
               />
               <p className="text-xs text-gray-400 mt-2">公告会显示在群详情页顶部</p>
             </div>
@@ -418,89 +472,139 @@ const GroupSettings = () => {
               <p className="text-xs text-gray-400 mt-1">共 {members.length} 位成员</p>
             </div>
             <div className="divide-y divide-gray-100">
-              {members.map(member => (
-                <div key={member._id} className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold shadow-sm">
-                    {member.personaId?.name?.charAt(0) || '?'}
+              {members.map(member => {
+                const displayName = getDisplayName(member);
+                return (
+                  <div key={member._id} className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold shadow-sm">
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-800">{displayName}</span>
+                        {getRoleBadge(member.role)}
+                        {member.title && (
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {member.title}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{member.userId.username}</p>
+                    </div>
+                    
+                    {/* 操作按钮 */}
+                    {isOwner && member.role !== 'owner' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSetAdmin(member.userId._id, member.userId.username, member.role !== 'admin')}
+                          className="text-xs text-blue-500 hover:text-blue-600"
+                        >
+                          {member.role === 'admin' ? '取消管理' : '设为管理'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedMember(member);
+                            setNewTitle(member.title || '');
+                            setShowTitleModal(true);
+                          }}
+                          className="text-xs text-gray-500 hover:text-emerald-600"
+                        >
+                          头衔
+                        </button>
+                        <button
+                          onClick={() => handleKickMember(member.userId._id, member.userId.username)}
+                          className="text-xs text-red-500 hover:text-red-600"
+                        >
+                          踢出
+                        </button>
+                      </div>
+                    )}
+                    
+                    {isAdmin && !isOwner && member.role !== 'owner' && member.role !== 'admin' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedMember(member);
+                            setNewTitle(member.title || '');
+                            setShowTitleModal(true);
+                          }}
+                          className="text-xs text-gray-500 hover:text-emerald-600"
+                        >
+                          头衔
+                        </button>
+                        <button
+                          onClick={() => handleKickMember(member.userId._id, member.userId.username)}
+                          className="text-xs text-red-500 hover:text-red-600"
+                        >
+                          踢出
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-800">{member.personaId?.name}</span>
-                      {getRoleBadge(member.role)}
-                      {member.title && (
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                          {member.title}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">{member.userId.username}</p>
-                  </div>
-                  
-                  {/* 操作按钮 */}
-                  {isOwner && member.role !== 'owner' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSetAdmin(member.userId._id, member.userId.username, member.role !== 'admin')}
-                        className="text-xs text-blue-500 hover:text-blue-600"
-                      >
-                        {member.role === 'admin' ? '取消管理' : '设为管理'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedMember(member);
-                          setNewTitle(member.title || '');
-                          setShowTitleModal(true);
-                        }}
-                        className="text-xs text-gray-500 hover:text-emerald-600"
-                      >
-                        头衔
-                      </button>
-                      <button
-                        onClick={() => handleKickMember(member.userId._id, member.userId.username)}
-                        className="text-xs text-red-500 hover:text-red-600"
-                      >
-                        踢出
-                      </button>
-                    </div>
-                  )}
-                  
-                  {isAdmin && !isOwner && member.role !== 'owner' && member.role !== 'admin' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedMember(member);
-                          setNewTitle(member.title || '');
-                          setShowTitleModal(true);
-                        }}
-                        className="text-xs text-gray-500 hover:text-emerald-600"
-                      >
-                        头衔
-                      </button>
-                      <button
-                        onClick={() => handleKickMember(member.userId._id, member.userId.username)}
-                        className="text-xs text-red-500 hover:text-red-600"
-                      >
-                        踢出
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* ========== 待审核 Tab（仅管理员） ========== */}
         {activeTab === 'pending' && (isOwner || isAdmin) && (
-          <button
-            onClick={() => navigate(`/room/${roomId}/pending`)}
-            className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl font-medium hover:from-emerald-600 hover:to-teal-700 transition shadow-md flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            查看待审核申请 ({pendingCount})
-          </button>
+          <div className="bg-white rounded-2xl shadow overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <h3 className="font-medium text-gray-800">待审核申请</h3>
+              <p className="text-xs text-gray-400 mt-1">共 {pendingCount} 个申请等待处理</p>
+            </div>
+            
+            {pendingRequests.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="text-gray-400">暂无待审核申请</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {pendingRequests.map((req: any) => (
+                  <div key={req._id} className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold shadow-md">
+                        {req.personaId?.name?.charAt(0) || '?'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800">{req.personaId?.name || '未知角色'}</span>
+                          <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">待审核</span>
+                        </div>
+                        <p className="text-sm text-gray-500">{req.userId?.username}</p>
+                        {req.message && (
+                          <p className="text-xs text-gray-400 mt-1 line-clamp-1">申请理由：{req.message}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          申请于 {new Date(req.appliedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleApproveRequest(req.userId._id, false)}
+                          className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                        >
+                          拒绝
+                        </button>
+                        <button
+                          onClick={() => handleApproveRequest(req.userId._id, true)}
+                          className="px-3 py-1.5 text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition shadow-sm"
+                        >
+                          批准
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* ========== 通用功能（所有人可见） ========== */}
@@ -541,7 +645,7 @@ const GroupSettings = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">
-                  设置 {selectedMember.personaId?.name} 的头衔
+                  设置 {getDisplayName(selectedMember)} 的头衔
                 </h3>
                 <button
                   onClick={() => {

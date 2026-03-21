@@ -39,6 +39,7 @@ const PendingRequests = () => {
       });
       const data = await res.json();
       setRequests(Array.isArray(data) ? data : []);
+      console.log('待审核申请:', data);
     } catch (error) {
       console.error('加载失败:', error);
     } finally {
@@ -189,10 +190,7 @@ const PendingRequests = () => {
               
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    const reason = prompt('请输入拒绝原因（可选）');
-                    handleApprove(selectedRequest.userId._id, false, reason || undefined);
-                  }}
+                  onClick={() => handleApprove(selectedRequest.userId._id, false)}
                   className="flex-1 bg-red-500 text-white px-4 py-2 rounded-xl hover:bg-red-600 transition shadow-md"
                 >
                   拒绝
