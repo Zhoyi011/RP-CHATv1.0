@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
 import DesktopLayout from '../layout/DesktopLayout';
@@ -56,7 +56,6 @@ const api = {
       method: 'POST',
       body: JSON.stringify({ personaId }),
     }),
-  // ✅ 修复：正确的路径是 /room/:roomId/messages
   getMessages: (roomId: string) =>
     request<Message[]>(`/room/${roomId}/messages`),
 };
@@ -368,6 +367,8 @@ const RoomSettingsMenu: React.FC<{
 // ========== 主组件 ==========
 const ChatHome = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
   const { isMobile, isTablet, isDesktop } = useResponsive();
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -385,7 +386,7 @@ const ChatHome = () => {
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
 
-  const [showUserList, setShowUserList] = useState(false);
+  const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
 
@@ -451,14 +452,12 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-  // 加载房间成员和权限（修复：不在这里调用成员接口，因为可能不是成员）
+  // 加载房间成员和权限
   useEffect(() => {
     if (!selectedRoom || !user) return;
 
-    // 直接从房间列表中找到当前房间的成员信息
     const currentRoom = rooms.find(r => r._id === selectedRoom._id);
     if (currentRoom && 'members' in currentRoom) {
-      // 如果房间对象里有成员信息
       const members = (currentRoom as any).members || [];
       setRoomMembers(members);
       const currentMember = members.find((m: any) => m.userId === user.uid);
@@ -551,7 +550,6 @@ const ChatHome = () => {
     };
   }, [authChecked, user, selectedRoom]);
 
-  // ✅ 加载消息 - 使用修复后的 API
   useEffect(() => {
     if (!selectedRoom || !selectedPersona || !user) return;
 
@@ -722,30 +720,30 @@ const ChatHome = () => {
         </button>
       </div>
 
-<div className="flex border-b border-gray-200 flex-shrink-0">
-  <button
-    onClick={() => {
-      setShowUserList(false);
-      setSelectedUser(null);
-    }}
-    className={`flex-1 py-2 text-sm font-medium ${
-      !showUserList ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'
-    }`}
-  >
-    群聊
-  </button>
-  <button
-    onClick={() => {
-      setShowUserList(true);
-      setSelectedRoom(null);
-    }}
-    className={`flex-1 py-2 text-sm font-medium ${
-      showUserList ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'
-    }`}
-  >
-    私聊
-  </button>
-</div>
+      <div className="flex border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={() => {
+            setShowUserList(false);
+            setSelectedUser(null);
+          }}
+          className={`flex-1 py-2 text-sm font-medium ${
+            !showUserList ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'
+          }`}
+        >
+          群聊
+        </button>
+        <button
+          onClick={() => {
+            setShowUserList(true);
+            setSelectedRoom(null);
+          }}
+          className={`flex-1 py-2 text-sm font-medium ${
+            showUserList ? 'text-green-600 border-b-2 border-green-500' : 'text-gray-500'
+          }`}
+        >
+          私聊
+        </button>
+      </div>
 
       {!showUserList && (
         <div className="px-4 py-2 border-b border-gray-100 flex-shrink-0">

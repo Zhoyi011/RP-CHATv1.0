@@ -4,7 +4,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 
 interface SearchResult {
   type: 'persona' | 'user' | 'room';
-  id: string;
+  _id: string;
   name: string;
   avatar?: string;
   description?: string;
@@ -47,11 +47,11 @@ const SearchPage = () => {
       const data = await res.json();
       
       if (activeTab === 'persona') {
-        setResults(data.personas.map(p => ({ type: 'persona', ...p })));
+        setResults(data.personas?.map((p: any) => ({ ...p, type: 'persona' })) || []);
       } else if (activeTab === 'user') {
-        setResults(data.users.map(u => ({ type: 'user', ...u })));
+        setResults(data.users?.map((u: any) => ({ ...u, type: 'user' })) || []);
       } else {
-        setResults(data.rooms.map(r => ({ type: 'room', ...r })));
+        setResults(data.rooms?.map((r: any) => ({ ...r, type: 'room' })) || []);
       }
     } catch (error) {
       console.error('搜索失败:', error);
@@ -62,12 +62,15 @@ const SearchPage = () => {
 
   const handleResultClick = (result: SearchResult) => {
     if (result.type === 'persona') {
-      navigate(`/persona/${result.id}`);
+      // 跳转到角色主页
+      navigate(`/persona/${result._id}`);
     } else if (result.type === 'user') {
-      // 跳转到私聊
-      navigate(`/chat?user=${result.id}`);
+      // 跳转到私聊（需要先获取用户的角色或直接跳转）
+      // 暂时跳转到聊天室，后续可以加私聊功能
+      navigate(`/chat?user=${result._id}`);
     } else {
-      navigate(`/chat?room=${result.id}`);
+      // ✅ 跳转到申请加入页面
+      navigate(`/join/${result._id}`);
     }
   };
 
@@ -90,7 +93,6 @@ const SearchPage = () => {
           />
         </div>
 
-        {/* 标签页 */}
         <div className="flex gap-4 mt-3">
           {[
             { key: 'persona', label: '🎭 角色' },
