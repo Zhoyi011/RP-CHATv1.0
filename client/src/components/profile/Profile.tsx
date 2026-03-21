@@ -339,6 +339,29 @@ const Profile = () => {
               </button>
             </div>
 
+            {/* 语音房入口 */}
+<div className="bg-white rounded-2xl shadow p-5 mb-4">
+  <button
+    onClick={() => navigate('/voice')}
+    className="w-full flex items-center justify-between py-2 text-gray-600 hover:text-emerald-600 transition"
+  >
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+      </div>
+      <div>
+        <span className="font-medium">语音房</span>
+        <p className="text-xs text-gray-400">与好友实时语音聊天</p>
+      </div>
+    </div>
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  </button>
+</div>
+
             {/* 统计数据 */}
             <div className="bg-white rounded-2xl shadow p-5">
               <h3 className="font-medium text-gray-800 mb-3">统计</h3>

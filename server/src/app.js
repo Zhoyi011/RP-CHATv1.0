@@ -48,7 +48,6 @@ mongoose.connect(process.env.MONGODB_URI, {
 .then(async () => {
   console.log('✅ MongoDB 连接成功');
   
-  // 不阻塞启动，延迟执行更新日志同步
   setTimeout(() => {
     console.log('📡 后台启动更新日志同步（不阻塞服务）...');
     try {
@@ -59,13 +58,12 @@ mongoose.connect(process.env.MONGODB_URI, {
     } catch (err) {
       console.error('⚠️ 加载更新日志模块失败:', err.message);
     }
-  }, 15000); // 15秒后执行
+  }, 15000);
   
   console.log('🚀 服务已就绪，等待请求...');
 })
 .catch(err => {
   console.error('❌ MongoDB 连接失败:', err.message);
-  // 即使数据库连接失败，服务器也要启动（至少返回错误信息）
 });
 
 // ===== 测试路由 =====
@@ -80,6 +78,7 @@ const roomRoutes = require('./routes/room');
 const userRoutes = require('./routes/user');
 const changelogRoutes = require('./routes/changelog');
 const searchRoutes = require('./routes/search');
+const voiceRoutes = require('./routes/voice');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/persona', personaRoutes);
@@ -87,6 +86,7 @@ app.use('/api/room', roomRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/changelog', changelogRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/voice', voiceRoutes);
 
 // ===== 404 =====
 app.use((req, res) => {
@@ -122,24 +122,35 @@ const io = require('socket.io')(server, {
   transports: ['websocket', 'polling']
 });
 
-// 存储在线用户
+// ========== 在线用户存储 ==========
 const onlineUsers = new Map();
 
+// ========== 语音房间存储 ==========
+const voiceRooms = new Map(); // roomId -> Map(socketId -> userInfo)
+
+// ========== Socket 事件处理 ==========
 io.on('connection', (socket) => {
   console.log('🟢 新客户端连接:', socket.id);
   
+  // ========== 文字聊天室 ==========
+  
+  // 用户加入房间
   socket.on('join-room', async ({ roomId, userId, personaId }) => {
     try {
       socket.join(roomId);
+      
       onlineUsers.set(socket.id, { userId, roomId, personaId, socketId: socket.id });
+      
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === roomId);
       io.to(roomId).emit('room-online-count', { roomId, count: roomUsers.length });
-      console.log(`👤 用户 ${userId} 加入房间 ${roomId}`);
+      
+      console.log(`👤 用户 ${userId} 使用角色 ${personaId} 加入房间 ${roomId}`);
     } catch (error) {
       console.error('加入房间失败:', error);
     }
   });
   
+  // 发送消息
   socket.on('send-message', async (data) => {
     const { roomId, userId, personaId, content, isAction } = data;
     
@@ -190,6 +201,7 @@ io.on('connection', (socket) => {
     }
   });
   
+  // 切换角色
   socket.on('switch-persona', ({ userId, newPersonaId }) => {
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
@@ -199,6 +211,7 @@ io.on('connection', (socket) => {
     }
   });
   
+  // 离开房间
   socket.on('leave-room', () => {
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
@@ -210,7 +223,152 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== 语音房 ==========
+  
+  // 加入语音房间
+  socket.on('join-voice-room', ({ roomId, userId, personaId, personaName, username, avatar }) => {
+    console.log(`🎙️ 用户 ${username} (${userId}) 加入语音房 ${roomId}`);
+    
+    if (!voiceRooms.has(roomId)) {
+      voiceRooms.set(roomId, new Map());
+    }
+    
+    const roomUsers = voiceRooms.get(roomId);
+    
+    // 检查是否是房主（房间创建者）
+    let isCreator = false;
+    const VoiceRoom = require('./models/VoiceRoom');
+    VoiceRoom.findById(roomId).then(room => {
+      if (room && room.creatorId.toString() === userId) {
+        isCreator = true;
+      }
+    }).catch(console.error);
+    
+    const userInfo = { 
+      userId, 
+      personaId, 
+      personaName, 
+      username, 
+      avatar, 
+      muted: false, 
+      speaking: false, 
+      socketId: socket.id,
+      isCreator: isCreator
+    };
+    roomUsers.set(socket.id, userInfo);
+    
+    // 加入房间
+    socket.join(`voice-${roomId}`);
+    socket.data.voiceRoomId = roomId;
+    socket.data.userId = userId;
+    socket.data.userInfo = userInfo;
+    
+    // 通知房间内其他用户
+    socket.to(`voice-${roomId}`).emit('user-joined-voice', userInfo);
+    
+    // 发送当前房间用户列表给新加入的用户
+    const userList = Array.from(roomUsers.values()).map(u => ({
+      userId: u.userId,
+      personaId: u.personaId,
+      personaName: u.personaName,
+      username: u.username,
+      avatar: u.avatar,
+      muted: u.muted,
+      speaking: u.speaking,
+      isCreator: u.isCreator
+    }));
+    socket.emit('voice-users', { users: userList });
+    
+    // 更新语音房的 memberCount
+    const VoiceRoomModel = require('./models/VoiceRoom');
+    VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
+  });
+  
+  // 离开语音房间
+  socket.on('leave-voice-room', ({ roomId, userId }) => {
+    console.log(`🎙️ 用户 ${userId} 离开语音房 ${roomId}`);
+    
+    const roomUsers = voiceRooms.get(roomId);
+    if (roomUsers) {
+      let leftUserInfo = null;
+      for (const [sid, info] of roomUsers.entries()) {
+        if (info.userId === userId) {
+          leftUserInfo = info;
+          roomUsers.delete(sid);
+          break;
+        }
+      }
+      
+      if (leftUserInfo) {
+        socket.to(`voice-${roomId}`).emit('user-left-voice', { userId });
+        console.log(`👋 用户 ${leftUserInfo.username} 离开了语音房`);
+      }
+      
+      if (roomUsers.size === 0) {
+        voiceRooms.delete(roomId);
+        console.log(`📭 语音房 ${roomId} 已空，已移除`);
+      } else {
+        // 更新语音房的 memberCount
+        const VoiceRoomModel = require('./models/VoiceRoom');
+        VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
+      }
+    }
+    
+    socket.leave(`voice-${roomId}`);
+    delete socket.data.voiceRoomId;
+    delete socket.data.userId;
+    delete socket.data.userInfo;
+  });
+  
+  // WebRTC 信令转发
+  socket.on('voice-signal', ({ roomId, targetUserId, signal }) => {
+    // 转发信令给目标用户
+    socket.to(`voice-${roomId}`).emit('voice-signal', {
+      fromUserId: socket.data.userId,
+      signal
+    });
+  });
+  
+  // 麦克风状态改变
+  socket.on('voice-mute', ({ roomId, userId, muted }) => {
+    const roomUsers = voiceRooms.get(roomId);
+    if (roomUsers) {
+      for (const [sid, info] of roomUsers.entries()) {
+        if (info.userId === userId) {
+          info.muted = muted;
+          roomUsers.set(sid, info);
+          break;
+        }
+      }
+    }
+    socket.to(`voice-${roomId}`).emit('voice-mute-changed', { userId, muted });
+  });
+  
+  // 语音聊天消息
+  socket.on('voice-message', ({ roomId, message }) => {
+    socket.to(`voice-${roomId}`).emit('voice-message', message);
+  });
+  
+  // 语音活动检测（说话状态）
+  socket.on('voice-speaking', ({ roomId, userId, isSpeaking }) => {
+    const roomUsers = voiceRooms.get(roomId);
+    if (roomUsers) {
+      for (const [sid, info] of roomUsers.entries()) {
+        if (info.userId === userId) {
+          info.speaking = isSpeaking;
+          roomUsers.set(sid, info);
+          break;
+        }
+      }
+    }
+    socket.to(`voice-${roomId}`).emit('voice-speaking-changed', { userId, isSpeaking });
+  });
+  
+  // ========== 断开连接 ==========
   socket.on('disconnect', () => {
+    console.log('🔌 客户端断开:', socket.id);
+    
+    // 处理文字聊天室离开
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
       onlineUsers.delete(socket.id);
@@ -218,9 +376,38 @@ io.on('connection', (socket) => {
       io.to(userInfo.roomId).emit('room-online-count', { roomId: userInfo.roomId, count: roomUsers.length });
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
     }
-    console.log('🔌 客户端断开:', socket.id);
+    
+    // 处理语音房离开
+    const voiceRoomId = socket.data.voiceRoomId;
+    if (voiceRoomId) {
+      const roomUsers = voiceRooms.get(voiceRoomId);
+      if (roomUsers) {
+        let leftUserId = null;
+        let leftUserInfo = null;
+        for (const [sid, info] of roomUsers.entries()) {
+          if (sid === socket.id) {
+            leftUserId = info.userId;
+            leftUserInfo = info;
+            roomUsers.delete(sid);
+            break;
+          }
+        }
+        if (leftUserId) {
+          socket.to(`voice-${voiceRoomId}`).emit('user-left-voice', { userId: leftUserId });
+          console.log(`👋 用户 ${leftUserInfo?.username} 断开连接，离开语音房`);
+        }
+        if (roomUsers.size === 0) {
+          voiceRooms.delete(voiceRoomId);
+          console.log(`📭 语音房 ${voiceRoomId} 已空，已移除`);
+        } else {
+          const VoiceRoomModel = require('./models/VoiceRoom');
+          VoiceRoomModel.findByIdAndUpdate(voiceRoomId, { memberCount: roomUsers.size }).catch(console.error);
+        }
+      }
+    }
   });
 });
 
+// 导出 io 供其他模块使用
 module.exports.io = io;
 module.exports.server = server;

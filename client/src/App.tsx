@@ -16,6 +16,8 @@ import JoinRoom from './components/chat/JoinRoom'
 import PendingRequests from './components/chat/PendingRequests'
 import RoomMembers from './components/chat/RoomMembers'
 import RoomSettings from './components/chat/RoomSettings'
+import VoiceHall from './components/voice/VoiceHall';
+import VoiceRoomDetail from './components/voice/VoiceRoomDetail';
 
 function App() {
   return (
@@ -35,6 +37,8 @@ function App() {
         <Route path="/group/:roomId" element={<GroupDetail />} />
         <Route path="/group/:roomId/settings" element={<GroupSettings />} />
         <Route path="/join/:roomId" element={<JoinRoom />} />
+        <Route path="/voice" element={<VoiceHall />} />
+        <Route path="/voice/:roomId" element={<VoiceRoomDetail />} />
         <Route path="/room/:roomId/pending" element={<PendingRequests />} />
         <Route path="/room/:roomId/members" element={<RoomMembers />} />
         <Route path="/room/:roomId/settings" element={<RoomSettings />} />
