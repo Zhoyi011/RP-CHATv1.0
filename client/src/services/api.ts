@@ -1,4 +1,4 @@
-// API 基础配置
+// API 基础配置 - 统一使用你的后端地址
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 // 获取存储的 token
@@ -166,7 +166,7 @@ export const adminApi = {
 export interface Persona {
   _id: string;
   name: string;
-  displayName?: string ;
+  displayName?: string;
   description: string;
   tags: string[];
   status: 'pending' | 'approved' | 'rejected';
@@ -232,27 +232,20 @@ export const personaApi = {
     request<{ message: string; persona: Persona }>(`/persona/${personaId}/use`, {
       method: 'POST',
     }),
-  // 添加守护
   addGuardian: (personaId: string, amount: number) =>
     request<{ message: string; totalGuardianAmount: number }>(`/persona/${personaId}/guardian`, {
       method: 'POST',
       body: JSON.stringify({ amount }),
     }),
-
-  // 添加动态
   addPost: (personaId: string, content: string, images?: string[]) =>
     request<{ message: string; posts: any[] }>(`/persona/${personaId}/post`, {
       method: 'POST',
       body: JSON.stringify({ content, images }),
     }),
-
-  // 获取动态列表
   getPosts: (personaId: string, page = 1, limit = 20) =>
     request<{ posts: any[]; total: number; page: number; totalPages: number }>(
       `/persona/${personaId}/posts?page=${page}&limit=${limit}`
     ),
-
-  // 点赞动态
   likePost: (personaId: string, postId: string) =>
     request<{ message: string }>(`/persona/${personaId}/posts/${postId}/like`, {
       method: 'POST',
@@ -306,7 +299,7 @@ export const roomApi = {
       body: JSON.stringify({ name, description }),
     }),
   getMessages: (roomId: string) =>
-  request<Message[]>(`/room/${roomId}/messages`),
+    request<Message[]>(`/room/${roomId}/messages`),
   setActivePersona: (personaId: string) =>
     request<{ message: string; activePersona: any }>('/room/active-persona', {
       method: 'POST',

@@ -1,214 +1,66 @@
-// 根据环境变量设置 API 地址
-const API_BASE = 'https://rp-chat-backend.onrender.com/api';
+// 后端调用外部 API 的服务
+const axios = require('axios');
 
-// 获取存储的 token
-const getToken = (): string | null => {
-  return localStorage.getItem('token');
-};
+// GitHub API 配置
+const GITHUB_OWNER = 'Zhoyi011';
+const GITHUB_REPO = 'RP-CHATv1.0';
 
-// 通用请求函数
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = getToken();
-  
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...options.headers,
-  };
-
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || '请求失败');
+/**
+ * 获取 GitHub 提交记录
+ */
+async function getGitHubCommits(limit = 30, since?: string) {
+  try {
+    const response = await axios.get(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits`, {
+      params: {
+        per_page: limit,
+        ...(since && { since })
+      },
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'RP-Chat-App'
+      }
+    });
+    
+    return response.data.map((commit: any) => ({
+      sha: commit.sha,
+      message: commit.commit.message,
+      date: commit.commit.author.date,
+      author: commit.commit.author.name,
+      url: commit.html_url
+    }));
+  } catch (error) {
+    console.error('获取 GitHub commits 失败:', error);
+    throw error;
   }
-
-  return data as T;
 }
 
-// ========== 认证相关 ==========
-export interface LoginResponse {
-  message: string;
-  token: string;
-  user: {
-    id: string;
-    username: string;
-    role: 'user' | 'admin';
-  };
+/**
+ * 获取单个 commit 详情
+ */
+async function getCommitDetail(sha: string) {
+  try {
+    const response = await axios.get(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits/${sha}`, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'RP-Chat-App'
+      }
+    });
+    
+    return {
+      sha: response.data.sha,
+      message: response.data.commit.message,
+      date: response.data.commit.author.date,
+      author: response.data.commit.author.name,
+      url: response.data.html_url,
+      files: response.data.files?.map((f: any) => f.filename) || []
+    };
+  } catch (error) {
+    console.error('获取 commit 详情失败:', error);
+    throw error;
+  }
 }
 
-export interface RegisterData {
-  username: string;
-  password: string;
-  inviteCode: string;
-}
-
-export const authApi = {
-  // 注册
-  register: (data: RegisterData) => 
-    request<LoginResponse>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  // 登录
-  login: (username: string, password: string) =>
-    request<LoginResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    }),
-
-  // Firebase 登录后绑定（新功能）
-  bindFirebaseUser: (firebaseUid: string, email: string, displayName: string) =>
-    request<LoginResponse>('/auth/firebase', {
-      method: 'POST',
-      body: JSON.stringify({ firebaseUid, email, displayName }),
-    }),
-};
-
-// ========== 角色相关 ==========
-export interface Persona {
-  _id: string;
-  name: string;
-  description: string;
-  tags: string[];
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-  createdBy: {
-    _id: string;
-    username: string;
-  };
-  reviewComment?: string;
-}
-
-export const personaApi = {
-  // 获取我的角色
-  getMyPersonas: () => 
-    request<Persona[]>('/persona/my'),
-
-  // 创建角色申请
-  createRequest: (data: { name: string; description: string; tags: string[] }) =>
-    request<{ message: string; persona: Persona }>('/persona/request', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  // 管理员：获取待审核角色
-  getPending: () => 
-    request<Persona[]>('/persona/pending'),
-
-  // 管理员：审核角色
-  reviewPersona: (id: string, status: 'approved' | 'rejected', comment?: string) =>
-    request<{ message: string; persona: Persona }>(`/persona/review/${id}`, {
-      method: 'POST',
-      body: JSON.stringify({ status, comment }),
-    }),
-};
-
-// ========== 聊天室相关 ==========
-export interface Room {
-  _id: string;
-  name: string;
-  description?: string;
-  messageCount: number;
-  createdAt: string;
-}
-
-export interface Message {
-  _id: string;
-  content: string;
-  isAction: boolean;
-  createdAt: string;
-  personaId: {
-    _id: string;
-    name: string;
-  };
-  userId: {
-    _id: string;
-    username: string;
-  };
-}
-
-export interface ActivePersonaResponse {
-  activePersona: {
-    _id: string;
-    userId: string;
-    personaId: Persona;
-  } | null;
-}
-
-export const roomApi = {
-  // 获取聊天室列表
-  getRooms: () => 
-    request<Room[]>('/room/list'),
-
-  // 创建聊天室
-  createRoom: (name: string, description?: string) =>
-    request<{ message: string; room: Room }>('/room/create', {
-      method: 'POST',
-      body: JSON.stringify({ name, description }),
-    }),
-
-  // 获取历史消息
-  getMessages: (roomId: string) =>
-    request<Message[]>(`/room/messages/${roomId}`),
-
-  // 设置当前角色
-  setActivePersona: (personaId: string) =>
-    request<{ message: string; activePersona: any }>('/room/active-persona', {
-      method: 'POST',
-      body: JSON.stringify({ personaId }),
-    }),
-
-  // 获取当前角色
-  getActivePersona: () =>
-    request<ActivePersonaResponse>('/room/active-persona'),
-};
-
-// ========== 管理员相关 ==========
-export interface User {
-  _id: string;
-  username: string;
-  role: 'user' | 'admin';
-  status: 'active' | 'banned' | 'muted';
-  createdAt: string;
-}
-
-export interface InviteCode {
-  _id: string;
-  code: string;
-  createdBy: string;
-  usedBy?: string;
-  expiresAt: string;
-  isActive: boolean;
-}
-
-export const adminApi = {
-  // 获取所有用户
-  getUsers: () => 
-    request<User[]>('/admin/users'),
-
-  // 封号/解封
-  updateUserStatus: (userId: string, status: 'active' | 'banned' | 'muted') =>
-    request<{ message: string }>(`/admin/users/${userId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    }),
-
-  // 获取邀请码列表
-  getInviteCodes: () =>
-    request<InviteCode[]>('/admin/invite-codes'),
-
-  // 生成邀请码
-  generateInviteCode: () =>
-    request<{ code: string }>('/admin/invite-codes', {
-      method: 'POST',
-    }),
+module.exports = {
+  getGitHubCommits,
+  getCommitDetail
 };

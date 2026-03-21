@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { useDebounce } from '../../hooks/useDebounce';
 
 interface SearchResult {
-  type: 'persona' | 'user' | 'room';
+  type: 'persona' | 'room';
   _id: string;
   name: string;
   avatar?: string;
   description?: string;
   memberCount?: number;
   tags?: string[];
+  displayName?: string;
+  globalNumber?: number;
 }
 
 const SearchPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'persona' | 'user' | 'room'>('persona');
+  const [activeTab, setActiveTab] = useState<'persona' | 'room'>('persona');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const debouncedSearch = useDebounce(searchTerm, 500);
@@ -35,8 +37,6 @@ const SearchPage = () => {
       let url = '';
       if (activeTab === 'persona') {
         url = `https://rp-chatv1-0.onrender.com/api/search/personas?q=${encodeURIComponent(debouncedSearch)}`;
-      } else if (activeTab === 'user') {
-        url = `https://rp-chatv1-0.onrender.com/api/search/users?q=${encodeURIComponent(debouncedSearch)}`;
       } else {
         url = `https://rp-chatv1-0.onrender.com/api/search/rooms?q=${encodeURIComponent(debouncedSearch)}`;
       }
@@ -48,8 +48,6 @@ const SearchPage = () => {
       
       if (activeTab === 'persona') {
         setResults(data.personas?.map((p: any) => ({ ...p, type: 'persona' })) || []);
-      } else if (activeTab === 'user') {
-        setResults(data.users?.map((u: any) => ({ ...u, type: 'user' })) || []);
       } else {
         setResults(data.rooms?.map((r: any) => ({ ...r, type: 'room' })) || []);
       }
@@ -62,14 +60,8 @@ const SearchPage = () => {
 
   const handleResultClick = (result: SearchResult) => {
     if (result.type === 'persona') {
-      // 跳转到角色主页
       navigate(`/persona/${result._id}`);
-    } else if (result.type === 'user') {
-      // 跳转到私聊（需要先获取用户的角色或直接跳转）
-      // 暂时跳转到聊天室，后续可以加私聊功能
-      navigate(`/chat?user=${result._id}`);
     } else {
-      // ✅ 跳转到申请加入页面
       navigate(`/join/${result._id}`);
     }
   };
@@ -87,30 +79,33 @@ const SearchPage = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="搜索角色、用户或群组..."
+            placeholder="搜索角色或群组..."
             className="flex-1 bg-gray-100 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
             autoFocus
           />
         </div>
 
         <div className="flex gap-4 mt-3">
-          {[
-            { key: 'persona', label: '🎭 角色' },
-            { key: 'user', label: '👥 用户' },
-            { key: 'room', label: '💬 群组' }
-          ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
-              className={`px-3 py-1 rounded-full text-sm ${
-                activeTab === tab.key
-                  ? 'bg-green-500 text-white'
-                  : 'text-gray-500 hover:bg-gray-100'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <button
+            onClick={() => setActiveTab('persona')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              activeTab === 'persona'
+                ? 'bg-green-500 text-white'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            🎭 角色
+          </button>
+          <button
+            onClick={() => setActiveTab('room')}
+            className={`px-3 py-1 rounded-full text-sm ${
+              activeTab === 'room'
+                ? 'bg-green-500 text-white'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            💬 群组
+          </button>
         </div>
       </div>
 
@@ -119,7 +114,7 @@ const SearchPage = () => {
           <div className="text-center py-8 text-gray-400">搜索中...</div>
         ) : results.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
-            {searchTerm ? '没有找到相关结果' : '输入关键词搜索'}
+            {searchTerm ? '没有找到相关结果' : '输入关键词搜索角色或群组'}
           </div>
         ) : (
           <div className="space-y-3">
@@ -133,16 +128,21 @@ const SearchPage = () => {
                   {result.name?.charAt(0) || '?'}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{result.name}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold">{result.displayName || result.name}</h3>
+                    {result.type === 'persona' && result.globalNumber && (
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                        #{result.globalNumber}
+                      </span>
+                    )}
                     {result.type === 'room' && result.memberCount && (
                       <span className="text-xs text-gray-400">{result.memberCount}人</span>
                     )}
                   </div>
                   {result.description && (
-                    <p className="text-sm text-gray-500 truncate">{result.description}</p>
+                    <p className="text-sm text-gray-500 truncate mt-1">{result.description}</p>
                   )}
-                  {result.tags && result.tags.length > 0 && (
+                  {result.type === 'persona' && result.tags && result.tags.length > 0 && (
                     <div className="flex gap-1 mt-1">
                       {result.tags.slice(0, 2).map((tag, i) => (
                         <span key={i} className="text-xs text-gray-400">#{tag}</span>
