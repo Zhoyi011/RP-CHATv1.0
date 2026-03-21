@@ -172,6 +172,7 @@ const RoomMembers = () => {
                 </p>
               </div>
               
+              {/* 管理员操作按钮 */}
               {(currentUserRole === 'owner' || (currentUserRole === 'admin' && member.role !== 'owner')) && 
                member.userId._id !== currentUser?.uid && (
                 <div className="flex gap-2">

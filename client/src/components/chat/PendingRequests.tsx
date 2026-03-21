@@ -17,6 +17,8 @@ const PendingRequests = () => {
   const [requests, setRequests] = useState<PendingMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [roomName, setRoomName] = useState('');
+  const [selectedRequest, setSelectedRequest] = useState<PendingMember | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   useEffect(() => {
     loadRoomAndRequests();
@@ -44,7 +46,7 @@ const PendingRequests = () => {
     }
   };
 
-  const handleApprove = async (userId: string, approve: boolean) => {
+  const handleApprove = async (userId: string, approve: boolean, rejectReason?: string) => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/approve-request`, {
@@ -53,12 +55,13 @@ const PendingRequests = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ userId, approve })
+        body: JSON.stringify({ userId, approve, rejectReason })
       });
       
       if (res.ok) {
         setRequests(requests.filter(r => r.userId._id !== userId));
         alert(approve ? '已批准加入' : '已拒绝申请');
+        setShowDetail(false);
       } else {
         const data = await res.json();
         alert(data.error || '操作失败');
@@ -106,7 +109,14 @@ const PendingRequests = () => {
         ) : (
           <div className="space-y-3">
             {requests.map(req => (
-              <div key={req._id} className="bg-white rounded-2xl shadow overflow-hidden">
+              <div 
+                key={req._id} 
+                className="bg-white rounded-2xl shadow overflow-hidden cursor-pointer hover:shadow-md transition"
+                onClick={() => {
+                  setSelectedRequest(req);
+                  setShowDetail(true);
+                }}
+              >
                 <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
                 <div className="p-4">
                   <div className="flex items-center gap-3">
@@ -114,38 +124,90 @@ const PendingRequests = () => {
                       {req.personaId.name.charAt(0)}
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-gray-800">{req.personaId.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-800">{req.personaId.name}</p>
+                        <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">待审核</span>
+                      </div>
                       <p className="text-sm text-gray-500">{req.userId.username}</p>
-                      {req.message && (
-                        <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-lg">
-                          "{req.message}"
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="text-xs text-gray-400 mt-1">
                         申请于 {new Date(req.appliedAt).toLocaleString()}
                       </p>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApprove(req.userId._id, true)}
-                        className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-3 py-1.5 rounded-xl text-sm hover:from-emerald-600 hover:to-teal-700 transition shadow-md"
-                      >
-                        通过
-                      </button>
-                      <button
-                        onClick={() => handleApprove(req.userId._id, false)}
-                        className="bg-red-500 text-white px-3 py-1.5 rounded-xl text-sm hover:bg-red-600 transition shadow-md"
-                      >
-                        拒绝
-                      </button>
-                    </div>
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
+                  {req.message && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-1">申请理由：</p>
+                      <p className="text-sm text-gray-600">"{req.message}"</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* 申请详情弹窗 */}
+      {showDetail && selectedRequest && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="h-2 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">申请详情</h3>
+                <button
+                  onClick={() => setShowDetail(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-2xl shadow-md">
+                  {selectedRequest.personaId.name.charAt(0)}
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800">{selectedRequest.personaId.name}</p>
+                  <p className="text-sm text-gray-500">{selectedRequest.userId.username}</p>
+                </div>
+              </div>
+              
+              {selectedRequest.message && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500 mb-1">申请理由：</p>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{selectedRequest.message}</p>
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-400 mb-4">
+                申请时间：{new Date(selectedRequest.appliedAt).toLocaleString()}
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const reason = prompt('请输入拒绝原因（可选）');
+                    handleApprove(selectedRequest.userId._id, false, reason || undefined);
+                  }}
+                  className="flex-1 bg-red-500 text-white px-4 py-2 rounded-xl hover:bg-red-600 transition shadow-md"
+                >
+                  拒绝
+                </button>
+                <button
+                  onClick={() => handleApprove(selectedRequest.userId._id, true)}
+                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-xl hover:from-emerald-600 hover:to-teal-700 transition shadow-md"
+                >
+                  批准加入
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
