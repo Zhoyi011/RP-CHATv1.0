@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const GITHUB_OWNER = 'Zhoyi011';
 const GITHUB_REPO = 'RP-CHATv1.0';
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits`;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // 从环境变量读取，安全！
 
 // 需要过滤的关键词
 const RELEVANT_KEYWORDS = [
@@ -34,29 +35,59 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// 获取 GitHub 请求头
+const getGitHubHeaders = () => {
+  const headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'RP-Chat-App'
+  };
+  
+  if (GITHUB_TOKEN) {
+    headers['Authorization'] = `token ${GITHUB_TOKEN}`;
+    console.log('🔑 使用 GitHub Token 认证');
+  } else {
+    console.log('⚠️ 未配置 GitHub Token，可能受 API 限流影响');
+  }
+  
+  return headers;
+};
+
 // ========== 从 GitHub 拉取并保存 commits ==========
 async function fetchAndSaveGitHubCommits() {
   try {
     console.log('📡 正在从 GitHub 获取更新记录...');
     
+    // 检查是否被限流，避免重复请求
+    const rateLimitRecord = await Changelog.findOne({ sha: 'rate_limit' });
+    if (rateLimitRecord && rateLimitRecord.date) {
+      const timeSinceLastAttempt = Date.now() - new Date(rateLimitRecord.date).getTime();
+      if (timeSinceLastAttempt < 5 * 60 * 1000) { // 5分钟内不重试
+        console.log('⏭️ 距离上次限流不足5分钟，跳过同步');
+        return 0;
+      }
+    }
+    
     // 获取最新的 commit 记录
     const lastAutoEntry = await Changelog.findOne({ type: 'auto' })
       .sort({ date: -1 });
     
-    const params = { per_page: 50 };
-    if (lastAutoEntry) {
+    const params = { per_page: 30 };
+    if (lastAutoEntry && lastAutoEntry.date) {
       params.since = lastAutoEntry.date.toISOString();
       console.log(`📅 上次同步时间: ${params.since}`);
     }
     
     const response = await axios.get(GITHUB_API, {
       params,
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'RP-Chat-App'
-      },
+      headers: getGitHubHeaders(),
       timeout: 10000
     });
+    
+    // 检查限流信息
+    const remaining = response.headers['x-ratelimit-remaining'];
+    if (remaining) {
+      console.log(`📊 GitHub API 剩余请求次数: ${remaining}`);
+    }
     
     // 过滤相关 commits
     const newCommits = response.data.filter(commit => {
@@ -85,6 +116,11 @@ async function fetchAndSaveGitHubCommits() {
       }
     }
     
+    // 清除限流记录（如果成功）
+    if (savedCount > 0 || newCommits.length === 0) {
+      await Changelog.deleteOne({ sha: 'rate_limit' });
+    }
+    
     if (savedCount > 0) {
       console.log(`✅ GitHub 同步完成，新增 ${savedCount} 条记录`);
     } else {
@@ -92,11 +128,32 @@ async function fetchAndSaveGitHubCommits() {
     }
     
     return savedCount;
+    
   } catch (error) {
     console.error('❌ 获取 GitHub commits 失败:', error.message);
+    
     if (error.response?.status === 403) {
-      console.error('⚠️ GitHub API 限流，请稍后再试');
+      console.error('⚠️ GitHub API 限流！');
+      const resetTime = error.response.headers['x-ratelimit-reset'];
+      if (resetTime) {
+        const resetDate = new Date(parseInt(resetTime) * 1000);
+        console.error(`⏰ 限流将在 ${resetDate.toLocaleString()} 重置`);
+      }
+      
+      // 记录限流状态，避免短时间内重复请求
+      await Changelog.findOneAndUpdate(
+        { sha: 'rate_limit' },
+        { 
+          type: 'auto',
+          sha: 'rate_limit',
+          message: 'GitHub API 限流',
+          date: new Date(),
+          author: 'system'
+        },
+        { upsert: true }
+      );
     }
+    
     return 0;
   }
 }
@@ -111,10 +168,34 @@ router.get('/', async (req, res) => {
       .sort({ date: -1 })
       .limit(100);
     
-    // 后台异步同步 GitHub（不阻塞响应）
-    fetchAndSaveGitHubCommits().catch(err => 
-      console.error('后台同步 GitHub 失败:', err.message)
-    );
+    // 检查是否需要后台同步（每小时最多一次）
+    const lastAuto = await Changelog.findOne({ type: 'auto' }).sort({ date: -1 });
+    const rateLimited = await Changelog.findOne({ sha: 'rate_limit' });
+    
+    let shouldSync = false;
+    
+    if (!lastAuto) {
+      // 没有记录，需要同步
+      shouldSync = true;
+    } else if (rateLimited) {
+      // 被限流了，等待一段时间
+      const timeSinceLimit = Date.now() - new Date(rateLimited.date).getTime();
+      shouldSync = timeSinceLimit > 60 * 60 * 1000; // 1小时后重试
+    } else {
+      // 检查上次同步时间
+      const lastSyncTime = new Date(lastAuto.date).getTime();
+      const hoursSinceLastSync = (Date.now() - lastSyncTime) / (1000 * 60 * 60);
+      shouldSync = hoursSinceLastSync > 1; // 每小时最多同步一次
+    }
+    
+    if (shouldSync) {
+      console.log('🔄 触发后台 GitHub 同步...');
+      fetchAndSaveGitHubCommits().catch(err => 
+        console.error('后台同步 GitHub 失败:', err.message)
+      );
+    } else if (!rateLimited) {
+      console.log('⏭️ 跳过 GitHub 同步（距离上次同步不足1小时）');
+    }
     
     res.json({ entries });
   } catch (error) {
@@ -192,6 +273,9 @@ router.post('/sync-github', authMiddleware, async (req, res) => {
     if (user.role !== 'owner' && user.role !== 'admin') {
       return res.status(403).json({ error: '需要管理员权限' });
     }
+    
+    // 清除限流记录
+    await Changelog.deleteOne({ sha: 'rate_limit' });
     
     const count = await fetchAndSaveGitHubCommits();
     res.json({
