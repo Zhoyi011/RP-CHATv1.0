@@ -14,6 +14,14 @@ const changelogSchema = new mongoose.Schema({
   message: {
     type: String
   },
+  formattedMessage: {
+    type: String
+  },
+  commitType: {
+    type: String,
+    enum: ['feat', 'add', 'fix', 'docs', 'style', 'refactor', 'chore', 'perf', 'test', 'other', 'manual'],
+    default: 'other'
+  },
   // 手动更新
   title: {
     type: String
@@ -43,5 +51,6 @@ const changelogSchema = new mongoose.Schema({
 // 创建索引
 changelogSchema.index({ date: -1 });
 changelogSchema.index({ type: 1 });
+changelogSchema.index({ sha: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Changelog', changelogSchema);
