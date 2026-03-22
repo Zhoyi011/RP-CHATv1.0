@@ -97,50 +97,46 @@ const VoiceRoomDetail: React.FC = () => {
     }
   }, [roomId]);
 
-  const handleSignal = async (fromUserId: string, signal: any) => {
-    if (fromUserId === user?.uid) return;
-    
-    let pc = webRTCService.getPeerConnection(fromUserId);
-    
-    if (!pc) {
-      pc = webRTCService.createPeerConnection(fromUserId, (stream) => {
-        webRTCService.createAudioElement(fromUserId, stream);
-      });
-      
-      if (signal.type === 'offer') {
-        await pc.setRemoteDescription(new RTCSessionDescription(signal));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        voiceSocketService.sendSignal(roomId!, fromUserId, answer);
-      }
-    }
-    
-    if (signal.type === 'offer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(signal));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      voiceSocketService.sendSignal(roomId!, fromUserId, answer);
-    } else if (signal.type === 'answer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(signal));
-    } else if (signal.type === 'ice-candidate') {
-      await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-    }
-  };
-
-  const connectToUser = useCallback(async (targetUserId: string) => {
-    if (targetUserId === user?.uid) return;
-    
-    const existingPC = webRTCService.getPeerConnection(targetUserId);
-    if (existingPC) return;
-    
-    const pc = webRTCService.createPeerConnection(targetUserId, (stream) => {
-      webRTCService.createAudioElement(targetUserId, stream);
+  // 处理信令
+const handleSignal = useCallback(async (fromUserId: string, signal: any) => {
+  if (fromUserId === user?.uid) return;
+  
+  console.log(`📡 收到信令 from ${fromUserId}:`, signal.type);
+  
+  if (signal.type === 'offer') {
+    // 作为接收方，处理 offer
+    const answer = await webRTCService.handleOffer(fromUserId, signal, (stream) => {
+      webRTCService.createAudioElement(fromUserId, stream);
     });
-    
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    if (answer) {
+      voiceSocketService.sendSignal(roomId!, fromUserId, answer);
+    }
+  } else if (signal.type === 'answer') {
+    // 作为发起方，处理 answer
+    await webRTCService.handleAnswer(fromUserId, signal);
+  } else if (signal.type === 'ice-candidate') {
+    // 处理 ICE 候选
+    await webRTCService.handleIceCandidate(fromUserId, signal.candidate);
+  }
+}, [roomId, user]);
+
+// 连接新用户（作为发起方）
+const connectToUser = useCallback(async (targetUserId: string) => {
+  if (targetUserId === user?.uid) return;
+  
+  const existingPC = webRTCService.getPeerConnection(targetUserId);
+  if (existingPC) return;
+  
+  console.log(`🔗 发起连接 to ${targetUserId}`);
+  
+  const offer = await webRTCService.createOffer(targetUserId, (stream) => {
+    webRTCService.createAudioElement(targetUserId, stream);
+  });
+  
+  if (offer) {
     voiceSocketService.sendSignal(roomId!, targetUserId, offer);
-  }, [roomId, user]);
+  }
+}, [roomId, user]);
 
   // 加入语音房间
   const joinVoiceRoom = useCallback(async () => {
