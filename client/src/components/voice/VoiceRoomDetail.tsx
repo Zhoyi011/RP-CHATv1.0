@@ -9,6 +9,9 @@ import type { VoiceUser, VoiceMessage } from '../../types/voice';
 // Agora App ID
 const AGORA_APP_ID = 'be1c4d900ae542c99c8fc4543406fd67';
 
+// 临时 Token（测试用）
+const TEMP_TOKEN = '007eJxTYPiste2xX0H4rbv5LleOHHDzYO122WpjmH+hyvzpsjgprWAFhqRUw2STFEsDg8RUUxOjZEvLZIu0ZBNTE2MTA7O0FDNz/8/7MxsCGRk23fzAysjAysDIwMQA4jMwAADExh8g';
+
 const VoiceRoomDetail: React.FC = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -72,10 +75,11 @@ const VoiceRoomDetail: React.FC = () => {
       const username = user?.email?.split('@')[0] || '用户';
       
       console.log('🎙️ 加入语音频道...');
+      // ✅ 使用临时 Token
       const success = await agoraService.joinChannel(
         AGORA_APP_ID,
         `voice_${roomId}`,
-        null,
+        TEMP_TOKEN,  // 使用临时 Token
         user?.uid || 'user'
       );
       
