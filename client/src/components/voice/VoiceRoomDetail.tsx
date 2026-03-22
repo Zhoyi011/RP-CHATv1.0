@@ -59,6 +59,7 @@ const VoiceRoomDetail: React.FC = () => {
   // 初始化 Agora
   const initAgora = async () => {
     try {
+      console.log('🎙️ 开始初始化 Agora...');
       await agoraService.init(AGORA_APP_ID);
       
       const token = localStorage.getItem('token');
@@ -70,6 +71,7 @@ const VoiceRoomDetail: React.FC = () => {
       const personaName = activePersona.activePersona?.personaId?.name || user?.email?.split('@')[0] || '用户';
       const username = user?.email?.split('@')[0] || '用户';
       
+      console.log('🎙️ 加入语音频道...');
       const success = await agoraService.joinChannel(
         AGORA_APP_ID,
         `voice_${roomId}`,

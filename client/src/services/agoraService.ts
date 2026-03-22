@@ -1,4 +1,4 @@
-// 简化导入，只导入默认导出
+// @ts-ignore - 忽略类型声明问题
 import AgoraRTC from 'agora-rtc-sdk-ng';
 
 class AgoraService {
@@ -10,6 +10,14 @@ class AgoraService {
   private onUserLeftCallback: ((uid: any) => void) | null = null;
 
   async init(appId: string) {
+    console.log('🎙️ 初始化 Agora...');
+    
+    // 检查 AgoraRTC 是否可用
+    if (!AgoraRTC) {
+      console.error('AgoraRTC 未加载');
+      return;
+    }
+    
     AgoraRTC.setLogLevel(0);
     this.client = AgoraRTC.createClient({ 
       mode: 'rtc', 
@@ -44,17 +52,24 @@ class AgoraService {
         }
       }
     });
+    
+    console.log('✅ Agora 初始化完成');
   }
 
   async joinChannel(appId: string, channelName: string, token: string | null, uid: string) {
-    if (!this.client) return false;
+    if (!this.client) {
+      console.error('Agora 客户端未初始化');
+      return false;
+    }
     if (this.isJoined) return true;
     
     try {
+      console.log('🎙️ 创建麦克风轨道...');
       this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
         encoderConfig: 'speech_standard',
       });
       
+      console.log('🎙️ 加入频道:', channelName);
       await this.client.join(appId, channelName, token, uid);
       await this.client.publish(this.localAudioTrack);
       
