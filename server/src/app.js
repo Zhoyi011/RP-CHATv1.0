@@ -31,14 +31,13 @@ app.use(express.json());
 
 // ===== 限流配置 =====
 const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1分钟
-  max: 100, // 每个IP最多100个请求
-  message: { error: '请求过于频繁，请稍后再试' }, // 返回 JSON
+  windowMs: 60 * 1000,
+  max: 200,
+  message: { error: '请求过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.ip || req.connection.remoteAddress,
   skip: (req) => {
-    // 跳过语音房相关接口的限流
     return req.path.includes('/voice') || req.path.includes('/socket.io');
   }
 });
@@ -55,7 +54,7 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.log('✅ MongoDB 连接成功');
   
   setTimeout(() => {
-    console.log('📡 后台启动更新日志同步（不阻塞服务）...');
+    console.log('📡 后台启动更新日志同步...');
     try {
       const { fetchAndSaveGitHubCommits } = require('./routes/changelog');
       fetchAndSaveGitHubCommits().catch(err => {
@@ -66,7 +65,7 @@ mongoose.connect(process.env.MONGODB_URI, {
     }
   }, 15000);
   
-  console.log('🚀 服务已就绪，等待请求...');
+  console.log('🚀 服务已就绪');
 })
 .catch(err => {
   console.error('❌ MongoDB 连接失败:', err.message);
@@ -112,49 +111,71 @@ const server = app.listen(PORT, () => {
   console.log(`📡 API 地址: http://localhost:${PORT}/api/test`);
 });
 
-// ===== Socket.IO =====
+// ===== Socket.IO 配置 =====
 const io = require('socket.io')(server, {
   cors: {
     origin: [
       'http://localhost:5173', 
       'http://localhost:3000', 
       'https://rp-chat-v1-0.vercel.app',
+      'https://rp-chatv1-0.onrender.com',
       /\.vercel\.app$/
     ],
     methods: ["GET", "POST"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 45000
 });
+
+console.log('🎙️ Socket.IO 服务已启动');
 
 // ========== 在线用户存储 ==========
 const onlineUsers = new Map();
 
 // ========== 语音房间存储 ==========
-const voiceRooms = new Map(); // roomId -> Map(socketId -> userInfo)
+const voiceRooms = new Map();
 
 // ========== 定期清理无效连接 ==========
 setInterval(() => {
-  const now = Date.now();
   voiceRooms.forEach((roomUsers, roomId) => {
     roomUsers.forEach((userInfo, socketId) => {
       const socket = io.sockets.sockets.get(socketId);
-      if (!socket) {
+      if (!socket || !socket.connected) {
         roomUsers.delete(socketId);
         console.log(`清理无效连接: ${userInfo.userId}`);
       }
     });
     if (roomUsers.size === 0) {
       voiceRooms.delete(roomId);
-      console.log(`📭 语音房 ${roomId} 已空，已移除`);
+      console.log(`📭 语音房 ${roomId} 已空`);
     }
   });
-}, 30000); // 每30秒清理一次
+}, 60000);
 
 // ========== Socket 事件处理 ==========
 io.on('connection', (socket) => {
   console.log('🟢 新客户端连接:', socket.id);
+  
+  // 立即发送连接确认
+  socket.emit('connected', { id: socket.id });
+  
+  // 心跳保活
+  const heartbeat = setInterval(() => {
+    if (socket.connected) {
+      socket.emit('ping');
+    } else {
+      clearInterval(heartbeat);
+    }
+  }, 25000);
+  
+  socket.on('pong', () => {
+    // 心跳响应
+  });
   
   // ========== 文字聊天室 ==========
   socket.on('join-room', async ({ roomId, userId, personaId }) => {
@@ -163,7 +184,7 @@ io.on('connection', (socket) => {
       onlineUsers.set(socket.id, { userId, roomId, personaId, socketId: socket.id });
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === roomId);
       io.to(roomId).emit('room-online-count', { roomId, count: roomUsers.length });
-      console.log(`👤 用户 ${userId} 使用角色 ${personaId} 加入房间 ${roomId}`);
+      console.log(`👤 用户 ${userId} 加入房间 ${roomId}`);
     } catch (error) {
       console.error('加入房间失败:', error);
     }
@@ -249,10 +270,11 @@ io.on('connection', (socket) => {
     
     const roomUsers = voiceRooms.get(roomId);
     
+    // 检查是否是房主
     let isCreator = false;
     const VoiceRoom = require('./models/VoiceRoom');
     VoiceRoom.findById(roomId).then(room => {
-      if (room && room.creatorId.toString() === userId) {
+      if (room && room.creatorId && room.creatorId.toString() === userId) {
         isCreator = true;
       }
     }).catch(console.error);
@@ -314,7 +336,7 @@ io.on('connection', (socket) => {
       
       if (roomUsers.size === 0) {
         voiceRooms.delete(roomId);
-        console.log(`📭 语音房 ${roomId} 已空，已移除`);
+        console.log(`📭 语音房 ${roomId} 已空`);
       } else {
         const VoiceRoomModel = require('./models/VoiceRoom');
         VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
@@ -352,28 +374,12 @@ io.on('connection', (socket) => {
     socket.to(`voice-${roomId}`).emit('voice-message', message);
   });
   
-  socket.on('voice-heartbeat', () => {
-    socket.emit('voice-heartbeat-ack');
-  });
-  
-  socket.on('voice-speaking', ({ roomId, userId, isSpeaking }) => {
-    const roomUsers = voiceRooms.get(roomId);
-    if (roomUsers) {
-      for (const [sid, info] of roomUsers.entries()) {
-        if (info.userId === userId) {
-          info.speaking = isSpeaking;
-          roomUsers.set(sid, info);
-          break;
-        }
-      }
-    }
-    socket.to(`voice-${roomId}`).emit('voice-speaking-changed', { userId, isSpeaking });
-  });
-  
   // ========== 断开连接 ==========
   socket.on('disconnect', () => {
     console.log('🔌 客户端断开:', socket.id);
+    clearInterval(heartbeat);
     
+    // 处理文字聊天室
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
       onlineUsers.delete(socket.id);
@@ -382,6 +388,7 @@ io.on('connection', (socket) => {
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
     }
     
+    // 处理语音房
     const voiceRoomId = socket.data.voiceRoomId;
     if (voiceRoomId) {
       const roomUsers = voiceRooms.get(voiceRoomId);
@@ -402,7 +409,7 @@ io.on('connection', (socket) => {
         }
         if (roomUsers.size === 0) {
           voiceRooms.delete(voiceRoomId);
-          console.log(`📭 语音房 ${voiceRoomId} 已空，已移除`);
+          console.log(`📭 语音房 ${voiceRoomId} 已空`);
         } else {
           const VoiceRoomModel = require('./models/VoiceRoom');
           VoiceRoomModel.findByIdAndUpdate(voiceRoomId, { memberCount: roomUsers.size }).catch(console.error);

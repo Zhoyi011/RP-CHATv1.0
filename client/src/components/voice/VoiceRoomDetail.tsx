@@ -21,15 +21,13 @@ const VoiceRoomDetail: React.FC = () => {
   const [showChat, setShowChat] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // ✅ 使用 ref 防止重复初始化
   const isInitialized = useRef(false);
   const isJoining = useRef(false);
   const mounted = useRef(true);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<number | null>(null);  // ✅ 修复：使用 number 类型
   
   const user = auth.currentUser;
 
-  // 清理所有资源
   const cleanup = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -99,102 +97,6 @@ const VoiceRoomDetail: React.FC = () => {
     }
   }, [roomId]);
 
-  // 加入语音房间
-  const joinVoiceRoom = useCallback(async () => {
-    if (!user || !roomId || isJoining.current) return;
-    isJoining.current = true;
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      isJoining.current = false;
-      return;
-    }
-    
-    // 先断开之前的连接
-    voiceSocketService.disconnect();
-    
-    // 连接 Socket
-    voiceSocketService.connect(token);
-    
-    // 设置超时
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      if (mounted.current) {
-        console.log('语音房连接超时');
-        setIsLoading(false);
-        isJoining.current = false;
-      }
-    }, 10000);
-    
-    try {
-      const activePersonaRes = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!activePersonaRes.ok) {
-        console.error('获取角色失败:', activePersonaRes.status);
-        setIsLoading(false);
-        isJoining.current = false;
-        return;
-      }
-      
-      const activePersona = await activePersonaRes.json();
-      const personaId = activePersona.activePersona?.personaId?._id || '';
-      const personaName = activePersona.activePersona?.personaId?.name || user.email?.split('@')[0] || '用户';
-      const username = user.email?.split('@')[0] || '用户';
-      const avatar = user.photoURL || '';
-      
-      // 设置事件监听
-      voiceSocketService.onVoiceUsers((data: { users: VoiceUser[] }) => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        if (mounted.current) {
-          setUsers(data.users);
-          setIsLoading(false);
-        }
-        isJoining.current = false;
-      });
-      
-      voiceSocketService.onUserJoinedVoice((data: VoiceUser) => {
-        if (mounted.current) {
-          setUsers(prev => [...prev.filter(u => u.userId !== data.userId), data]);
-        }
-      });
-      
-      voiceSocketService.onUserLeftVoice((data: { userId: string }) => {
-        if (mounted.current) {
-          setUsers(prev => prev.filter(u => u.userId !== data.userId));
-          webRTCService.closePeerConnection(data.userId);
-        }
-      });
-      
-      voiceSocketService.onSignal(async (data: { fromUserId: string, signal: any }) => {
-        await handleSignal(data.fromUserId, data.signal);
-      });
-      
-      voiceSocketService.onUserMuteChanged((data: { userId: string, muted: boolean }) => {
-        if (mounted.current) {
-          setUsers(prev => prev.map(u => 
-            u.userId === data.userId ? { ...u, muted: data.muted } : u
-          ));
-        }
-      });
-      
-      voiceSocketService.onVoiceMessage((data: VoiceMessage) => {
-        if (mounted.current) {
-          setMessages(prev => [...prev, data]);
-        }
-      });
-      
-      // 加入房间
-      voiceSocketService.joinVoiceRoom(roomId, user.uid, personaId, personaName, username, avatar);
-      
-    } catch (error) {
-      console.error('加入语音房失败:', error);
-      setIsLoading(false);
-      isJoining.current = false;
-    }
-  }, [roomId, user]);
-
   const handleSignal = async (fromUserId: string, signal: any) => {
     if (fromUserId === user?.uid) return;
     
@@ -240,6 +142,119 @@ const VoiceRoomDetail: React.FC = () => {
     voiceSocketService.sendSignal(roomId!, targetUserId, offer);
   }, [roomId, user]);
 
+  // 加入语音房间
+  const joinVoiceRoom = useCallback(async () => {
+    if (!user || !roomId || isJoining.current) return;
+    isJoining.current = true;
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      isJoining.current = false;
+      return;
+    }
+    
+    voiceSocketService.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    const socket = voiceSocketService.connect(token);
+    
+    let connectResolve: (value: boolean) => void;
+    const connectPromise = new Promise<boolean>((resolve) => {
+      connectResolve = resolve;
+      if (socket?.connected) {
+        resolve(true);
+      } else {
+        socket?.once('connect', () => resolve(true));
+        setTimeout(() => resolve(false), 8000);
+      }
+    });
+    
+    const connected = await connectPromise;
+    if (!connected) {
+      console.log('Socket 连接失败');
+      setIsLoading(false);
+      isJoining.current = false;
+      return;
+    }
+    
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = window.setTimeout(() => {  // ✅ 使用 window.setTimeout
+      if (mounted.current) {
+        console.log('语音房连接超时');
+        setIsLoading(false);
+        isJoining.current = false;
+      }
+    }, 15000);
+    
+    try {
+      const activePersonaRes = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!activePersonaRes.ok) {
+        console.error('获取角色失败:', activePersonaRes.status);
+        setIsLoading(false);
+        isJoining.current = false;
+        return;
+      }
+      
+      const activePersona = await activePersonaRes.json();
+      const personaId = activePersona.activePersona?.personaId?._id || '';
+      const personaName = activePersona.activePersona?.personaId?.name || user.email?.split('@')[0] || '用户';
+      const username = user.email?.split('@')[0] || '用户';
+      const avatar = user.photoURL || '';
+      
+      voiceSocketService.removeAllListeners();
+      
+      voiceSocketService.onVoiceUsers((data: { users: VoiceUser[] }) => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        if (mounted.current) {
+          setUsers(data.users);
+          setIsLoading(false);
+        }
+        isJoining.current = false;
+      });
+      
+      voiceSocketService.onUserJoinedVoice((data: VoiceUser) => {
+        if (mounted.current) {
+          setUsers(prev => [...prev.filter(u => u.userId !== data.userId), data]);
+        }
+      });
+      
+      voiceSocketService.onUserLeftVoice((data: { userId: string }) => {
+        if (mounted.current) {
+          setUsers(prev => prev.filter(u => u.userId !== data.userId));
+          webRTCService.closePeerConnection(data.userId);
+        }
+      });
+      
+      voiceSocketService.onSignal(async (data: { fromUserId: string, signal: any }) => {
+        await handleSignal(data.fromUserId, data.signal);
+      });
+      
+      voiceSocketService.onUserMuteChanged((data: { userId: string, muted: boolean }) => {
+        if (mounted.current) {
+          setUsers(prev => prev.map(u => 
+            u.userId === data.userId ? { ...u, muted: data.muted } : u
+          ));
+        }
+      });
+      
+      voiceSocketService.onVoiceMessage((data: VoiceMessage) => {
+        if (mounted.current) {
+          setMessages(prev => [...prev, data]);
+        }
+      });
+      
+      voiceSocketService.joinVoiceRoom(roomId, user.uid, personaId, personaName, username, avatar);
+      
+    } catch (error) {
+      console.error('加入语音房失败:', error);
+      setIsLoading(false);
+      isJoining.current = false;
+    }
+  }, [roomId, user]);
+
   useEffect(() => {
     users.forEach(u => {
       if (u.userId !== user?.uid) {
@@ -248,7 +263,6 @@ const VoiceRoomDetail: React.FC = () => {
     });
   }, [users, connectToUser, user]);
 
-  // 初始化
   useEffect(() => {
     initWebRTC();
     joinVoiceRoom();

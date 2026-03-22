@@ -7,7 +7,7 @@ class VoiceSocketService {
 
   connect(token: string) {
     if (this.socket && this.socket.connected) {
-      console.log('语音 Socket 已连接');
+      console.log('语音 Socket 已连接, ID:', this.socket.id);
       return this.socket;
     }
     
@@ -17,27 +17,39 @@ class VoiceSocketService {
     }
     
     this.isConnecting = true;
+    console.log('🔌 正在连接语音 Socket...');
     
     this.socket = io('https://rp-chatv1-0.onrender.com', {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 3,
+      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      forceNew: true,
     });
 
     this.socket.on('connect', () => {
-      console.log('🎙️ Voice socket connected');
+      console.log('🎙️ Voice socket connected, ID:', this.socket?.id);
       this.isConnecting = false;
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('❌ Voice socket connection error:', error);
+      console.error('❌ Voice socket connection error:', error.message);
       this.isConnecting = false;
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('🔌 Voice socket disconnected');
+    this.socket.on('disconnect', (reason) => {
+      console.log('🔌 Voice socket disconnected:', reason);
+    });
+
+    this.socket.on('ping', () => {
+      this.socket?.emit('pong');
+    });
+
+    this.socket.on('connected', (data) => {
+      console.log('✅ Socket 连接确认:', data);
     });
 
     return this.socket;
@@ -45,6 +57,7 @@ class VoiceSocketService {
 
   disconnect() {
     if (this.socket) {
+      console.log('🔌 断开语音 Socket');
       this.socket.disconnect();
       this.socket = null;
     }
@@ -54,6 +67,7 @@ class VoiceSocketService {
 
   joinVoiceRoom(roomId: string, userId: string, personaId: string, personaName: string, username: string, avatar?: string) {
     this.roomId = roomId;
+    console.log(`📡 加入语音房: ${roomId}, 用户: ${username}`);
     this.socket?.emit('join-voice-room', { 
       roomId, 
       userId, 
@@ -65,6 +79,7 @@ class VoiceSocketService {
   }
 
   leaveVoiceRoom(roomId: string, userId: string) {
+    console.log(`📡 离开语音房: ${roomId}`);
     this.socket?.emit('leave-voice-room', { roomId, userId });
     this.roomId = null;
   }
@@ -106,7 +121,9 @@ class VoiceSocketService {
   }
 
   removeAllListeners() {
-    this.socket?.removeAllListeners();
+    if (this.socket) {
+      this.socket.removeAllListeners();
+    }
   }
 }
 

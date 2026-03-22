@@ -20,6 +20,38 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// 获取当前用户信息
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    
+    // ✅ 返回完整的用户信息，包括金币
+    res.json({
+      _id: user._id,
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      displayName: user.displayName,
+      role: user.role,
+      status: user.status,
+      hasAccess: user.hasAccess,
+      coins: user.coins || 0,
+      avatar: user.avatar,
+      loginStreak: user.loginStreak || 0,
+      lastLogin: user.lastLogin,
+      createdAt: user.createdAt,
+      equippedItems: user.equippedItems || {},
+      stats: user.stats || { totalMessages: 0, totalRooms: 0, totalPersonas: 0 }
+    });
+  } catch (error) {
+    console.error('获取用户信息错误:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // 获取用户统计
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
@@ -29,7 +61,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
     }
 
     // 计算加入天数
-    const joinDays = Math.floor((Date.now() - user.createdAt) / (1000 * 60 * 60 * 24));
+    const joinDays = Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24));
 
     res.json({
       totalMessages: user.stats?.totalMessages || 0,

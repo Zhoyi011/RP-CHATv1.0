@@ -37,7 +37,7 @@ const Profile = () => {
     }
   };
 
-  // 刷新用户数据（用于金币更新后）
+  // 刷新用户数据
   const refreshUserData = async () => {
     try {
       setRefreshing(true);
@@ -72,47 +72,6 @@ const Profile = () => {
       default:
         return '';
     }
-  };
-
-  // 获取金币获得方式
-  const getCoinEarningMethods = () => {
-    return [
-      { 
-        name: '每日登录', 
-        amount: '5-15', 
-        description: '每天首次登录领取，连续登录奖励递增',
-        icon: '📅',
-        action: () => navigate('/wallet?tab=daily')
-      },
-      { 
-        name: '聊天发言', 
-        amount: '1-5', 
-        description: '每10条消息获得金币，活跃发言额外奖励',
-        icon: '💬',
-        action: () => navigate('/chat')
-      },
-      { 
-        name: '角色互动', 
-        amount: '10-50', 
-        description: '角色扮演互动获得金币奖励',
-        icon: '🎭',
-        action: () => navigate('/persona')
-      },
-      { 
-        name: '邀请好友', 
-        amount: '50', 
-        description: '邀请新用户注册并完成验证',
-        icon: '👥',
-        action: () => alert('邀请功能开发中')
-      },
-      { 
-        name: '完成任务', 
-        amount: '20-200', 
-        description: '完成每日任务和成就获得奖励',
-        icon: '🎯',
-        action: () => setActiveTab('achievements')
-      }
-    ];
   };
 
   if (loading) {
@@ -208,14 +167,10 @@ const Profile = () => {
             成就
           </button>
           <button
-            onClick={() => setActiveTab('earn')}
-            className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
-              activeTab === 'earn' 
-                ? 'bg-white text-emerald-600 shadow-md' 
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
+            onClick={() => navigate('/voice')}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition bg-white/10 text-white hover:bg-white/20`}
           >
-            赚金币
+            🎙️ 语音房
           </button>
         </div>
       </div>
@@ -225,7 +180,7 @@ const Profile = () => {
         {/* 我的资料 */}
         {activeTab === 'profile' && (
           <>
-            {/* 钱包卡片 - 真实金币数据 */}
+            {/* 钱包卡片 - 显示真实金币数据 */}
             <div className="bg-white rounded-2xl shadow p-5 mb-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -253,13 +208,13 @@ const Profile = () => {
                     查看详情
                   </button>
                   <button
-                    onClick={() => setActiveTab('earn')}
-                    className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:from-emerald-600 hover:to-teal-700 transition shadow-md flex items-center gap-1"
+                    onClick={() => navigate('/voice')}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:from-purple-600 hover:to-pink-600 transition shadow-md flex items-center gap-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     </svg>
-                    赚金币
+                    语音房
                   </button>
                 </div>
               </div>
@@ -338,29 +293,6 @@ const Profile = () => {
                 </svg>
               </button>
             </div>
-
-            {/* 语音房入口 */}
-<div className="bg-white rounded-2xl shadow p-5 mb-4">
-  <button
-    onClick={() => navigate('/voice')}
-    className="w-full flex items-center justify-between py-2 text-gray-600 hover:text-emerald-600 transition"
-  >
-    <div className="flex items-center gap-3">
-      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-        </svg>
-      </div>
-      <div>
-        <span className="font-medium">语音房</span>
-        <p className="text-xs text-gray-400">与好友实时语音聊天</p>
-      </div>
-    </div>
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-    </svg>
-  </button>
-</div>
 
             {/* 统计数据 */}
             <div className="bg-white rounded-2xl shadow p-5">
@@ -494,68 +426,8 @@ const Profile = () => {
                   <p className="text-xs text-gray-400">累计获得10000金币</p>
                 </div>
                 <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
-                  {((userData?.coins || 0) / 10000 * 100).toFixed(0)}%
+                  {Math.min(100, Math.floor(((userData?.coins || 0) / 10000) * 100))}%
                 </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 赚金币 - 新增页面 */}
-        {activeTab === 'earn' && (
-          <div className="space-y-4">
-            <div className="bg-gradient-to-r from-amber-500 to-yellow-500 rounded-2xl p-5 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm opacity-90">当前金币</p>
-                  <p className="text-3xl font-bold">{userData?.coins?.toLocaleString() || 0}</p>
-                </div>
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                  <span className="text-2xl">💰</span>
-                </div>
-              </div>
-              <p className="text-sm opacity-80">继续参与活动，赚取更多金币！</p>
-            </div>
-
-            <h3 className="text-lg font-semibold text-gray-800 px-1">获得金币方式</h3>
-            
-            <div className="space-y-3">
-              {getCoinEarningMethods().map((method, index) => (
-                <div 
-                  key={index}
-                  onClick={method.action}
-                  className="bg-white rounded-2xl shadow p-4 cursor-pointer hover:shadow-md transition"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-xl flex items-center justify-center text-2xl">
-                      {method.icon}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-gray-800">{method.name}</h4>
-                        <span className="text-sm font-bold text-emerald-600">+{method.amount}</span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">{method.description}</p>
-                    </div>
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 mt-4">
-              <div className="flex items-start gap-3">
-                <svg className="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-blue-800">💡 小贴士</p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    每日登录和聊天发言是最稳定的金币来源！连续登录奖励会递增，记得每天登录哦~
-                  </p>
-                </div>
               </div>
             </div>
           </div>

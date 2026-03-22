@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { authApi, type User } from '../../services/api';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -7,9 +7,10 @@ import DailyLogin from './DailyLogin';
 import TransactionHistory from './TransactionHistory';
 
 const Wallet = () => {
+  const [searchParams] = useSearchParams();
   const [userData, setUserData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('wallet');
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'wallet');
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
   const user = auth.currentUser;
@@ -31,7 +32,7 @@ const Wallet = () => {
   // 领取成功后的回调
   const handleClaimSuccess = () => {
     console.log('🎉 领取成功，刷新金币数据...');
-    loadUserData(); // 重新加载用户数据
+    loadUserData();
   };
 
   useEffect(() => {
@@ -82,7 +83,9 @@ const Wallet = () => {
         <div className="flex px-4 pb-4 gap-4">
           <button
             onClick={() => setActiveTab('daily')}
-            className="flex-1 bg-white/10 py-3 rounded-xl text-center hover:bg-white/20 transition"
+            className={`flex-1 py-3 rounded-xl text-center transition ${
+              activeTab === 'daily' ? 'bg-white text-amber-600 shadow-md' : 'bg-white/10 hover:bg-white/20'
+            }`}
           >
             <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -91,7 +94,9 @@ const Wallet = () => {
           </button>
           <button
             onClick={() => navigate('/shop')}
-            className="flex-1 bg-white/10 py-3 rounded-xl text-center hover:bg-white/20 transition"
+            className={`flex-1 py-3 rounded-xl text-center transition ${
+              activeTab === 'shop' ? 'bg-white text-amber-600 shadow-md' : 'bg-white/10 hover:bg-white/20'
+            }`}
           >
             <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -100,7 +105,9 @@ const Wallet = () => {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className="flex-1 bg-white/10 py-3 rounded-xl text-center hover:bg-white/20 transition"
+            className={`flex-1 py-3 rounded-xl text-center transition ${
+              activeTab === 'history' ? 'bg-white text-amber-600 shadow-md' : 'bg-white/10 hover:bg-white/20'
+            }`}
           >
             <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -112,9 +119,7 @@ const Wallet = () => {
 
       {/* 内容区域 */}
       <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
-        {activeTab === 'daily' && (
-          <DailyLogin onClaimSuccess={handleClaimSuccess} />
-        )}
+        {activeTab === 'daily' && <DailyLogin onClaimSuccess={handleClaimSuccess} />}
         {activeTab === 'history' && <TransactionHistory />}
         {activeTab === 'wallet' && (
           <div className="bg-white rounded-2xl shadow p-5">
