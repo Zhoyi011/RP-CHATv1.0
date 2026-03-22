@@ -7,6 +7,14 @@ interface VoiceMessageListProps {
 }
 
 const VoiceMessageList: React.FC<VoiceMessageListProps> = ({ messages, currentUserId }) => {
+  if (messages.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-xs text-gray-500">暂无消息</p>
+      </div>
+    );
+  }
+
   return (
     <>
       {messages.map(msg => {

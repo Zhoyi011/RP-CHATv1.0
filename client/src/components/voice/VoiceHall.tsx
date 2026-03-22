@@ -4,7 +4,7 @@ import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
 import CreateVoiceRoom from './CreateVoiceRoom';
 import type { VoiceRoom } from '../../types/voice';
-import { VOICE_CATEGORIES, getCategoryInfo } from '../../types/voice';
+import { VOICE_CATEGORIES } from '../../types/voice';
 
 const VoiceHall: React.FC = () => {
   const [rooms, setRooms] = useState<VoiceRoom[]>([]);

@@ -1,4 +1,15 @@
-// 语音用户信息
+// ========== 语音消息 ==========
+export interface VoiceMessage {
+  _id: string;
+  userId: string;
+  username: string;
+  personaName: string;
+  content: string;
+  timestamp: Date;
+  type: 'text' | 'system';
+}
+
+// ========== 语音用户 ==========
 export interface VoiceUser {
   userId: string;
   personaId: string;
@@ -8,10 +19,9 @@ export interface VoiceUser {
   muted: boolean;
   speaking: boolean;
   isCreator: boolean;
-  volume?: number;  // 音量级别 0-100
 }
 
-// 语音房间信息
+// ========== 语音房间 ==========
 export interface VoiceRoom {
   _id: string;
   name: string;
@@ -27,32 +37,42 @@ export interface VoiceRoom {
   updatedAt: string;
 }
 
-// 语音消息
-export interface VoiceMessage {
-  _id: string;
-  userId: string;
-  username: string;
-  personaName: string;
-  content: string;
-  timestamp: Date;
-  type: 'text' | 'system';
-}
+// ========== 语音房间分类 ==========
+export const VOICE_CATEGORIES = [
+  { id: 'chat', name: '闲聊', icon: '💬', color: 'from-blue-500 to-cyan-500' },
+  { id: 'music', name: '音乐', icon: '🎵', color: 'from-purple-500 to-pink-500' },
+  { id: 'game', name: '游戏', icon: '🎮', color: 'from-green-500 to-emerald-500' },
+  { id: 'study', name: '学习', icon: '📚', color: 'from-orange-500 to-red-500' },
+  { id: 'rp', name: '角色扮演', icon: '🎭', color: 'from-indigo-500 to-purple-500' },
+] as const;
 
-// WebRTC 信令类型
-export interface SignalData {
-  type: 'offer' | 'answer' | 'ice-candidate';
-  sdp?: string;
-  candidate?: RTCIceCandidateInit;
-}
+export type VoiceCategory = typeof VOICE_CATEGORIES[number]['id'];
 
-// 麦克风设备信息
-export interface MicrophoneDevice {
-  deviceId: string;
-  label: string;
-  groupId: string;
-}
+// ========== 辅助函数 ==========
+// 获取分类图标
+export const getCategoryIcon = (categoryId: string): string => {
+  const cat = VOICE_CATEGORIES.find(c => c.id === categoryId);
+  return cat?.icon || '🎙️';
+};
 
-// 语音房配置
+// 获取分类名称
+export const getCategoryName = (categoryId: string): string => {
+  const cat = VOICE_CATEGORIES.find(c => c.id === categoryId);
+  return cat?.name || '其他';
+};
+
+// 获取分类颜色
+export const getCategoryColor = (categoryId: string): string => {
+  const cat = VOICE_CATEGORIES.find(c => c.id === categoryId);
+  return cat?.color || 'from-gray-500 to-gray-600';
+};
+
+// 获取分类信息
+export const getCategoryInfo = (categoryId: string) => {
+  return VOICE_CATEGORIES.find(c => c.id === categoryId) || VOICE_CATEGORIES[0];
+};
+
+// ========== 语音房间配置 ==========
 export interface VoiceRoomConfig {
   name: string;
   description: string;
@@ -60,14 +80,20 @@ export interface VoiceRoomConfig {
   isPublic: boolean;
 }
 
-// 语音活动检测状态
-export interface VoiceActivityState {
-  isSpeaking: boolean;
-  volume: number;
-  speakingDuration: number;  // 当前说话的持续时间（ms）
+// ========== 语音活动检测配置 ==========
+export interface VoiceActivityConfig {
+  silenceDelay: number;
+  voiceThreshold: number;
+  minVoiceDuration: number;
 }
 
-// 音频质量设置
+export const defaultVoiceActivityConfig: VoiceActivityConfig = {
+  silenceDelay: 500,
+  voiceThreshold: 15,
+  minVoiceDuration: 100
+};
+
+// ========== 音频质量配置 ==========
 export interface AudioQualityConfig {
   sampleRate: number;
   channelCount: number;
@@ -84,18 +110,9 @@ export const defaultAudioQuality: AudioQualityConfig = {
   autoGainControl: true
 };
 
-// 语音房间分类
-export const VOICE_CATEGORIES = [
-  { id: 'chat', name: '闲聊', icon: '💬', color: 'from-blue-500 to-cyan-500' },
-  { id: 'music', name: '音乐', icon: '🎵', color: 'from-purple-500 to-pink-500' },
-  { id: 'game', name: '游戏', icon: '🎮', color: 'from-green-500 to-emerald-500' },
-  { id: 'study', name: '学习', icon: '📚', color: 'from-orange-500 to-red-500' },
-  { id: 'rp', name: '角色扮演', icon: '🎭', color: 'from-indigo-500 to-purple-500' },
-] as const;
-
-export type VoiceCategory = typeof VOICE_CATEGORIES[number]['id'];
-
-// 获取分类信息
-export const getCategoryInfo = (categoryId: string) => {
-  return VOICE_CATEGORIES.find(c => c.id === categoryId) || VOICE_CATEGORIES[0];
-};
+// ========== 麦克风设备 ==========
+export interface MicrophoneDevice {
+  deviceId: string;
+  label: string;
+  groupId: string;
+}

@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auth } from '../../firebase/config';
-import { voiceSocketService } from '../../services/voiceSocket';
-import { webRTCService } from '../../services/webRTCService';
+import { agoraService } from '../../services/agoraService';
 import VoiceControls from './VoiceControls';
 import VoiceMessageList from './VoiceMessageList';
 import type { VoiceUser, VoiceMessage } from '../../types/voice';
+
+// Agora App ID
+const AGORA_APP_ID = 'be1c4d900ae542c99c8fc4543406fd67';
 
 const VoiceRoomDetail: React.FC = () => {
   const { roomId } = useParams();
@@ -20,255 +22,27 @@ const VoiceRoomDetail: React.FC = () => {
   const [showUserList, setShowUserList] = useState(true);
   const [showChat, setShowChat] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  const isInitialized = useRef(false);
-  const isJoining = useRef(false);
-  const mounted = useRef(true);
-  const timeoutRef = useRef<number | null>(null);  // ✅ 修复：使用 number 类型
-  
   const user = auth.currentUser;
-
-  const cleanup = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    voiceSocketService.removeAllListeners();
-    voiceSocketService.disconnect();
-    webRTCService.closeAllConnections();
-    isInitialized.current = false;
-    isJoining.current = false;
-  }, []);
 
   // 加载房间信息
   useEffect(() => {
-    const loadRoomInfo = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const res = await fetch(`https://rp-chatv1-0.onrender.com/api/voice/room/${roomId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (mounted.current) setRoom(data);
-        }
-      } catch (error) {
-        console.error('加载房间信息失败:', error);
-      }
-    };
     loadRoomInfo();
-    
-    return () => {
-      mounted.current = false;
-      cleanup();
-    };
-  }, [roomId, cleanup]);
-
-  // 初始化 WebRTC
-  const initWebRTC = useCallback(async () => {
-    if (isInitialized.current) return;
-    isInitialized.current = true;
-    
-    try {
-      const stream = await webRTCService.getLocalStream();
-      if (!mounted.current) return;
-      setIsMuted(webRTCService.isMuted());
-      
-      webRTCService.onIceCandidate = (targetUserId, candidate) => {
-        voiceSocketService.sendSignal(roomId!, targetUserId, {
-          type: 'ice-candidate',
-          candidate,
-        });
-      };
-      
-      webRTCService.setOnSpeakingChange((userId, isSpeaking) => {
-        if (mounted.current) {
-          setUsers(prev => prev.map(u => 
-            u.userId === userId ? { ...u, speaking: isSpeaking } : u
-          ));
-        }
-      });
-      
-      setIsConnected(true);
-    } catch (err) {
-      console.error('初始化麦克风失败:', err);
-      setIsConnected(false);
-    }
   }, [roomId]);
 
-  // 处理信令
-const handleSignal = useCallback(async (fromUserId: string, signal: any) => {
-  if (fromUserId === user?.uid) return;
-  
-  console.log(`📡 收到信令 from ${fromUserId}:`, signal.type);
-  
-  if (signal.type === 'offer') {
-    // 作为接收方，处理 offer
-    const answer = await webRTCService.handleOffer(fromUserId, signal, (stream) => {
-      webRTCService.createAudioElement(fromUserId, stream);
-    });
-    if (answer) {
-      voiceSocketService.sendSignal(roomId!, fromUserId, answer);
-    }
-  } else if (signal.type === 'answer') {
-    // 作为发起方，处理 answer
-    await webRTCService.handleAnswer(fromUserId, signal);
-  } else if (signal.type === 'ice-candidate') {
-    // 处理 ICE 候选
-    await webRTCService.handleIceCandidate(fromUserId, signal.candidate);
-  }
-}, [roomId, user]);
-
-// 连接新用户（作为发起方）
-const connectToUser = useCallback(async (targetUserId: string) => {
-  if (targetUserId === user?.uid) return;
-  
-  const existingPC = webRTCService.getPeerConnection(targetUserId);
-  if (existingPC) return;
-  
-  console.log(`🔗 发起连接 to ${targetUserId}`);
-  
-  const offer = await webRTCService.createOffer(targetUserId, (stream) => {
-    webRTCService.createAudioElement(targetUserId, stream);
-  });
-  
-  if (offer) {
-    voiceSocketService.sendSignal(roomId!, targetUserId, offer);
-  }
-}, [roomId, user]);
-
-  // 加入语音房间
-  const joinVoiceRoom = useCallback(async () => {
-    if (!user || !roomId || isJoining.current) return;
-    isJoining.current = true;
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      isJoining.current = false;
-      return;
-    }
-    
-    voiceSocketService.disconnect();
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const socket = voiceSocketService.connect(token);
-    
-    let connectResolve: (value: boolean) => void;
-    const connectPromise = new Promise<boolean>((resolve) => {
-      connectResolve = resolve;
-      if (socket?.connected) {
-        resolve(true);
-      } else {
-        socket?.once('connect', () => resolve(true));
-        setTimeout(() => resolve(false), 8000);
-      }
-    });
-    
-    const connected = await connectPromise;
-    if (!connected) {
-      console.log('Socket 连接失败');
-      setIsLoading(false);
-      isJoining.current = false;
-      return;
-    }
-    
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = window.setTimeout(() => {  // ✅ 使用 window.setTimeout
-      if (mounted.current) {
-        console.log('语音房连接超时');
-        setIsLoading(false);
-        isJoining.current = false;
-      }
-    }, 15000);
-    
+  const loadRoomInfo = async () => {
     try {
-      const activePersonaRes = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/voice/room/${roomId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
-      if (!activePersonaRes.ok) {
-        console.error('获取角色失败:', activePersonaRes.status);
-        setIsLoading(false);
-        isJoining.current = false;
-        return;
-      }
-      
-      const activePersona = await activePersonaRes.json();
-      const personaId = activePersona.activePersona?.personaId?._id || '';
-      const personaName = activePersona.activePersona?.personaId?.name || user.email?.split('@')[0] || '用户';
-      const username = user.email?.split('@')[0] || '用户';
-      const avatar = user.photoURL || '';
-      
-      voiceSocketService.removeAllListeners();
-      
-      voiceSocketService.onVoiceUsers((data: { users: VoiceUser[] }) => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        if (mounted.current) {
-          setUsers(data.users);
-          setIsLoading(false);
-        }
-        isJoining.current = false;
-      });
-      
-      voiceSocketService.onUserJoinedVoice((data: VoiceUser) => {
-        if (mounted.current) {
-          setUsers(prev => [...prev.filter(u => u.userId !== data.userId), data]);
-        }
-      });
-      
-      voiceSocketService.onUserLeftVoice((data: { userId: string }) => {
-        if (mounted.current) {
-          setUsers(prev => prev.filter(u => u.userId !== data.userId));
-          webRTCService.closePeerConnection(data.userId);
-        }
-      });
-      
-      voiceSocketService.onSignal(async (data: { fromUserId: string, signal: any }) => {
-        await handleSignal(data.fromUserId, data.signal);
-      });
-      
-      voiceSocketService.onUserMuteChanged((data: { userId: string, muted: boolean }) => {
-        if (mounted.current) {
-          setUsers(prev => prev.map(u => 
-            u.userId === data.userId ? { ...u, muted: data.muted } : u
-          ));
-        }
-      });
-      
-      voiceSocketService.onVoiceMessage((data: VoiceMessage) => {
-        if (mounted.current) {
-          setMessages(prev => [...prev, data]);
-        }
-      });
-      
-      voiceSocketService.joinVoiceRoom(roomId, user.uid, personaId, personaName, username, avatar);
-      
+      const data = await res.json();
+      setRoom(data);
     } catch (error) {
-      console.error('加入语音房失败:', error);
-      setIsLoading(false);
-      isJoining.current = false;
+      console.error('加载房间信息失败:', error);
     }
-  }, [roomId, user]);
+  };
 
-  useEffect(() => {
-    users.forEach(u => {
-      if (u.userId !== user?.uid) {
-        connectToUser(u.userId);
-      }
-    });
-  }, [users, connectToUser, user]);
-
-  useEffect(() => {
-    initWebRTC();
-    joinVoiceRoom();
-    
-    return () => {
-      cleanup();
-      mounted.current = false;
-    };
-  }, [initWebRTC, joinVoiceRoom, cleanup]);
-
+  // 添加系统消息
   const addSystemMessage = (content: string) => {
     const newMessage: VoiceMessage = {
       _id: Date.now().toString(),
@@ -282,31 +56,133 @@ const connectToUser = useCallback(async (targetUserId: string) => {
     setMessages(prev => [...prev, newMessage]);
   };
 
-  const toggleMute = () => {
-    const newMuted = !isMuted;
-    webRTCService.setMute(newMuted);
-    setIsMuted(newMuted);
-    if (user && roomId) {
-      voiceSocketService.toggleMute(roomId, user.uid, newMuted);
+  // 初始化 Agora
+  const initAgora = async () => {
+    try {
+      await agoraService.init(AGORA_APP_ID);
+      
+      const token = localStorage.getItem('token');
+      const activePersonaRes = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const activePersona = await activePersonaRes.json();
+      const personaId = activePersona.activePersona?.personaId?._id || '';
+      const personaName = activePersona.activePersona?.personaId?.name || user?.email?.split('@')[0] || '用户';
+      const username = user?.email?.split('@')[0] || '用户';
+      
+      const success = await agoraService.joinChannel(
+        AGORA_APP_ID,
+        `voice_${roomId}`,
+        null,
+        user?.uid || 'user'
+      );
+      
+      if (success) {
+        setIsConnected(true);
+        setIsMuted(false);
+        
+        setUsers([{
+          userId: user?.uid || '',
+          personaId,
+          personaName,
+          username,
+          muted: false,
+          speaking: false,
+          isCreator: true
+        }]);
+        
+        addSystemMessage(`你加入了语音房`);
+      }
+    } catch (error) {
+      console.error('初始化 Agora 失败:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const sendMessage = () => {
-    if (!inputMessage.trim() || !roomId) return;
+  // 监听用户加入/离开
+  useEffect(() => {
+    agoraService.onUserJoined((uid) => {
+      console.log('👤 用户加入:', uid);
+      const uidStr = uid.toString();
+      
+      setUsers(prev => [...prev, {
+        userId: uidStr,
+        personaId: '',
+        personaName: `用户${uidStr.slice(-4)}`,
+        username: `user_${uidStr.slice(-4)}`,
+        muted: false,
+        speaking: false,
+        isCreator: false
+      }]);
+      addSystemMessage(`用户 ${uidStr.slice(-4)} 加入了语音房`);
+    });
+    
+    agoraService.onUserLeft((uid) => {
+      console.log('👋 用户离开:', uid);
+      const uidStr = uid.toString();
+      const leavingUser = users.find(u => u.userId === uidStr);
+      if (leavingUser) {
+        addSystemMessage(`${leavingUser.personaName} 离开了语音房`);
+      }
+      setUsers(prev => prev.filter(u => u.userId !== uidStr));
+    });
+    
+    initAgora();
+    
+    return () => {
+      agoraService.leaveChannel();
+      agoraService.destroy();
+    };
+  }, [roomId]);
+
+  // 发送聊天消息
+  const sendMessage = async () => {
+    if (!inputMessage.trim()) return;
+    
+    const token = localStorage.getItem('token');
+    const activePersonaRes = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const activePersona = await activePersonaRes.json();
+    const personaName = activePersona.activePersona?.personaId?.name || user?.email?.split('@')[0] || '用户';
     
     const message: VoiceMessage = {
       _id: Date.now().toString(),
       userId: user?.uid || '',
       username: user?.email?.split('@')[0] || '用户',
-      personaName: users.find(u => u.userId === user?.uid)?.personaName || '用户',
+      personaName,
       content: inputMessage,
       timestamp: new Date(),
       type: 'text'
     };
     
-    voiceSocketService.sendVoiceMessage(roomId, message);
-    setMessages(prev => [...prev, message]);
-    setInputMessage('');
+    try {
+      await fetch(`https://rp-chatv1-0.onrender.com/api/voice/room/${roomId}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(message)
+      });
+      
+      setMessages(prev => [...prev, message]);
+      setInputMessage('');
+    } catch (error) {
+      console.error('发送消息失败:', error);
+    }
+  };
+
+  const toggleMute = () => {
+    const newMuted = !isMuted;
+    agoraService.setMute(newMuted);
+    setIsMuted(newMuted);
+  };
+
+  const handleLeave = () => {
+    agoraService.leaveChannel();
+    navigate('/voice');
   };
 
   useEffect(() => {
@@ -373,6 +249,7 @@ const connectToUser = useCallback(async (targetUserId: string) => {
       <div className="flex h-[calc(100vh-73px)]">
         <div className={`flex-1 p-4 sm:p-6 transition-all duration-300 ${showUserList ? 'sm:mr-80' : ''} ${showChat ? 'sm:mr-80' : ''}`}>
           <div className="h-full flex flex-col">
+            {/* 当前语音状态 */}
             <div className="relative z-10 bg-white/5 backdrop-blur-sm rounded-2xl p-4 sm:p-6 mb-6 border border-white/10">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -393,12 +270,13 @@ const connectToUser = useCallback(async (targetUserId: string) => {
                 <VoiceControls
                   isMuted={isMuted}
                   onToggleMute={toggleMute}
-                  onLeave={() => navigate('/voice')}
+                  onLeave={handleLeave}
                   isLoading={!isConnected}
                 />
               </div>
             </div>
             
+            {/* 用户网格 */}
             <div className="relative z-10 flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
                 {users.map(user => (
@@ -440,6 +318,7 @@ const connectToUser = useCallback(async (targetUserId: string) => {
           </div>
         </div>
 
+        {/* 右侧：成员列表 */}
         {showUserList && (
           <div className="fixed right-0 top-[73px] bottom-0 w-80 bg-black/30 backdrop-blur-xl border-l border-white/10 overflow-y-auto hidden sm:block">
             <div className="p-4">
@@ -478,6 +357,7 @@ const connectToUser = useCallback(async (targetUserId: string) => {
           </div>
         )}
 
+        {/* 右侧：聊天区 */}
         {showChat && (
           <div className={`fixed right-0 top-[73px] bottom-0 w-80 bg-black/30 backdrop-blur-xl border-l border-white/10 flex flex-col ${showUserList ? 'hidden sm:block' : ''}`}>
             <div className="p-4 border-b border-white/10">
