@@ -17,6 +17,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return data;
 }
 
+// ✅ 导出 DailyInfo 接口
 export interface DailyInfo {
   hasClaimed: boolean;
   currentStreak: number;
@@ -24,12 +25,20 @@ export interface DailyInfo {
   rewards: number[];
 }
 
+export interface ClaimResult {
+  claimed: boolean;
+  reward?: number;
+  streak?: number;
+  diamonds?: number;
+  reason?: string;
+}
+
 export const diamondApi = {
   // 获取当前钻石数量
   getBalance: () => request<{ diamonds: number }>('/diamond/balance'),
   
   // 每日登录领取
-  claimDaily: () => request<{ claimed: boolean; reward?: number; streak?: number; diamonds?: number; reason?: string }>('/diamond/daily'),
+  claimDaily: () => request<ClaimResult>('/diamond/daily'),
   
   // 获取每日奖励信息
   getDailyInfo: () => request<DailyInfo>('/diamond/daily-info'),
