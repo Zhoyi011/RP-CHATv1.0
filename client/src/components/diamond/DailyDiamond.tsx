@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { diamondApi, DailyInfo } from '../../services/diamondApi';
+import { diamondApi } from '../../services/diamondApi';
+
+// ✅ 直接在组件内定义类型
+interface DailyInfo {
+  hasClaimed: boolean;
+  currentStreak: number;
+  nextReward: number;
+  rewards: number[];
+}
 
 interface Props {
   onClaimSuccess?: () => void;
@@ -61,13 +69,11 @@ const DailyDiamond: React.FC<Props> = ({ onClaimSuccess }) => {
     <div className="bg-white rounded-2xl shadow p-5">
       <h2 className="font-medium text-gray-800 mb-4">每日钻石奖励</h2>
       
-      {/* 连续签到提示 */}
       <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-3 mb-4 text-center">
         <p className="text-sm text-gray-600">连续签到</p>
         <p className="text-2xl font-bold text-blue-600">{currentStreak} 天</p>
       </div>
 
-      {/* 7天奖励表 */}
       <div className="grid grid-cols-7 gap-1 mb-5">
         {rewards.map((reward, index) => {
           const dayNum = index + 1;
@@ -97,7 +103,6 @@ const DailyDiamond: React.FC<Props> = ({ onClaimSuccess }) => {
         })}
       </div>
 
-      {/* 领取按钮 */}
       <button
         onClick={handleClaim}
         disabled={info?.hasClaimed || claiming}
