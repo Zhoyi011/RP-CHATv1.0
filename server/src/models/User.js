@@ -78,7 +78,8 @@ const userSchema = new mongoose.Schema({
   // ===== 金币系统 =====
   coins: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   
   // 最后登录时间
@@ -93,6 +94,12 @@ const userSchema = new mongoose.Schema({
   
   // 连续登录天数
   loginStreak: {
+    type: Number,
+    default: 0
+  },
+  
+  // 最后消息奖励计数
+  lastMessageReward: {
     type: Number,
     default: 0
   },
@@ -207,22 +214,85 @@ userSchema.methods.canAccess = function() {
   return this.status === 'active' && (this.hasAccess || this.isAdmin());
 };
 
+// ========== 金币系统方法（带事务） ==========
+
 // 添加金币
-userSchema.methods.addCoins = function(amount) {
-  this.coins += amount;
-  return this.save();
+userSchema.methods.addCoins = async function(amount, type, description, metadata = {}) {
+  const mongoose = require('mongoose');
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const oldBalance = this.coins || 0;
+    const newBalance = oldBalance + amount;
+    
+    if (newBalance < 0) {
+      throw new Error('金币不足');
+    }
+    
+    // 更新用户金币
+    this.coins = newBalance;
+    await this.save({ session });
+    
+    // 创建交易记录
+    const Transaction = require('./Transaction');
+    await Transaction.create([{
+      userId: this._id,
+      type,
+      amount,
+      balance: newBalance,
+      description,
+      metadata
+    }], { session });
+    
+    await session.commitTransaction();
+    return { success: true, oldBalance, newBalance };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 // 扣除金币
-userSchema.methods.deductCoins = function(amount) {
+userSchema.methods.deductCoins = async function(amount, type, description, metadata = {}) {
   if (this.coins < amount) {
     throw new Error('金币不足');
   }
-  this.coins -= amount;
-  return this.save();
+  return this.addCoins(-amount, type, description, metadata);
 };
 
-// 每日登录奖励
+// 获取交易记录
+userSchema.methods.getTransactions = async function(limit = 50, skip = 0) {
+  const Transaction = require('./Transaction');
+  return Transaction.find({ userId: this._id })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+};
+
+// 获取金币统计
+userSchema.methods.getCoinStats = async function() {
+  const Transaction = require('./Transaction');
+  const totalEarned = await Transaction.aggregate([
+    { $match: { userId: this._id, amount: { $gt: 0 } } },
+    { $group: { _id: null, total: { $sum: '$amount' } } }
+  ]);
+  const totalSpent = await Transaction.aggregate([
+    { $match: { userId: this._id, amount: { $lt: 0 } } },
+    { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+  ]);
+  
+  return {
+    totalEarned: totalEarned[0]?.total || 0,
+    totalSpent: totalSpent[0]?.total || 0,
+    current: this.coins || 0
+  };
+};
+
+// ========== 每日登录奖励 ==========
+
 userSchema.methods.claimDailyReward = function() {
   const now = new Date();
   const last = this.lastDailyReward;
@@ -255,14 +325,14 @@ userSchema.methods.claimDailyReward = function() {
   if (this.loginStreak >= 7) reward = 200;
   else if (this.loginStreak >= 3) reward = 100;
   
-  this.coins += reward;
-  
   return {
-    coins: this.coins,
+    coins: this.coins + reward,
     streak: this.loginStreak,
     reward
   };
 };
+
+// ========== 背包系统 ==========
 
 // 添加物品到背包
 userSchema.methods.addItem = function(item) {
@@ -320,6 +390,7 @@ userSchema.methods.equipItem = function(itemId) {
 // 返回安全用户信息
 userSchema.methods.toSafeObject = function() {
   return {
+    _id: this._id,
     id: this._id,
     username: this.username,
     email: this.email,
@@ -328,10 +399,10 @@ userSchema.methods.toSafeObject = function() {
     role: this.role,
     status: this.status,
     hasAccess: this.hasAccess,
-    coins: this.coins,
-    loginStreak: this.loginStreak,
-    equippedItems: this.equippedItems,
-    stats: this.stats,
+    coins: this.coins || 0,
+    loginStreak: this.loginStreak || 0,
+    equippedItems: this.equippedItems || {},
+    stats: this.stats || { totalMessages: 0, totalRooms: 0, totalPersonas: 0 },
     createdAt: this.createdAt,
     lastLogin: this.lastLogin
   };

@@ -1,51 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { auth } from '../../firebase/config';
-import { authApi, type User } from '../../services/api';
+import { coinApi } from '../../services/coinApi';
 import { useResponsive } from '../../hooks/useResponsive';
-import DailyLogin from './DailyLogin';
-import TransactionHistory from './TransactionHistory';
+import DailyLogin from '../coin/DailyLogin';
+import CoinHistory from '../coin/CoinHistory';
+import CoinBalance from '../coin/CoinBalance';
 
 const Wallet = () => {
   const [searchParams] = useSearchParams();
-  const [userData, setUserData] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'wallet');
+  const [balance, setBalance] = useState(0);
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
-  const user = auth.currentUser;
 
-  // 加载用户数据
-  const loadUserData = async () => {
+  const loadBalance = async () => {
     try {
-      setLoading(true);
-      const data = await authApi.getCurrentUser();
-      setUserData(data);
-      console.log('💰 钱包数据加载成功:', data.coins, '金币');
+      const data = await coinApi.getBalance();
+      setBalance(data.coins);
     } catch (error) {
-      console.error('加载用户数据失败:', error);
-    } finally {
-      setLoading(false);
+      console.error('加载余额失败:', error);
     }
   };
 
-  // 领取成功后的回调
-  const handleClaimSuccess = () => {
-    console.log('🎉 领取成功，刷新金币数据...');
-    loadUserData();
-  };
-
   useEffect(() => {
-    loadUserData();
+    loadBalance();
   }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-gray-400">加载中...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -63,7 +43,7 @@ const Wallet = () => {
           <h1 className="text-xl font-bold flex-1">我的钱包</h1>
         </div>
 
-        {/* 金币卡片 - 显示真实数据 */}
+        {/* 金币卡片 */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <p className="text-sm opacity-90 mb-2">当前金币</p>
           <div className="flex items-center justify-between">
@@ -71,10 +51,13 @@ const Wallet = () => {
               <svg className="w-8 h-8 text-amber-300" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
               </svg>
-              <span className="text-3xl font-bold">{userData?.coins?.toLocaleString() || 0}</span>
+              <span className="text-3xl font-bold">{balance.toLocaleString()}</span>
             </div>
-            <button className="bg-amber-400 text-amber-900 px-4 py-2 rounded-xl font-medium text-sm hover:bg-amber-300 transition shadow-md">
-              充值
+            <button 
+              onClick={loadBalance}
+              className="bg-amber-400 text-amber-900 px-3 py-1.5 rounded-xl text-sm font-medium hover:bg-amber-300 transition"
+            >
+              刷新
             </button>
           </div>
         </div>
@@ -93,17 +76,6 @@ const Wallet = () => {
             <span className="text-xs">每日领取</span>
           </button>
           <button
-            onClick={() => navigate('/shop')}
-            className={`flex-1 py-3 rounded-xl text-center transition ${
-              activeTab === 'shop' ? 'bg-white text-amber-600 shadow-md' : 'bg-white/10 hover:bg-white/20'
-            }`}
-          >
-            <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-            <span className="text-xs">前往商城</span>
-          </button>
-          <button
             onClick={() => setActiveTab('history')}
             className={`flex-1 py-3 rounded-xl text-center transition ${
               activeTab === 'history' ? 'bg-white text-amber-600 shadow-md' : 'bg-white/10 hover:bg-white/20'
@@ -114,13 +86,24 @@ const Wallet = () => {
             </svg>
             <span className="text-xs">交易记录</span>
           </button>
+          <button
+            onClick={() => navigate('/shop')}
+            className={`flex-1 py-3 rounded-xl text-center transition ${
+              activeTab === 'shop' ? 'bg-white text-amber-600 shadow-md' : 'bg-white/10 hover:bg-white/20'
+            }`}
+          >
+            <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+            <span className="text-xs">商城</span>
+          </button>
         </div>
       </div>
 
       {/* 内容区域 */}
       <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
-        {activeTab === 'daily' && <DailyLogin onClaimSuccess={handleClaimSuccess} />}
-        {activeTab === 'history' && <TransactionHistory />}
+        {activeTab === 'daily' && <DailyLogin onClaimSuccess={loadBalance} />}
+        {activeTab === 'history' && <CoinHistory />}
         {activeTab === 'wallet' && (
           <div className="bg-white rounded-2xl shadow p-5">
             <h2 className="font-medium text-gray-800 mb-4">获取金币</h2>

@@ -53,17 +53,16 @@ mongoose.connect(process.env.MONGODB_URI, {
 .then(async () => {
   console.log('✅ MongoDB 连接成功');
   
-  setTimeout(() => {
-    console.log('📡 后台启动更新日志同步...');
+  // 初始化奖励规则
+  setTimeout(async () => {
     try {
-      const { fetchAndSaveGitHubCommits } = require('./routes/changelog');
-      fetchAndSaveGitHubCommits().catch(err => {
-        console.error('⚠️ 更新日志同步失败:', err.message);
-      });
+      const rewardService = require('./services/rewardService');
+      await rewardService.initDefaultRules();
+      console.log('✅ 奖励规则初始化完成');
     } catch (err) {
-      console.error('⚠️ 加载更新日志模块失败:', err.message);
+      console.error('⚠️ 奖励规则初始化失败:', err.message);
     }
-  }, 15000);
+  }, 3000);
   
   console.log('🚀 服务已就绪');
 })
@@ -84,6 +83,7 @@ const userRoutes = require('./routes/user');
 const changelogRoutes = require('./routes/changelog');
 const searchRoutes = require('./routes/search');
 const voiceRoutes = require('./routes/voice');
+const coinRoutes = require('./routes/coin');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/persona', personaRoutes);
@@ -92,6 +92,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/changelog', changelogRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/voice', voiceRoutes);
+app.use('/api/coin', coinRoutes);
 
 // ===== 404 =====
 app.use((req, res) => {
@@ -111,7 +112,7 @@ const server = app.listen(PORT, () => {
   console.log(`📡 API 地址: http://localhost:${PORT}/api/test`);
 });
 
-// ===== Socket.IO 配置 =====
+// ===== Socket.IO =====
 const io = require('socket.io')(server, {
   cors: {
     origin: [
@@ -125,14 +126,8 @@ const io = require('socket.io')(server, {
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
   },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true,
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  connectTimeout: 45000
+  transports: ['websocket', 'polling']
 });
-
-console.log('🎙️ Socket.IO 服务已启动');
 
 // ========== 在线用户存储 ==========
 const onlineUsers = new Map();
@@ -140,42 +135,12 @@ const onlineUsers = new Map();
 // ========== 语音房间存储 ==========
 const voiceRooms = new Map();
 
-// ========== 定期清理无效连接 ==========
-setInterval(() => {
-  voiceRooms.forEach((roomUsers, roomId) => {
-    roomUsers.forEach((userInfo, socketId) => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (!socket || !socket.connected) {
-        roomUsers.delete(socketId);
-        console.log(`清理无效连接: ${userInfo.userId}`);
-      }
-    });
-    if (roomUsers.size === 0) {
-      voiceRooms.delete(roomId);
-      console.log(`📭 语音房 ${roomId} 已空`);
-    }
-  });
-}, 60000);
-
 // ========== Socket 事件处理 ==========
 io.on('connection', (socket) => {
   console.log('🟢 新客户端连接:', socket.id);
   
   // 立即发送连接确认
   socket.emit('connected', { id: socket.id });
-  
-  // 心跳保活
-  const heartbeat = setInterval(() => {
-    if (socket.connected) {
-      socket.emit('ping');
-    } else {
-      clearInterval(heartbeat);
-    }
-  }, 25000);
-  
-  socket.on('pong', () => {
-    // 心跳响应
-  });
   
   // ========== 文字聊天室 ==========
   socket.on('join-room', async ({ roomId, userId, personaId }) => {
@@ -270,7 +235,6 @@ io.on('connection', (socket) => {
     
     const roomUsers = voiceRooms.get(roomId);
     
-    // 检查是否是房主
     let isCreator = false;
     const VoiceRoom = require('./models/VoiceRoom');
     VoiceRoom.findById(roomId).then(room => {
@@ -349,37 +313,10 @@ io.on('connection', (socket) => {
     delete socket.data.userInfo;
   });
   
-  socket.on('voice-signal', ({ roomId, targetUserId, signal }) => {
-    socket.to(`voice-${roomId}`).emit('voice-signal', {
-      fromUserId: socket.data.userId,
-      signal
-    });
-  });
-  
-  socket.on('voice-mute', ({ roomId, userId, muted }) => {
-    const roomUsers = voiceRooms.get(roomId);
-    if (roomUsers) {
-      for (const [sid, info] of roomUsers.entries()) {
-        if (info.userId === userId) {
-          info.muted = muted;
-          roomUsers.set(sid, info);
-          break;
-        }
-      }
-    }
-    socket.to(`voice-${roomId}`).emit('voice-mute-changed', { userId, muted });
-  });
-  
-  socket.on('voice-message', ({ roomId, message }) => {
-    socket.to(`voice-${roomId}`).emit('voice-message', message);
-  });
-  
   // ========== 断开连接 ==========
   socket.on('disconnect', () => {
     console.log('🔌 客户端断开:', socket.id);
-    clearInterval(heartbeat);
     
-    // 处理文字聊天室
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
       onlineUsers.delete(socket.id);
@@ -388,7 +325,6 @@ io.on('connection', (socket) => {
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
     }
     
-    // 处理语音房
     const voiceRoomId = socket.data.voiceRoomId;
     if (voiceRoomId) {
       const roomUsers = voiceRooms.get(voiceRoomId);
