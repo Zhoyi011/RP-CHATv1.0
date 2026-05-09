@@ -24,7 +24,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const user = auth.currentUser;
 
-  // Tab 配置
   const tabs: TabItem[] = [
     {
       name: '聊天',
@@ -55,7 +54,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     },
   ];
 
-  // 加载用户数据
   useEffect(() => {
     const loadUserData = async () => {
       if (!user) return;
@@ -69,7 +67,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
-  // 获取未读消息
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
@@ -86,7 +83,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     fetchUnreadCount();
   }, [user]);
 
-  // 点击外部关闭菜单
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -112,7 +108,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     }
   };
 
-  // 根据当前路径激活对应 tab
   useEffect(() => {
     const currentTab = tabs.find(tab => location.pathname.startsWith(tab.path));
     if (currentTab) {
@@ -125,19 +120,15 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
       {/* 顶部导航栏 */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-sm">RP</span>
-          </div>
+          <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
           <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
             RP Chat
           </h1>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* 钻石余额 */}
           <DiamondBalance size="sm" />
           
-          {/* 搜索按钮 */}
           <button
             onClick={() => navigate('/search')}
             className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition"
@@ -147,7 +138,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
             </svg>
           </button>
 
-          {/* 用户菜单 */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -161,7 +151,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
               <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full ring-1 ring-white"></div>
             </button>
 
-            {/* 下拉菜单 */}
             {showMenu && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-20">
                 <div className="px-4 py-2 border-b border-gray-100">
