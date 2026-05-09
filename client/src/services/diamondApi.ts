@@ -17,7 +17,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return data;
 }
 
-// ✅ 确保这些接口都被导出
 export interface DailyInfo {
   hasClaimed: boolean;
   currentStreak: number;
@@ -33,7 +32,6 @@ export interface ClaimResult {
   reason?: string;
 }
 
-// ✅ 确保 diamondApi 被正确导出
 export const diamondApi = {
   getBalance: () => request<{ diamonds: number }>('/diamond/balance'),
   claimDaily: () => request<ClaimResult>('/diamond/daily'),
