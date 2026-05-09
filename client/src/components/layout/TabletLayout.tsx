@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { authApi, type User } from '../../services/api';
+import DiamondBalance from '../diamond/DiamondBalance';
 
 interface Props {
   children: React.ReactNode;
@@ -22,7 +23,6 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const user = auth.currentUser;
 
-  // 导航菜单
   const navItems: NavItem[] = [
     {
       name: '聊天',
@@ -51,18 +51,8 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
         </svg>
       ),
     },
-    {
-      name: '钱包',
-      path: '/wallet',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
-        </svg>
-      ),
-    },
   ];
 
-  // 加载用户数据
   useEffect(() => {
     const loadUserData = async () => {
       if (!user) return;
@@ -76,7 +66,6 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
-  // 获取未读消息
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
@@ -93,7 +82,6 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
     fetchUnreadCount();
   }, [user]);
 
-  // 点击外部关闭侧边栏
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
@@ -131,24 +119,24 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 text-gray-500 hover:text-emerald-600 rounded-lg hover:bg-gray-100 transition"
+            className="p-2 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100 transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md">
-            <span className="text-white font-bold text-sm">RP</span>
-          </div>
-          <h1 className="text-lg font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
+          <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
             RP Chat
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <DiamondBalance size="sm" />
+          
           <button
             onClick={() => navigate('/search')}
-            className="p-2 text-gray-500 hover:text-emerald-600 rounded-full hover:bg-gray-100 transition"
+            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -157,7 +145,7 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
 
           <div className="relative">
             <img
-              src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=10b981&color=fff&size=36`}
+              src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=36`}
               alt="avatar"
               className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-200"
             />
@@ -185,9 +173,7 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
             {/* 侧边栏头部 */}
             <div className="p-6 border-b border-gray-100">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-xl">RP</span>
-                </div>
+                <img src="/favicon.svg" alt="Logo" className="w-12 h-12" />
                 <div>
                   <h2 className="text-lg font-bold text-gray-800">RP Chat</h2>
                   <p className="text-xs text-gray-400">角色扮演聊天室</p>
@@ -196,16 +182,19 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
             </div>
 
             {/* 用户信息 */}
-            <div className="p-4 mx-4 my-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl">
+            <div className="p-4 mx-4 my-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
               <div className="flex items-center gap-3">
                 <img
-                  src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=10b981&color=fff&size=48`}
+                  src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=48`}
                   alt="avatar"
-                  className="w-12 h-12 rounded-full object-cover ring-2 ring-emerald-300"
+                  className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-300"
                 />
                 <div className="flex-1">
                   <p className="font-semibold text-gray-800">{userData?.username || '用户'}</p>
-                  <p className="text-sm text-emerald-600">{userData?.coins?.toLocaleString() || 0} 金币</p>
+                  <div className="flex items-center gap-1">
+                    <DiamondBalance size="sm" />
+                    <span className="text-xs text-gray-500">钻石</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -219,8 +208,8 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
                   className={`
                     w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
                     ${isActive(item.path)
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-emerald-600'
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
                     }
                   `}
                 >
