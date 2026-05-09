@@ -6,7 +6,7 @@ import ChatHome from './components/chat/ChatHome'
 import PersonaManager from './components/persona/PersonaManager'
 import PersonaCreate from './components/persona/PersonaCreate'
 import PersonaDetail from './components/persona/PersonaDetail'
-import Wallet from './components/wallet/Wallet'
+//import Wallet from './components/wallet/Wallet'
 import Profile from './components/profile/Profile'
 import Changelog from './components/common/Changelog'
 import SearchPage from './components/common/SearchPage'
@@ -29,7 +29,6 @@ function App() {
         <Route path="/persona" element={<PersonaManager />} />
         <Route path="/persona/create" element={<PersonaCreate />} />
         <Route path="/persona/:personaId" element={<PersonaDetail />} />
-        <Route path="/wallet" element={<Wallet />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/search" element={<SearchPage />} />
