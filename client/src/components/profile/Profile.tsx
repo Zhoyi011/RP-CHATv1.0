@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { authApi, type User } from '../../services/api';
+import { diamondApi } from '../../services/diamondApi';
 import { useResponsive } from '../../hooks/useResponsive';
+import DailyDiamond from '../diamond/DailyDiamond';
 
 const Profile = () => {
   const [user, setUser] = useState<any>(null);
   const [userData, setUserData] = useState<User | null>(null);
+  const [diamonds, setDiamonds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
   const [refreshing, setRefreshing] = useState(false);
@@ -17,6 +20,7 @@ const Profile = () => {
     const currentUser = auth.currentUser;
     setUser(currentUser);
     loadUserData();
+    loadDiamonds();
   }, []);
 
   // 加载用户数据
@@ -27,8 +31,8 @@ const Profile = () => {
       setUserData(data);
       console.log('📊 用户数据加载成功:', {
         username: data.username,
-        coins: data.coins,
-        streak: data.loginStreak
+        diamonds: data.diamonds,
+        streak: data.dailyDiamondStreak
       });
     } catch (error) {
       console.error('加载用户数据失败:', error);
@@ -37,18 +41,27 @@ const Profile = () => {
     }
   };
 
-  // 刷新用户数据
-  const refreshUserData = async () => {
+  // 加载钻石数量
+  const loadDiamonds = async () => {
     try {
-      setRefreshing(true);
-      const data = await authApi.getCurrentUser();
-      setUserData(data);
-      console.log('🔄 用户数据刷新成功，当前金币:', data.coins);
+      const data = await diamondApi.getBalance();
+      setDiamonds(data.diamonds);
     } catch (error) {
-      console.error('刷新用户数据失败:', error);
-    } finally {
-      setRefreshing(false);
+      console.error('加载钻石失败:', error);
     }
+  };
+
+  // 刷新所有数据
+  const refreshAll = async () => {
+    setRefreshing(true);
+    await Promise.all([loadUserData(), loadDiamonds()]);
+    setRefreshing(false);
+  };
+
+  // 领取钻石成功后的回调
+  const handleDiamondClaim = () => {
+    loadDiamonds();
+    loadUserData();
   };
 
   const handleLogout = async () => {
@@ -85,7 +98,7 @@ const Profile = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 头部 */}
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+      <div className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
         <div className="px-4 py-3 flex items-center">
           <button
             onClick={() => navigate('/chat')}
@@ -97,7 +110,7 @@ const Profile = () => {
           </button>
           <h1 className="text-xl font-bold flex-1">个人中心</h1>
           <button
-            onClick={refreshUserData}
+            onClick={refreshAll}
             disabled={refreshing}
             className="p-1 hover:bg-white/20 rounded-full transition"
             title="刷新"
@@ -114,7 +127,7 @@ const Profile = () => {
             <div className="relative">
               <div className={`w-20 h-20 rounded-full overflow-hidden ${getAvatarFrameClass()}`}>
                 <img 
-                  src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=10b981&color=fff&size=80`}
+                  src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=80`}
                   alt="avatar"
                   className="w-full h-full object-cover"
                 />
@@ -134,13 +147,13 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* 快捷入口 */}
-        <div className="flex px-4 pb-4 gap-2">
+        {/* 快捷入口 - 手机版适配 */}
+        <div className="flex px-4 pb-4 gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
               activeTab === 'profile' 
-                ? 'bg-white text-emerald-600 shadow-md' 
+                ? 'bg-white text-blue-600 shadow-md' 
                 : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
@@ -148,9 +161,9 @@ const Profile = () => {
           </button>
           <button
             onClick={() => setActiveTab('inventory')}
-            className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
               activeTab === 'inventory' 
-                ? 'bg-white text-emerald-600 shadow-md' 
+                ? 'bg-white text-blue-600 shadow-md' 
                 : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
@@ -158,19 +171,23 @@ const Profile = () => {
           </button>
           <button
             onClick={() => setActiveTab('achievements')}
-            className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
               activeTab === 'achievements' 
-                ? 'bg-white text-emerald-600 shadow-md' 
+                ? 'bg-white text-blue-600 shadow-md' 
                 : 'bg-white/10 text-white hover:bg-white/20'
             }`}
           >
             成就
           </button>
           <button
-            onClick={() => navigate('/voice')}
-            className={`flex-1 py-2 rounded-xl text-sm font-medium transition bg-white/10 text-white hover:bg-white/20`}
+            onClick={() => setActiveTab('daily')}
+            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
+              activeTab === 'daily' 
+                ? 'bg-white text-blue-600 shadow-md' 
+                : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
           >
-            🎙️ 语音房
+            💎 每日
           </button>
         </div>
       </div>
@@ -180,53 +197,33 @@ const Profile = () => {
         {/* 我的资料 */}
         {activeTab === 'profile' && (
           <>
-            {/* 钱包卡片 - 显示真实金币数据 */}
+            {/* 钻石卡片 */}
             <div className="bg-white rounded-2xl shadow p-5 mb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">我的钱包</p>
+                  <p className="text-sm text-gray-500">我的钻石</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-3xl font-bold bg-gradient-to-r from-amber-500 to-yellow-500 bg-clip-text text-transparent">
-                      {userData?.coins?.toLocaleString() || 0}
+                    <svg className="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                    <p className="text-3xl font-bold text-blue-600">
+                      {diamonds.toLocaleString()}
                     </p>
-                    <span className="text-sm text-gray-400">金币</span>
-                    {refreshing && (
-                      <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    )}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => navigate('/wallet')}
-                    className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:from-amber-600 hover:to-yellow-600 transition shadow-md flex items-center gap-1"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                    查看详情
-                  </button>
-                  <button
-                    onClick={() => navigate('/voice')}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:from-purple-600 hover:to-pink-600 transition shadow-md flex items-center gap-1"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                    语音房
-                  </button>
-                </div>
+                <button
+                  onClick={() => setActiveTab('daily')}
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-cyan-600 transition shadow-md flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  每日领取
+                </button>
               </div>
               <div className="flex gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
-                <span>今日可领取</span>
-                <span className="text-emerald-600 font-medium">50-200 金币</span>
-                <button
-                  onClick={() => navigate('/wallet?tab=daily')}
-                  className="ml-auto text-emerald-500 hover:text-emerald-600"
-                >
-                  立即领取 →
-                </button>
+                <span>连续登录可获得更多钻石</span>
+                <span className="text-blue-500 font-medium">最高20/天</span>
               </div>
             </div>
 
@@ -242,7 +239,7 @@ const Profile = () => {
                   </div>
                   <p className="text-xs text-gray-600">头像框</p>
                   {userData?.equippedItems?.avatarFrame && (
-                    <p className="text-xs text-emerald-500 font-medium">已装备</p>
+                    <p className="text-xs text-blue-500 font-medium">已装备</p>
                   )}
                 </div>
                 <div className="text-center">
@@ -253,7 +250,7 @@ const Profile = () => {
                   </div>
                   <p className="text-xs text-gray-600">戒指</p>
                   {userData?.equippedItems?.ring && (
-                    <p className="text-xs text-emerald-500 font-medium">已佩戴</p>
+                    <p className="text-xs text-blue-500 font-medium">已佩戴</p>
                   )}
                 </div>
                 <div className="text-center">
@@ -264,13 +261,13 @@ const Profile = () => {
                   </div>
                   <p className="text-xs text-gray-600">关系卡</p>
                   {userData?.equippedItems?.relationshipCard && (
-                    <p className="text-xs text-emerald-500 font-medium">已使用</p>
+                    <p className="text-xs text-blue-500 font-medium">已使用</p>
                   )}
                 </div>
               </div>
               <button
                 onClick={() => navigate('/shop')}
-                className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-2.5 rounded-xl text-sm font-medium hover:from-emerald-600 hover:to-teal-700 transition shadow-md"
+                className="w-full mt-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2.5 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-cyan-600 transition shadow-md"
               >
                 前往商城
               </button>
@@ -280,7 +277,7 @@ const Profile = () => {
             <div className="bg-white rounded-2xl shadow p-5 mb-4">
               <button
                 onClick={() => navigate('/changelog')}
-                className="w-full flex items-center justify-between py-2 text-gray-600 hover:text-emerald-600 transition"
+                className="w-full flex items-center justify-between py-2 text-gray-600 hover:text-blue-600 transition"
               >
                 <div className="flex items-center gap-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -306,11 +303,11 @@ const Profile = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">连续登录</span>
-                  <span className="font-medium text-emerald-600">{userData?.loginStreak || 0}天</span>
+                  <span className="font-medium text-blue-600">{userData?.dailyDiamondStreak || 0}天</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">累计获得金币</span>
-                  <span className="font-medium text-amber-600">{userData?.coins?.toLocaleString() || 0}</span>
+                  <span className="text-gray-500">累计钻石</span>
+                  <span className="font-medium text-blue-600">{diamonds.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -332,7 +329,7 @@ const Profile = () => {
                     </div>
                     <p className="text-xs text-gray-600">金色边框</p>
                     {userData?.equippedItems?.avatarFrame === 'gold' && (
-                      <p className="text-xs text-emerald-500">已装备</p>
+                      <p className="text-xs text-blue-500">已装备</p>
                     )}
                   </div>
                   <div className="p-2 bg-gray-50 rounded-xl text-center opacity-50">
@@ -354,7 +351,7 @@ const Profile = () => {
                     </div>
                     <p className="text-xs text-gray-600">钻石戒指</p>
                     {userData?.equippedItems?.ring && (
-                      <p className="text-xs text-emerald-500">已佩戴</p>
+                      <p className="text-xs text-blue-500">已佩戴</p>
                     )}
                   </div>
                 </div>
@@ -369,7 +366,7 @@ const Profile = () => {
                     </div>
                     <p className="text-xs text-gray-600">灵魂伴侣</p>
                     {userData?.equippedItems?.relationshipCard && (
-                      <p className="text-xs text-emerald-500">已使用</p>
+                      <p className="text-xs text-blue-500">已使用</p>
                     )}
                   </div>
                 </div>
@@ -392,7 +389,7 @@ const Profile = () => {
                   <p className="font-medium text-sm text-gray-800">聊天达人</p>
                   <p className="text-xs text-gray-400">累计发言100条</p>
                 </div>
-                <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full">已完成</span>
+                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">已完成</span>
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
@@ -403,7 +400,7 @@ const Profile = () => {
                   <p className="font-medium text-sm text-gray-800">角色收藏家</p>
                   <p className="text-xs text-gray-400">拥有2个角色</p>
                 </div>
-                <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full">已完成</span>
+                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">已完成</span>
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
@@ -414,23 +411,28 @@ const Profile = () => {
                   <p className="font-medium text-sm text-gray-800">连续登录</p>
                   <p className="text-xs text-gray-400">连续登录7天</p>
                 </div>
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{userData?.loginStreak || 0}/7</span>
+                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{userData?.dailyDiamondStreak || 0}/7</span>
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl opacity-50">
                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                  💰
+                  💎
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-sm text-gray-800">富甲一方</p>
-                  <p className="text-xs text-gray-400">累计获得10000金币</p>
+                  <p className="font-medium text-sm text-gray-800">钻石收藏家</p>
+                  <p className="text-xs text-gray-400">累计获得1000钻石</p>
                 </div>
                 <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
-                  {Math.min(100, Math.floor(((userData?.coins || 0) / 10000) * 100))}%
+                  {Math.min(100, Math.floor((diamonds / 1000) * 100))}%
                 </span>
               </div>
             </div>
           </div>
+        )}
+
+        {/* 每日钻石 */}
+        {activeTab === 'daily' && (
+          <DailyDiamond onClaimSuccess={handleDiamondClaim} />
         )}
       </div>
 
