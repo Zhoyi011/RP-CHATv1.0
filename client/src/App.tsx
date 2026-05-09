@@ -10,14 +10,13 @@ import Wallet from './components/wallet/Wallet'
 import Profile from './components/profile/Profile'
 import Changelog from './components/common/Changelog'
 import SearchPage from './components/common/SearchPage'
-import GroupDetail from './components/chat/GroupDetail';
-import GroupSettings from './components/chat/GroupSettings';
 import JoinRoom from './components/chat/JoinRoom'
 import PendingRequests from './components/chat/PendingRequests'
 import RoomMembers from './components/chat/RoomMembers'
 import RoomSettings from './components/chat/RoomSettings'
-import VoiceHall from './components/voice/VoiceHall';
-import VoiceRoomDetail from './components/voice/VoiceRoomDetail';
+// ✅ 导入法律条款页面
+import TermsOfService from './components/legal/TermsOfService'
+import PrivacyPolicy from './components/legal/PrivacyPolicy'
 
 function App() {
   return (
@@ -34,14 +33,13 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/search" element={<SearchPage />} />
-        <Route path="/group/:roomId" element={<GroupDetail />} />
-        <Route path="/group/:roomId/settings" element={<GroupSettings />} />
         <Route path="/join/:roomId" element={<JoinRoom />} />
-        <Route path="/voice" element={<VoiceHall />} />
-        <Route path="/voice/:roomId" element={<VoiceRoomDetail />} />
         <Route path="/room/:roomId/pending" element={<PendingRequests />} />
         <Route path="/room/:roomId/members" element={<RoomMembers />} />
         <Route path="/room/:roomId/settings" element={<RoomSettings />} />
+        {/* ✅ 添加法律条款路由 */}
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="*" element={<div className="p-8 text-center">404 - 页面不存在</div>} />
       </Routes>
     </BrowserRouter>
