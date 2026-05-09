@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { authApi, type User } from '../../services/api';
+import DiamondBalance from '../diamond/DiamondBalance';
 
 interface Props {
   children: React.ReactNode;
@@ -11,7 +12,6 @@ interface TabItem {
   name: string;
   path: string;
   icon: React.ReactNode;
-  activeIcon?: React.ReactNode;
 }
 
 const MobileLayout: React.FC<Props> = ({ children }) => {
@@ -50,15 +50,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-      ),
-    },
-    {
-      name: '钱包',
-      path: '/wallet',
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
         </svg>
       ),
     },
@@ -134,31 +125,36 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
       {/* 顶部导航栏 */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center shadow-md">
             <span className="text-white font-bold text-sm">RP</span>
           </div>
-          <h1 className="text-lg font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
             RP Chat
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* 钻石余额 */}
+          <DiamondBalance size="sm" />
+          
+          {/* 搜索按钮 */}
           <button
             onClick={() => navigate('/search')}
-            className="p-2 text-gray-500 hover:text-emerald-600 rounded-full hover:bg-gray-100 transition"
+            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
 
+          {/* 用户菜单 */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="relative focus:outline-none"
             >
               <img
-                src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=10b981&color=fff&size=32`}
+                src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=32`}
                 alt="avatar"
                 className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-200"
               />
@@ -170,7 +166,10 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
               <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-20">
                 <div className="px-4 py-2 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-800">{userData?.username || '用户'}</p>
-                  <p className="text-xs text-gray-400">{userData?.coins?.toLocaleString() || 0} 金币</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <DiamondBalance size="sm" />
+                    <span className="text-xs text-gray-400">钻石</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => { navigate('/profile'); setShowMenu(false); }}
@@ -197,12 +196,12 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
       </div>
 
       {/* 主内容区 */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-20">
         {children}
       </div>
 
       {/* 底部 Tab 栏 */}
-      <div className="bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg">
         {tabs.map((tab) => (
           <button
             key={tab.name}
@@ -210,7 +209,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
             className={`
               flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200
               ${activeTab === tab.name.toLowerCase() 
-                ? 'text-emerald-600' 
+                ? 'text-blue-600' 
                 : 'text-gray-400 hover:text-gray-600'
               }
             `}
