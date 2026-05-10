@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Persona = require('../models/Persona');
 const Room = require('../models/Room');
+const PersonaRoom = require('../models/PersonaRoom');
 const jwt = require('jsonwebtoken');
 const cc = require('chinese-conv');
 
@@ -15,7 +16,7 @@ function toTraditional(str) {
   return cc.tify(str);
 }
 
-// ✅ 修复：生成搜索正则（支持简繁转换，但不支持跨字符模糊）
+// 生成搜索正则（支持模糊匹配和简繁转换）
 function getSearchRegex(searchTerm) {
   if (!searchTerm || searchTerm.length === 0) return null;
   
@@ -23,7 +24,7 @@ function getSearchRegex(searchTerm) {
   const simplified = toSimplified(searchTerm);
   const traditional = toTraditional(searchTerm);
   
-  // ✅ 修复：不再使用 .* 连接，改为精确匹配每个字符
+  // 构建正则：每个字符支持简繁两种形式
   let pattern = '';
   for (let i = 0; i < searchTerm.length; i++) {
     const sChar = simplified[i];
@@ -35,9 +36,9 @@ function getSearchRegex(searchTerm) {
     }
   }
   
-  // ✅ 使用 ^ 和 $ 确保完整匹配（或使用 .* 前后可选）
-  // 这里改为匹配包含关键词即可，但不允许中间插字
-  return new RegExp(pattern, 'i');
+  // 添加模糊匹配：允许中间有任意字符
+  const fuzzyPattern = pattern.split('').join('.*');
+  return new RegExp(fuzzyPattern, 'i');
 }
 
 // 验证token中间件
@@ -66,8 +67,6 @@ router.get('/personas', authMiddleware, async (req, res) => {
     if (!searchRegex) {
       return res.json({ personas: [], total: 0 });
     }
-    
-    console.log(`搜索: "${q}", 正则: ${searchRegex}`);
     
     const query = {
       status: 'approved',
@@ -98,7 +97,7 @@ router.get('/personas', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 搜索群组 ==========
+// ========== 搜索群组（优化版） ==========
 router.get('/rooms', authMiddleware, async (req, res) => {
   try {
     const { q, limit = 20 } = req.query;
@@ -120,12 +119,13 @@ router.get('/rooms', authMiddleware, async (req, res) => {
       ]
     })
     .limit(parseInt(limit))
-    .sort({ memberCount: -1 });
+    .sort({ createdAt: -1 });
     
-    const roomsWithCount = rooms.map(room => ({
+    // 获取每个房间的成员数
+    const roomsWithCount = await Promise.all(rooms.map(async (room) => ({
       ...room.toObject(),
-      memberCount: room.members.length
-    }));
+      memberCount: await PersonaRoom.countDocuments({ roomId: room._id })
+    })));
     
     res.json({ rooms: roomsWithCount });
   } catch (error) {

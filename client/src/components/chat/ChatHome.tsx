@@ -199,7 +199,7 @@ const MessageList: React.FC<{
               </div>
             )}
 
-            {/* 翻译按钮 - 非自己发送的消息显示 */}
+            {/* 翻译按钮 */}
             {!isSelf && (
               <button
                 onClick={() => handleTranslate(msg.content, msg._id)}
@@ -238,6 +238,7 @@ const ChatHome = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
+  const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
   const [showChatWindow, setShowChatWindow] = useState(false);
@@ -248,7 +249,6 @@ const ChatHome = () => {
   const [isRoomOwner, setIsRoomOwner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showRoomMenu, setShowRoomMenu] = useState(false);
-  const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
 
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -303,7 +303,7 @@ const ChatHome = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // ========== 加载初始数据（适配角色独立系统） ==========
+  // ========== 加载初始数据 ==========
   useEffect(() => {
     if (!authChecked || !user) return;
     
@@ -311,8 +311,9 @@ const ChatHome = () => {
       try {
         setLoading(true);
         
-        // 获取当前角色的房间列表（新 API）
         const token = localStorage.getItem('token');
+        
+        // 获取当前角色的房间列表
         const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -349,7 +350,7 @@ const ChatHome = () => {
 
   // ========== 加载房间成员和权限 ==========
   useEffect(() => {
-    if (!selectedRoom || !user) return;
+    if (!selectedRoom || !selectedPersona) return;
 
     const loadRoomPermissions = async () => {
       try {
@@ -370,12 +371,18 @@ const ChatHome = () => {
         const members = await response.json();
         setRoomMembers(members);
         
-        // 通过角色 ID 判断权限
-        if (selectedPersona) {
-          const currentMember = members.find((m: any) => m.personaId?._id === selectedPersona._id);
-          setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
-          setIsRoomOwner(currentMember?.role === 'owner');
-        }
+        // 通过当前角色 ID 判断权限
+        const currentMember = members.find((m: any) => m.personaId?._id === selectedPersona?._id);
+        setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
+        setIsRoomOwner(currentMember?.role === 'owner');
+        
+        console.log('权限检查:', {
+          roomId: selectedRoom._id,
+          personaId: selectedPersona?._id,
+          role: currentMember?.role,
+          isAdmin: currentMember?.role === 'admin' || currentMember?.role === 'owner',
+          isOwner: currentMember?.role === 'owner'
+        });
       } catch (error) {
         console.error('加载成员权限失败:', error);
         setIsRoomAdmin(false);
@@ -384,7 +391,7 @@ const ChatHome = () => {
     };
     
     loadRoomPermissions();
-  }, [selectedRoom, selectedPersona, user]);
+  }, [selectedRoom, selectedPersona]);
 
   // ========== Socket 连接和事件监听 ==========
   useEffect(() => {
@@ -510,19 +517,6 @@ const ChatHome = () => {
     };
   }, [selectedRoom, selectedPersona, user]);
 
-  // ========== 添加系统消息 ==========
-  const addSystemMessage = useCallback((content: string) => {
-    const systemMsg: any = {
-      _id: 'system-' + Date.now(),
-      content,
-      isAction: false,
-      createdAt: new Date().toISOString(),
-      personaId: { _id: 'system', name: '系统' },
-      userId: { _id: 'system', username: '系统' }
-    };
-    setMessages(prev => [...prev, systemMsg]);
-  }, []);
-
   // ========== 选择房间 ==========
   const handleSelectRoom = useCallback(async (room: Room) => {
     if (!selectedPersona) {
@@ -559,7 +553,7 @@ const ChatHome = () => {
       await roomApi.setActivePersona(persona._id);
       setSelectedPersona(persona);
       
-      // 重新加载房间列表（新角色有不同房间）
+      // 重新加载房间列表
       const token = localStorage.getItem('token');
       const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -891,8 +885,8 @@ const ChatHome = () => {
             </div>
           </div>
           
-          {/* 右上角按钮组 */}
-          <div className="flex items-center gap-1">
+          {/* ✅ 右上角按钮组 - 调整 z-index 防止被气泡遮挡 */}
+          <div className="flex items-center gap-1 relative z-50">
             {/* 待审核按钮 */}
             {selectedRoom && (isRoomAdmin || isRoomOwner) && (
               <button
@@ -909,9 +903,9 @@ const ChatHome = () => {
               </button>
             )}
             
-            {/* 三个点菜单 */}
+            {/* ✅ 三个点菜单 - z-index 50 确保不被气泡遮挡 */}
             {selectedRoom && (
-              <div className="relative">
+              <div className="relative z-50">
                 <button
                   onClick={() => setShowRoomMenu(!showRoomMenu)}
                   className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -923,7 +917,7 @@ const ChatHome = () => {
                 </button>
                 
                 {showRoomMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-[100]">
                     <button
                       onClick={() => {
                         navigate(`/group/${selectedRoom._id}`);
