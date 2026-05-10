@@ -77,7 +77,8 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
         });
         if (response.ok) {
           const data = await response.json();
-          setUnreadCount(data.total || 0);
+          // ✅ 确保是数字
+          setUnreadCount(Number(data.total) || 0);
         }
       } catch (error) {
         console.error('获取未读消息失败:', error);

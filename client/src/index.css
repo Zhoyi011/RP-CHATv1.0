@@ -2,19 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========== 引入猫啃珠圆体 ========== */
+@font-face {
+  font-family: 'MaokenZhuyuanTi';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'MaokenZhuyuanTi';
+  font-style: normal;
+  font-weight: 500;
+  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'MaokenZhuyuanTi';
+  font-style: normal;
+  font-weight: 600;
+  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'MaokenZhuyuanTi';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+}
+
+/* ========== 全局字体应用 ========== */
+html, body, #root {
+  font-family: 'MaokenZhuyuanTi', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* 防止滚动条导致布局偏移 */
+html {
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 标题字体加粗调整 */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
 /* 手机端优化 */
 @media (max-width: 768px) {
-  /* 防止字体过大 */
   html {
     font-size: 14px;
   }
   
-  /* 点击元素去掉默认高亮 */
   * {
     -webkit-tap-highlight-color: transparent;
   }
   
-  /* 按钮和可点击元素优化 */
   button, 
   [role="button"],
   .cursor-pointer {
@@ -22,7 +68,6 @@
     touch-action: manipulation;
   }
   
-  /* 列表项点击反馈 */
   .clickable:active {
     opacity: 0.7;
     background-color: rgba(0,0,0,0.05);
@@ -34,17 +79,4 @@
   .message-bubble {
     max-width: 50%;
   }
-}
-
-/* 防止滚动条导致布局偏移 */
-html {
-  overflow-y: scroll;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* 确保高度正确 */
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
 }

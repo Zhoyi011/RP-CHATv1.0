@@ -48,7 +48,6 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
-        // 系统消息
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -59,7 +58,6 @@ const MessageList: React.FC<{
           );
         }
         
-        // 动作消息 (/me)
         if (msg.isAction) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -200,7 +198,7 @@ const ChatHome = () => {
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [personas, setPersonas]  = useState<Persona[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
   const [showChatWindow, setShowChatWindow] = useState(false);
@@ -234,7 +232,6 @@ const ChatHome = () => {
   useEffect(() => {
     if (selectedRoom && (isRoomAdmin || isRoomOwner)) {
       fetchPendingCount();
-      // 每30秒刷新一次
       const interval = setInterval(fetchPendingCount, 30000);
       return () => clearInterval(interval);
     }
@@ -717,7 +714,8 @@ const ChatHome = () => {
                       <div className="flex justify-between items-baseline">
                         <div className="flex items-center gap-2">
                           <h3 className="font-medium text-gray-800 truncate">{room.name}</h3>
-                          {room.unreadCount && room.unreadCount > 0 && (
+                          {/* ✅ 修复：只有大于0才显示未读数字 */}
+                          {room.unreadCount > 0 && (
                             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                               {room.unreadCount}
                             </span>
