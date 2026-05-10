@@ -8,12 +8,6 @@ interface ChatInputProps {
   placeholder?: string;
 }
 
-// 检测文本是否包含繁体字
-const containsTraditional = (text: string): boolean => {
-  const traditionalChars = /[愛國學會書龍對發開關體頭點電飛個過後時間門馬鳥魚貝車長東樂為萬與麼]/;
-  return traditionalChars.test(text);
-};
-
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   disabled = false, 
@@ -25,7 +19,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiContainerRef = useRef<HTMLDivElement>(null);
 
-  // 修复手机键盘问题
   useEffect(() => {
     const handleFocus = () => {
       setTimeout(() => {
@@ -45,7 +38,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, []);
 
-  // 点击外部关闭表情面板
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (emojiContainerRef.current && !emojiContainerRef.current.contains(e.target as Node)) {
@@ -56,27 +48,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ✅ 智能翻译：自动检测并转换
+  // ✅ 智能翻译：调用后端转换，并自动循环
   const handleTranslate = async () => {
     if (!inputValue.trim() || isTranslating) return;
     
     setIsTranslating(true);
     try {
-      let translated: string;
+      // 先尝试转简体
+      const simplified = await traditionalToSimplified(inputValue);
       
-      // 检测输入框当前文字是简体还是繁体
-      if (containsTraditional(inputValue)) {
-        // 繁体 → 简体
-        translated = await traditionalToSimplified(inputValue);
+      // 如果转简体后和原文相同，说明是简体，转繁体
+      if (simplified === inputValue) {
+        const traditional = await simplifiedToTraditional(inputValue);
+        setInputValue(traditional);
       } else {
-        // 简体 → 繁体
-        translated = await simplifiedToTraditional(inputValue);
+        // 否则原文是繁体，已经转成简体了，直接用
+        setInputValue(simplified);
       }
-      
-      setInputValue(translated);
     } catch (error) {
       console.error('翻译失败:', error);
-      alert('翻译失败，请稍后重试');
     } finally {
       setIsTranslating(false);
     }
@@ -107,13 +97,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <div className="bg-white border-t border-gray-200 px-4 py-3 flex-shrink-0 relative">
       <div className="flex items-center gap-2">
-        {/* 表情按钮 */}
         <div className="relative" ref={emojiContainerRef}>
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 flex-shrink-0"
-            title="表情"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -127,7 +115,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </div>
 
-        {/* ✅ 翻译按钮 - 简繁切换 */}
         <button
           type="button"
           onClick={handleTranslate}
@@ -148,7 +135,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </button>
 
-        {/* 输入框 */}
         <input 
           ref={inputRef}
           type="text" 
@@ -160,7 +146,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
           disabled={disabled}
         />
         
-        {/* 发送按钮 */}
         <button 
           onClick={handleSend}
           disabled={disabled || !inputValue.trim()}

@@ -24,6 +24,8 @@ import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
 import { smartConvert } from '../../services/translateApi';
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
+
 // ========== 消息列表组件 ==========
 const MessageList: React.FC<{
   messages: Message[];
@@ -39,13 +41,13 @@ const MessageList: React.FC<{
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleTranslate = async (msg: Message) => {
-    if (translatingMsgId === msg._id) return;
+  const handleTranslate = async (content: string, msgId: string) => {
+    if (translatingMsgId === msgId) return;
     
-    setTranslatingMsgId(msg._id);
+    setTranslatingMsgId(msgId);
     try {
-      const translated = await smartConvert(msg.content);
-      alert(`📝 翻译结果：\n\n原文：${msg.content}\n\n译文：${translated}`);
+      const translated = await smartConvert(content);
+      alert(`📝 翻译结果：\n\n原文：${content}\n\n译文：${translated}`);
     } catch (error) {
       console.error('翻译失败:', error);
       alert('翻译失败，请稍后重试');
@@ -65,7 +67,6 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
-        // 系统消息
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -76,7 +77,6 @@ const MessageList: React.FC<{
           );
         }
         
-        // 动作消息 (/me)
         if (msg.isAction) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -199,10 +199,10 @@ const MessageList: React.FC<{
               </div>
             )}
 
-            {/* ✅ 翻译按钮 - 非自己发送的消息显示 */}
+            {/* 翻译按钮 - 非自己发送的消息显示 */}
             {!isSelf && (
               <button
-                onClick={() => handleTranslate(msg)}
+                onClick={() => handleTranslate(msg.content, msg._id)}
                 disabled={translatingMsgId === msg._id}
                 className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50"
                 title="简繁转换"
@@ -248,6 +248,7 @@ const ChatHome = () => {
   const [isRoomOwner, setIsRoomOwner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showRoomMenu, setShowRoomMenu] = useState(false);
+  const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
 
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -259,7 +260,7 @@ const ChatHome = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/pending`, {
+      const res = await fetch(`${API_BASE}/room/${selectedRoom._id}/pending`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -302,7 +303,7 @@ const ChatHome = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // ========== 加载初始数据 ==========
+  // ========== 加载初始数据（适配角色独立系统） ==========
   useEffect(() => {
     if (!authChecked || !user) return;
     
@@ -310,33 +311,29 @@ const ChatHome = () => {
       try {
         setLoading(true);
         
-        const [roomsData, personasData] = await Promise.all([
-          roomApi.getRooms(),
-          personaApi.getMyPersonas(),
-        ]);
+        // 获取当前角色的房间列表（新 API）
+        const token = localStorage.getItem('token');
+        const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const roomsData = await roomsRes.json();
         
-        const roomsWithUnread = await Promise.all(
-          roomsData.map(async (room) => {
-            try {
-              const unreadData = await roomApi.getUnreadCount(room._id);
-              return { 
-                ...room, 
-                onlineCount: 0,
-                unreadCount: unreadData.unreadCount 
-              };
-            } catch {
-              return { ...room, onlineCount: 0, unreadCount: 0 };
-            }
-          })
-        );
-        setRooms(roomsWithUnread);
+        setRooms(roomsData.rooms || []);
+        if (roomsData.currentPersona) {
+          setCurrentPersona(roomsData.currentPersona);
+        }
         
+        // 获取我的所有角色
+        const personasData = await personaApi.getMyPersonas();
         const approvedPersonas = personasData.filter(p => p.status === 'approved');
         setPersonas(approvedPersonas);
         
+        // 获取当前激活的角色
         const activePersona = await roomApi.getActivePersona();
         if (activePersona.activePersona) {
           setSelectedPersona(activePersona.activePersona.personaId);
+        } else if (approvedPersonas.length > 0) {
+          setSelectedPersona(approvedPersonas[0]);
         }
         
       } catch (err: any) {
@@ -359,12 +356,12 @@ const ChatHome = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const response = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/members`, {
+        const response = await fetch(`${API_BASE}/room/${selectedRoom._id}/members`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!response.ok) {
-          console.warn('获取成员列表失败，用户可能不是群成员:', response.status);
+          console.warn('获取成员列表失败:', response.status);
           setIsRoomAdmin(false);
           setIsRoomOwner(false);
           return;
@@ -373,17 +370,12 @@ const ChatHome = () => {
         const members = await response.json();
         setRoomMembers(members);
         
-        const currentMember = members.find((m: any) => m.userId._id === user.uid);
-        setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
-        setIsRoomOwner(currentMember?.role === 'owner');
-        
-        console.log('权限检查:', {
-          roomId: selectedRoom._id,
-          userId: user.uid,
-          role: currentMember?.role,
-          isAdmin: currentMember?.role === 'admin' || currentMember?.role === 'owner',
-          isOwner: currentMember?.role === 'owner'
-        });
+        // 通过角色 ID 判断权限
+        if (selectedPersona) {
+          const currentMember = members.find((m: any) => m.personaId?._id === selectedPersona._id);
+          setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
+          setIsRoomOwner(currentMember?.role === 'owner');
+        }
       } catch (error) {
         console.error('加载成员权限失败:', error);
         setIsRoomAdmin(false);
@@ -392,7 +384,7 @@ const ChatHome = () => {
     };
     
     loadRoomPermissions();
-  }, [selectedRoom, user]);
+  }, [selectedRoom, selectedPersona, user]);
 
   // ========== Socket 连接和事件监听 ==========
   useEffect(() => {
@@ -567,6 +559,19 @@ const ChatHome = () => {
       await roomApi.setActivePersona(persona._id);
       setSelectedPersona(persona);
       
+      // 重新加载房间列表（新角色有不同房间）
+      const token = localStorage.getItem('token');
+      const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const roomsData = await roomsRes.json();
+      setRooms(roomsData.rooms || []);
+      setCurrentPersona(roomsData.currentPersona);
+      
+      // 清空当前选中的房间
+      setSelectedRoom(null);
+      setMessages([]);
+      
       if (selectedRoom && user) {
         socketService.switchPersona(user.uid, persona._id);
       }
@@ -606,7 +611,7 @@ const ChatHome = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/leave`, {
+      const res = await fetch(`${API_BASE}/room/${selectedRoom._id}/leave`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -617,7 +622,14 @@ const ChatHome = () => {
       const data = await res.json();
       if (res.ok) {
         alert(data.message || '已退出群聊');
-        window.location.reload();
+        // 刷新房间列表
+        const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const roomsData = await roomsRes.json();
+        setRooms(roomsData.rooms || []);
+        setSelectedRoom(null);
+        setMessages([]);
       } else {
         alert(data.error || '退出失败');
       }
@@ -723,7 +735,12 @@ const ChatHome = () => {
       {/* 角色选择栏 */}
       {!showUserList && (
         <div className="px-4 py-2 border-b border-gray-100 flex-shrink-0">
-          <div className="text-sm text-gray-500 mb-2">当前角色：</div>
+          <div className="text-sm text-gray-500 mb-2">
+            当前角色：
+            {currentPersona && (
+              <span className="ml-1 text-blue-600 font-medium">{currentPersona.name}</span>
+            )}
+          </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {personas.map(persona => (
               <button
@@ -759,7 +776,18 @@ const ChatHome = () => {
             {loading ? (
               <div className="text-center py-8 text-gray-400">加载中...</div>
             ) : rooms.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">暂无聊天室</div>
+              <div className="text-center py-8 flex flex-col items-center gap-2">
+                <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <p className="text-gray-400">当前角色还没有加入任何聊天室</p>
+                <button
+                  onClick={() => setShowCreateRoom(true)}
+                  className="mt-2 text-blue-500 hover:text-blue-600"
+                >
+                  创建新聊天室 →
+                </button>
+              </div>
             ) : (
               rooms.map(room => (
                 <div 
@@ -863,7 +891,7 @@ const ChatHome = () => {
             </div>
           </div>
           
-          {/* ✅ 右上角按钮组 */}
+          {/* 右上角按钮组 */}
           <div className="flex items-center gap-1">
             {/* 待审核按钮 */}
             {selectedRoom && (isRoomAdmin || isRoomOwner) && (

@@ -29,7 +29,6 @@ function App() {
         <Route path="/persona" element={<PersonaManager />} />
         <Route path="/persona/create" element={<PersonaCreate />} />
         <Route path="/persona/:personaId" element={<PersonaDetail />} />
-        {/* <Route path="/wallet" element={<Wallet />} /> 已删除 */}
         <Route path="/profile" element={<Profile />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/search" element={<SearchPage />} />

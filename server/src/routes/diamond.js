@@ -13,13 +13,13 @@ const authMiddleware = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
     req.userId = decoded.userId;
     next();
-  } catch {
+  } catch (error) {
     res.status(401).json({ error: 'token无效' });
   }
 };
 
-// 每日登录奖励配置
-const DAILY_REWARDS = [5, 5, 8, 8, 10, 15, 20]; // 第1-7天奖励
+// 每日钻石奖励配置
+const DAILY_REWARDS = [5, 5, 8, 8, 10, 15, 20];
 
 // 获取当前钻石数量
 router.get('/balance', authMiddleware, async (req, res) => {
@@ -27,6 +27,7 @@ router.get('/balance', authMiddleware, async (req, res) => {
     const user = await User.findById(req.userId);
     res.json({ diamonds: user?.diamonds || 0 });
   } catch (error) {
+    console.error('获取钻石失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
@@ -42,7 +43,6 @@ router.post('/daily', authMiddleware, async (req, res) => {
     const today = new Date().toDateString();
     const lastClaim = user.lastDailyDiamond ? new Date(user.lastDailyDiamond).toDateString() : null;
 
-    // 检查是否已领取
     if (lastClaim === today) {
       return res.json({ 
         claimed: false, 
@@ -57,7 +57,7 @@ router.post('/daily', authMiddleware, async (req, res) => {
     yesterday.setDate(yesterday.getDate() - 1);
     
     if (lastClaim === yesterday.toDateString()) {
-      streak = Math.min(streak + 1, 6); // 最高第7天（索引6）
+      streak = Math.min(streak + 1, 6);
     } else {
       streak = 0;
     }
@@ -80,7 +80,7 @@ router.post('/daily', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取每日奖励信息（今日可领多少）
+// 获取每日奖励信息
 router.get('/daily-info', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -88,7 +88,6 @@ router.get('/daily-info', authMiddleware, async (req, res) => {
     const lastClaim = user?.lastDailyDiamond ? new Date(user.lastDailyDiamond).toDateString() : null;
     const hasClaimed = lastClaim === today;
     
-    // 计算当前连续天数
     let currentStreak = user?.dailyDiamondStreak || 0;
     if (!hasClaimed && currentStreak > 0) {
       const yesterday = new Date();
@@ -107,6 +106,7 @@ router.get('/daily-info', authMiddleware, async (req, res) => {
       rewards: DAILY_REWARDS
     });
   } catch (error) {
+    console.error('获取每日信息失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });

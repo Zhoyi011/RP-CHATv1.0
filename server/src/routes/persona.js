@@ -9,7 +9,6 @@ const authMiddleware = (req, res, next) => {
   if (!token) {
     return res.status(401).json({ error: '请先登录' });
   }
-  
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
     req.userId = decoded.userId;
@@ -29,7 +28,7 @@ router.post('/request', authMiddleware, async (req, res) => {
       name,
       description,
       tags: tags || [],
-      createdBy: req.userId,
+      userId: req.userId,  // ✅ 关联当前用户
       status: 'pending'
     });
     
@@ -53,7 +52,7 @@ router.post('/request', authMiddleware, async (req, res) => {
 // 获取我的角色
 router.get('/my', authMiddleware, async (req, res) => {
   try {
-    const personas = await Persona.find({ createdBy: req.userId })
+    const personas = await Persona.find({ userId: req.userId })
       .sort({ createdAt: -1 });
     
     res.json(personas);
@@ -71,7 +70,7 @@ router.get('/pending', authMiddleware, async (req, res) => {
   
   try {
     const pending = await Persona.find({ status: 'pending' })
-      .populate('createdBy', 'username')
+      .populate('userId', 'username')
       .sort({ createdAt: 1 });
     
     res.json(pending);
@@ -88,7 +87,7 @@ router.post('/review/:id', authMiddleware, async (req, res) => {
   }
   
   try {
-    const { status, comment } = req.body; // status: 'approved' 或 'rejected'
+    const { status, comment } = req.body;
     
     const persona = await Persona.findByIdAndUpdate(
       req.params.id,
@@ -116,19 +115,24 @@ router.post('/review/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 角色搜索和主页功能 ==========
-
-// 搜索已审核的角色
+// 搜索角色
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { q, limit = 20, page = 1 } = req.query;
     
+    if (!q || q.length < 1) {
+      return res.json({ personas: [], total: 0 });
+    }
+    
+    const searchRegex = new RegExp(q, 'i');
+    
     const query = {
       status: 'approved',
       $or: [
-        { name: { $regex: q, $options: 'i' } },
-        { tags: { $in: [new RegExp(q, 'i')] } },
-        { description: { $regex: q, $options: 'i' } }
+        { name: searchRegex },
+        { displayName: searchRegex },
+        { description: searchRegex },
+        { tags: { $in: [searchRegex] } }
       ]
     };
     
@@ -143,23 +147,19 @@ router.get('/search', authMiddleware, async (req, res) => {
       personas,
       total,
       page: parseInt(page),
-      totalPages: Math.ceil(total / parseInt(limit)),
-      limit: parseInt(limit)
+      totalPages: Math.ceil(total / parseInt(limit))
     });
-    
   } catch (error) {
     console.error('搜索角色失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// 获取角色详情（主页）
+// 获取角色详情
 router.get('/:personaId', authMiddleware, async (req, res) => {
   try {
     const persona = await Persona.findById(req.params.personaId)
-      .populate('createdBy', 'username email')
-      .populate('relationships.targetPersonaId', 'name avatar globalNumber')
-      .populate('guardians.userId', 'username avatar');
+      .populate('userId', 'username email avatar');
     
     if (!persona) {
       return res.status(404).json({ error: '角色不存在' });
@@ -170,7 +170,6 @@ router.get('/:personaId', authMiddleware, async (req, res) => {
     await persona.save();
     
     res.json(persona.toSafeObject());
-    
   } catch (error) {
     console.error('获取角色详情失败:', error);
     res.status(500).json({ error: '服务器错误' });
@@ -189,7 +188,7 @@ router.post('/:personaId/use', authMiddleware, async (req, res) => {
     // 检查用户是否已经拥有这个角色
     const existing = await Persona.findOne({
       name: original.name,
-      createdBy: req.userId,
+      userId: req.userId,
       status: 'approved'
     });
     
@@ -211,7 +210,7 @@ router.post('/:personaId/use', authMiddleware, async (req, res) => {
       avatar: original.avatar,
       globalNumber: original.globalNumber,
       usageCount: number,
-      createdBy: req.userId,
+      userId: req.userId,  // ✅ 关联当前用户
       originalPersonaId: original._id,
       status: 'approved'
     });
@@ -229,141 +228,6 @@ router.post('/:personaId/use', authMiddleware, async (req, res) => {
     
   } catch (error) {
     console.error('使用角色失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 添加守护
-router.post('/:personaId/guardian', authMiddleware, async (req, res) => {
-  try {
-    const { amount } = req.body;
-    const persona = await Persona.findById(req.params.personaId);
-    
-    if (!persona) {
-      return res.status(404).json({ error: '角色不存在' });
-    }
-    
-    await persona.addGuardian(req.userId, amount);
-    
-    res.json({
-      message: '守护成功',
-      totalGuardianAmount: persona.totalGuardianAmount,
-      guardians: persona.guardians.slice(0, 10)
-    });
-    
-  } catch (error) {
-    console.error('添加守护失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 添加亲密关系
-router.post('/:personaId/relationship', authMiddleware, async (req, res) => {
-  try {
-    const { targetPersonaId, type, cardId } = req.body;
-    const persona = await Persona.findById(req.params.personaId);
-    const target = await Persona.findById(targetPersonaId);
-    
-    if (!persona || !target) {
-      return res.status(404).json({ error: '角色不存在' });
-    }
-    
-    // 检查是否是自己的角色
-    if (persona.createdBy.toString() !== req.userId) {
-      return res.status(403).json({ error: '只能修改自己的角色关系' });
-    }
-    
-    await persona.addRelationship(targetPersonaId, type, cardId);
-    await target.addRelationship(req.params.personaId, type, cardId);
-    
-    res.json({
-      message: '关系已建立',
-      relationships: persona.relationships
-    });
-    
-  } catch (error) {
-    console.error('添加关系失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 移除亲密关系
-router.delete('/:personaId/relationship/:targetId', authMiddleware, async (req, res) => {
-  try {
-    const persona = await Persona.findById(req.params.personaId);
-    
-    if (!persona) {
-      return res.status(404).json({ error: '角色不存在' });
-    }
-    
-    if (persona.createdBy.toString() !== req.userId) {
-      return res.status(403).json({ error: '只能修改自己的角色关系' });
-    }
-    
-    await persona.removeRelationship(req.params.targetId);
-    
-    res.json({
-      message: '关系已解除',
-      relationships: persona.relationships
-    });
-    
-  } catch (error) {
-    console.error('移除关系失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 添加动态
-router.post('/:personaId/post', authMiddleware, async (req, res) => {
-  try {
-    const { content, images } = req.body;
-    const persona = await Persona.findById(req.params.personaId);
-    
-    if (!persona) {
-      return res.status(404).json({ error: '角色不存在' });
-    }
-    
-    if (persona.createdBy.toString() !== req.userId) {
-      return res.status(403).json({ error: '只能发布自己的角色动态' });
-    }
-    
-    await persona.addPost(content, images);
-    
-    res.json({
-      message: '动态发布成功',
-      posts: persona.posts.slice(0, 10)
-    });
-    
-  } catch (error) {
-    console.error('发布动态失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 获取角色动态列表
-router.get('/:personaId/posts', authMiddleware, async (req, res) => {
-  try {
-    const { limit = 20, page = 1 } = req.query;
-    const persona = await Persona.findById(req.params.personaId)
-      .populate('posts.comments.userId', 'username avatar')
-      .populate('posts.likes', 'username');
-    
-    if (!persona) {
-      return res.status(404).json({ error: '角色不存在' });
-    }
-    
-    const start = (parseInt(page) - 1) * parseInt(limit);
-    const posts = persona.posts.slice(start, start + parseInt(limit));
-    
-    res.json({
-      posts,
-      total: persona.posts.length,
-      page: parseInt(page),
-      totalPages: Math.ceil(persona.posts.length / parseInt(limit))
-    });
-    
-  } catch (error) {
-    console.error('获取动态失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });

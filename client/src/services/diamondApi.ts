@@ -17,6 +17,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return data;
 }
 
+// ✅ 导出接口
 export interface DailyInfo {
   hasClaimed: boolean;
   currentStreak: number;

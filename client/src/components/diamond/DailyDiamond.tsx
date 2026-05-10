@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { diamondApi } from '../../services/diamondApi';
-
-// ✅ 直接在组件内定义类型
-interface DailyInfo {
-  hasClaimed: boolean;
-  currentStreak: number;
-  nextReward: number;
-  rewards: number[];
-}
+import type { DailyInfo } from '../../services/diamondApi';
 
 interface Props {
   onClaimSuccess?: () => void;
