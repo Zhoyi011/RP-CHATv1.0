@@ -4,8 +4,13 @@ const OpenCC = require('opencc');
 const s2tConverter = new OpenCC('s2t.json');  // 简体转繁体
 const t2sConverter = new OpenCC('t2s.json');  // 繁体转简体
 
-// 简体转繁体
+/**
+ * 简体转繁体
+ * @param {string} text - 简体中文文本
+ * @returns {Promise<string>} 繁体中文文本
+ */
 async function simplifiedToTraditional(text) {
+  if (!text || typeof text !== 'string') return text;
   try {
     return await s2tConverter.convertPromise(text);
   } catch (error) {
@@ -14,8 +19,13 @@ async function simplifiedToTraditional(text) {
   }
 }
 
-// 繁体转简体
+/**
+ * 繁体转简体
+ * @param {string} text - 繁体中文文本
+ * @returns {Promise<string>} 简体中文文本
+ */
 async function traditionalToSimplified(text) {
+  if (!text || typeof text !== 'string') return text;
   try {
     return await t2sConverter.convertPromise(text);
   } catch (error) {
@@ -24,11 +34,16 @@ async function traditionalToSimplified(text) {
   }
 }
 
-// 自动检测并转换（智能转换）
+/**
+ * 智能转换（自动检测并转换）
+ * @param {string} text - 待转换文本
+ * @returns {Promise<string>} 转换后的文本
+ */
 async function smartConvert(text) {
-  // 简单检测：如果包含繁体字符则转简体，否则转繁体
-  const hasTraditional = /[\u4E00-\u9FFF]/.test(text) && 
-    /[愛國學會書龍對發開關體頭點電飛個過後時間門馬鳥魚貝車長東樂為]/.test(text);
+  if (!text || typeof text !== 'string') return text;
+  
+  // 检测是否包含繁体字
+  const hasTraditional = /[愛國學會書龍對發開關體頭點電飛個過後時間門馬鳥魚貝車長東樂為萬與麼]/.test(text);
   
   if (hasTraditional) {
     return await traditionalToSimplified(text);
