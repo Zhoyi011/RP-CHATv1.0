@@ -15,7 +15,7 @@ function toTraditional(str) {
   return cc.tify(str);
 }
 
-// 生成搜索正则（支持模糊匹配和简繁转换）
+// ✅ 修复：生成搜索正则（支持简繁转换，但不支持跨字符模糊）
 function getSearchRegex(searchTerm) {
   if (!searchTerm || searchTerm.length === 0) return null;
   
@@ -23,7 +23,7 @@ function getSearchRegex(searchTerm) {
   const simplified = toSimplified(searchTerm);
   const traditional = toTraditional(searchTerm);
   
-  // 构建正则：每个字符支持简繁两种形式
+  // ✅ 修复：不再使用 .* 连接，改为精确匹配每个字符
   let pattern = '';
   for (let i = 0; i < searchTerm.length; i++) {
     const sChar = simplified[i];
@@ -35,9 +35,9 @@ function getSearchRegex(searchTerm) {
     }
   }
   
-  // 添加模糊匹配：允许中间有任意字符
-  const fuzzyPattern = pattern.split('').join('.*');
-  return new RegExp(fuzzyPattern, 'i');
+  // ✅ 使用 ^ 和 $ 确保完整匹配（或使用 .* 前后可选）
+  // 这里改为匹配包含关键词即可，但不允许中间插字
+  return new RegExp(pattern, 'i');
 }
 
 // 验证token中间件
@@ -66,6 +66,8 @@ router.get('/personas', authMiddleware, async (req, res) => {
     if (!searchRegex) {
       return res.json({ personas: [], total: 0 });
     }
+    
+    console.log(`搜索: "${q}", 正则: ${searchRegex}`);
     
     const query = {
       status: 'approved',
