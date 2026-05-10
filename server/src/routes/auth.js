@@ -24,7 +24,7 @@ const authMiddleware = (req, res, next) => {
 
 // 管理员中间件
 const adminMiddleware = (req, res, next) => {
-  if (req.userRole !== 'admin') {
+  if (req.userRole !== 'admin' && req.userRole !== 'owner') {
     return res.status(403).json({ error: '需要管理员权限' });
   }
   next();

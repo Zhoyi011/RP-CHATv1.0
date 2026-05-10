@@ -64,7 +64,7 @@ router.get('/my', authMiddleware, async (req, res) => {
 
 // 管理员：获取待审核角色
 router.get('/pending', authMiddleware, async (req, res) => {
-  if (req.userRole !== 'admin') {
+  if (req.userRole !== 'admin' && req.userRole !== 'owner') {
     return res.status(403).json({ error: '需要管理员权限' });
   }
   
