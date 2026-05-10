@@ -33,6 +33,19 @@ const adminMiddleware = (req, res, next) => {
   next();
 };
 
+// ========== 辅助函数 ==========
+// 获取用户当前激活的角色
+async function getCurrentPersona(userId) {
+  const active = await ActivePersona.findOne({ userId }).populate('personaId');
+  return active?.personaId || null;
+}
+
+// 检查角色在房间中的权限
+async function getPersonaRoomRole(personaId, roomId) {
+  const pr = await PersonaRoom.findOne({ personaId, roomId });
+  return pr?.role || null;
+}
+
 // ========== 聊天室路由 ==========
 
 // 创建聊天室
@@ -44,12 +57,10 @@ router.post('/create', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '房间名称至少需要2个字符' });
     }
     
-    const active = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
-    if (!active || !active.personaId) {
+    const persona = await getCurrentPersona(req.userId);
+    if (!persona) {
       return res.status(400).json({ error: '请先选择一个角色' });
     }
-    
-    const persona = active.personaId;
     
     const room = new Room({
       name: name.trim(),
@@ -71,6 +82,8 @@ router.post('/create', authMiddleware, async (req, res) => {
       role: 'owner',
       joinedAt: new Date()
     });
+    
+    console.log(`✅ 房间创建成功: ${room.name}, 群主角色: ${persona.name}`);
     
     res.status(201).json({
       message: '聊天室创建成功',
@@ -94,13 +107,12 @@ router.post('/create', authMiddleware, async (req, res) => {
 // 获取当前角色加入的房间列表
 router.get('/my-rooms', authMiddleware, async (req, res) => {
   try {
-    const active = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
-    if (!active || !active.personaId) {
+    const persona = await getCurrentPersona(req.userId);
+    if (!persona) {
       return res.json({ rooms: [], currentPersona: null });
     }
     
-    const personaId = active.personaId._id;
-    const personaRooms = await PersonaRoom.find({ personaId }).populate('roomId');
+    const personaRooms = await PersonaRoom.find({ personaId: persona._id }).populate('roomId');
     const rooms = personaRooms.map(pr => pr.roomId).filter(Boolean);
     
     const roomsWithStats = await Promise.all(rooms.map(async (room) => {
@@ -131,9 +143,9 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
     res.json({ 
       rooms: roomsWithStats, 
       currentPersona: {
-        _id: active.personaId._id,
-        name: active.personaId.name,
-        avatar: active.personaId.avatar
+        _id: persona._id,
+        name: persona.name,
+        avatar: persona.avatar
       }
     });
   } catch (error) {
@@ -145,12 +157,12 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
 // 获取用户所有房间的未读消息总数
 router.get('/unread-total', authMiddleware, async (req, res) => {
   try {
-    const active = await ActivePersona.findOne({ userId: req.userId });
-    if (!active) {
+    const persona = await getCurrentPersona(req.userId);
+    if (!persona) {
       return res.json({ total: 0 });
     }
     
-    const personaRooms = await PersonaRoom.find({ personaId: active.personaId });
+    const personaRooms = await PersonaRoom.find({ personaId: persona._id });
     let totalUnread = 0;
     
     for (const pr of personaRooms) {
@@ -306,15 +318,20 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '该群是私密群' });
     }
     
+    // 检查是否已经是成员
     const existing = await PersonaRoom.findOne({ personaId, roomId: room._id });
     if (existing) {
       return res.status(400).json({ error: '该角色已在群中' });
     }
     
+    // 检查是否有待审核申请
     const pendingExists = room.pendingMembers.some(p => p.personaId?.toString() === personaId);
     if (pendingExists) {
       return res.status(400).json({ error: '已有待审核申请' });
     }
+    
+    // 获取角色信息用于日志
+    const persona = await Persona.findById(personaId);
     
     room.pendingMembers.push({
       userId: req.userId,
@@ -324,6 +341,9 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
     });
     
     await room.save();
+    
+    console.log(`📋 新入群申请: 角色 ${persona?.name || personaId} 申请加入房间 ${room.name}`);
+    
     res.json({ message: '申请已提交，等待审核' });
   } catch (error) {
     console.error('申请加入失败:', error);
@@ -331,7 +351,7 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取待审核列表
+// 获取待审核列表 ✅ 修复权限检查
 router.get('/:roomId/pending', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
@@ -342,8 +362,27 @@ router.get('/:roomId/pending', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const isAdmin = room.members.some(m => m.userId?.toString() === req.userId && (m.role === 'admin' || m.role === 'owner'));
-    if (!isAdmin) {
+    // ✅ 获取当前使用的角色
+    const persona = await getCurrentPersona(req.userId);
+    if (!persona) {
+      return res.status(403).json({ error: '请先选择角色' });
+    }
+    
+    // ✅ 检查当前角色是否是群主或管理员
+    const personaRoom = await PersonaRoom.findOne({
+      personaId: persona._id,
+      roomId: room._id
+    });
+    
+    const isAdmin = personaRoom && (personaRoom.role === 'owner' || personaRoom.role === 'admin');
+    
+    // 兼容旧数据
+    const isLegacyAdmin = room.members.some(m => 
+      m.userId?.toString() === req.userId && (m.role === 'owner' || m.role === 'admin')
+    );
+    
+    if (!isAdmin && !isLegacyAdmin) {
+      console.log(`⚠️ 权限不足: 用户 ${req.userId}, 角色 ${persona.name}, 房间 ${room.name}`);
       return res.status(403).json({ error: '没有权限' });
     }
     
@@ -354,7 +393,7 @@ router.get('/:roomId/pending', authMiddleware, async (req, res) => {
   }
 });
 
-// 审核加入申请
+// 审核加入申请 ✅ 修复权限检查
 router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   try {
     const { userId, approve } = req.body;
@@ -364,8 +403,26 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const isAdmin = room.members.some(m => m.userId?.toString() === req.userId && (m.role === 'admin' || m.role === 'owner'));
-    if (!isAdmin) {
+    // ✅ 获取当前使用的角色
+    const persona = await getCurrentPersona(req.userId);
+    if (!persona) {
+      return res.status(403).json({ error: '请先选择角色' });
+    }
+    
+    // ✅ 检查当前角色是否是群主或管理员
+    const personaRoom = await PersonaRoom.findOne({
+      personaId: persona._id,
+      roomId: room._id
+    });
+    
+    const isAdmin = personaRoom && (personaRoom.role === 'owner' || personaRoom.role === 'admin');
+    
+    // 兼容旧数据
+    const isLegacyAdmin = room.members.some(m => 
+      m.userId?.toString() === req.userId && (m.role === 'owner' || m.role === 'admin')
+    );
+    
+    if (!isAdmin && !isLegacyAdmin) {
       return res.status(403).json({ error: '没有权限' });
     }
     
@@ -377,6 +434,7 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
     const pending = room.pendingMembers[pendingIndex];
     
     if (approve) {
+      // 添加到 PersonaRoom
       await PersonaRoom.create({
         personaId: pending.personaId,
         roomId: room._id,
@@ -384,12 +442,17 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
         joinedAt: new Date()
       });
       
+      // 同时添加到旧 members 数组（兼容）
       room.members.push({
         userId: pending.userId,
         personaId: pending.personaId,
         role: 'member',
         joinedAt: new Date()
       });
+      
+      console.log(`✅ 批准入群: 角色 ${pending.personaId} 加入房间 ${room.name}`);
+    } else {
+      console.log(`❌ 拒绝入群: 角色 ${pending.personaId} 申请加入房间 ${room.name}`);
     }
     
     room.pendingMembers.splice(pendingIndex, 1);
@@ -402,7 +465,7 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 获取群成员列表（完整版）
+// ✅ 获取群成员列表（完整修复版）
 router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
     // 获取所有皮与群的关联
@@ -434,7 +497,7 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
       };
     }));
     
-    // 兼容旧数据
+    // 兼容旧数据中的成员
     const room = await Room.findById(req.params.roomId);
     if (room && room.members && room.members.length > 0) {
       for (const oldMember of room.members) {
@@ -449,7 +512,7 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
                 avatar: persona.avatar,
                 displayName: persona.displayName || persona.name
               },
-              userId: { _id: oldMember.userId, username: '未知用户' },
+              userId: oldMember.userId ? { _id: oldMember.userId, username: '未知用户' } : null,
               role: oldMember.role,
               title: oldMember.title,
               joinedAt: oldMember.joinedAt
@@ -476,8 +539,14 @@ router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const isOwner = room.members.some(m => m.userId?.toString() === req.userId && m.role === 'owner');
-    if (!isOwner) {
+    // 获取当前角色的权限
+    const currentPersona = await getCurrentPersona(req.userId);
+    if (!currentPersona) {
+      return res.status(403).json({ error: '请先选择角色' });
+    }
+    
+    const currentRole = await getPersonaRoomRole(currentPersona._id, room._id);
+    if (currentRole !== 'owner') {
       return res.status(403).json({ error: '只有群主可以设置管理员' });
     }
     
@@ -513,7 +582,15 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const isAdmin = room.members.some(m => m.userId?.toString() === req.userId && (m.role === 'admin' || m.role === 'owner'));
+    // 获取当前角色的权限
+    const currentPersona = await getCurrentPersona(req.userId);
+    if (!currentPersona) {
+      return res.status(403).json({ error: '请先选择角色' });
+    }
+    
+    const currentRole = await getPersonaRoomRole(currentPersona._id, room._id);
+    const isAdmin = currentRole === 'owner' || currentRole === 'admin';
+    
     if (!isAdmin) {
       return res.status(403).json({ error: '没有权限' });
     }
@@ -527,7 +604,7 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '不能踢出群主' });
     }
     
-    if (targetMember.role === 'admin' && !room.members.some(m => m.userId?.toString() === req.userId && m.role === 'owner')) {
+    if (targetMember.role === 'admin' && currentRole !== 'owner') {
       return res.status(403).json({ error: '只有群主可以踢出管理员' });
     }
     
@@ -553,8 +630,8 @@ router.post('/:roomId/leave', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const active = await ActivePersona.findOne({ userId: req.userId });
-    if (!active) {
+    const persona = await getCurrentPersona(req.userId);
+    if (!persona) {
       return res.status(400).json({ error: '请先选择角色' });
     }
     
@@ -574,7 +651,7 @@ router.post('/:roomId/leave', authMiddleware, async (req, res) => {
       }
     }
     
-    await PersonaRoom.deleteOne({ personaId: active.personaId, roomId: room._id });
+    await PersonaRoom.deleteOne({ personaId: persona._id, roomId: room._id });
     room.members.splice(memberIndex, 1);
     await room.save();
     
@@ -595,7 +672,15 @@ router.put('/:roomId/settings', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const isAdmin = room.members.some(m => m.userId?.toString() === req.userId && (m.role === 'admin' || m.role === 'owner'));
+    // 获取当前角色的权限
+    const currentPersona = await getCurrentPersona(req.userId);
+    if (!currentPersona) {
+      return res.status(403).json({ error: '请先选择角色' });
+    }
+    
+    const currentRole = await getPersonaRoomRole(currentPersona._id, room._id);
+    const isAdmin = currentRole === 'owner' || currentRole === 'admin';
+    
     if (!isAdmin) {
       return res.status(403).json({ error: '没有权限' });
     }
@@ -605,6 +690,7 @@ router.put('/:roomId/settings', authMiddleware, async (req, res) => {
     if (announcement !== undefined) room.announcement = announcement;
     if (isPublic !== undefined) room.isPublic = isPublic;
     if (requireApproval !== undefined) room.requireApproval = requireApproval;
+    room.updatedAt = new Date();
     
     await room.save();
     res.json({ message: '群信息已更新', room });
@@ -624,7 +710,15 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    const isAdmin = room.members.some(m => m.userId?.toString() === req.userId && (m.role === 'admin' || m.role === 'owner'));
+    // 获取当前角色的权限
+    const currentPersona = await getCurrentPersona(req.userId);
+    if (!currentPersona) {
+      return res.status(403).json({ error: '请先选择角色' });
+    }
+    
+    const currentRole = await getPersonaRoomRole(currentPersona._id, room._id);
+    const isAdmin = currentRole === 'owner' || currentRole === 'admin';
+    
     if (!isAdmin) {
       return res.status(403).json({ error: '没有权限' });
     }
