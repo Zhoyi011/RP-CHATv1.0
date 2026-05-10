@@ -4,7 +4,41 @@ const User = require('../models/User');
 const Persona = require('../models/Persona');
 const Room = require('../models/Room');
 const jwt = require('jsonwebtoken');
-const st = require('chinese-simple2traditional');
+const cc = require('chinese-conv');
+
+// 简繁转换函数
+function toSimplified(str) {
+  return cc.sify(str);
+}
+
+function toTraditional(str) {
+  return cc.tify(str);
+}
+
+// 生成搜索正则（支持模糊匹配和简繁转换）
+function getSearchRegex(searchTerm) {
+  if (!searchTerm || searchTerm.length === 0) return null;
+  
+  // 生成简体和繁体版本
+  const simplified = toSimplified(searchTerm);
+  const traditional = toTraditional(searchTerm);
+  
+  // 构建正则：每个字符支持简繁两种形式
+  let pattern = '';
+  for (let i = 0; i < searchTerm.length; i++) {
+    const sChar = simplified[i];
+    const tChar = traditional[i];
+    if (sChar !== tChar) {
+      pattern += `[${sChar}${tChar}]`;
+    } else {
+      pattern += sChar;
+    }
+  }
+  
+  // 添加模糊匹配：允许中间有任意字符
+  const fuzzyPattern = pattern.split('').join('.*');
+  return new RegExp(fuzzyPattern, 'i');
+}
 
 // 验证token中间件
 const authMiddleware = (req, res, next) => {
@@ -18,31 +52,6 @@ const authMiddleware = (req, res, next) => {
     res.status(401).json({ error: 'token无效' });
   }
 };
-
-// 生成搜索正则（支持模糊匹配和简繁转换）
-function getSearchRegex(searchTerm) {
-  if (!searchTerm || searchTerm.length === 0) return null;
-  
-  // 生成简体和繁体版本
-  const simplified = searchTerm;
-  const traditional = st.s2t(searchTerm);
-  
-  // 构建正则：每个字符支持简繁两种形式
-  let pattern = '';
-  for (let i = 0; i < searchTerm.length; i++) {
-    const char = searchTerm[i];
-    const tChar = traditional[i];
-    if (char !== tChar) {
-      pattern += `[${char}${tChar}]`;
-    } else {
-      pattern += char;
-    }
-  }
-  
-  // 添加模糊匹配：允许中间有任意字符
-  const fuzzyPattern = pattern.split('').join('.*');
-  return new RegExp(fuzzyPattern, 'i');
-}
 
 // ========== 搜索角色 ==========
 router.get('/personas', authMiddleware, async (req, res) => {
