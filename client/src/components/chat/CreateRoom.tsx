@@ -18,11 +18,16 @@ const CreateRoom: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name.trim()) {
+      setError('请输入房间名称');
+      return;
+    }
+    
     setLoading(true);
     setError('');
 
     try {
-      await roomApi.createRoom(formData.name, formData.description);
+      await roomApi.createRoom(formData.name.trim(), formData.description.trim());
       if (onSuccess) onSuccess();
       if (onClose) onClose();
       navigate(0);
@@ -36,12 +41,11 @@ const CreateRoom: React.FC<Props> = ({ onClose, onSuccess }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-        {/* 头部渐变条 */}
-        <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
+        <div className="h-2 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
         
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
               创建新聊天室
             </h2>
             <button
@@ -67,9 +71,10 @@ const CreateRoom: React.FC<Props> = ({ onClose, onSuccess }) => {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
                 placeholder="例如：闲聊室"
                 maxLength={30}
+                autoFocus
                 required
               />
               <p className="text-xs text-gray-400 mt-1">最多30个字符</p>
@@ -82,7 +87,7 @@ const CreateRoom: React.FC<Props> = ({ onClose, onSuccess }) => {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
                 placeholder="简单介绍一下这个聊天室..."
                 rows={3}
                 maxLength={200}
@@ -101,7 +106,7 @@ const CreateRoom: React.FC<Props> = ({ onClose, onSuccess }) => {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-3 rounded-xl font-medium hover:from-emerald-600 hover:to-teal-700 transition disabled:opacity-50 shadow-md"
+                className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-3 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-600 transition disabled:opacity-50 shadow-md"
               >
                 {loading ? '创建中...' : '创建房间'}
               </button>

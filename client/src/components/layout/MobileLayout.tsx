@@ -205,6 +205,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
           >
             <div className="relative">
               {tab.icon}
+              {/* ✅ 修复：只有未读消息大于0时才显示红点 */}
               {tab.name === '聊天' && unreadCount > 0 && activeTab !== 'chat' && (
                 <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
                   {unreadCount > 99 ? '99+' : unreadCount}

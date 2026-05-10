@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -29,9 +29,9 @@ const GroupSettings = () => {
   const [room, setRoom] = useState<any>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'members' | 'pending'>('basic');
   const [pendingCount, setPendingCount] = useState(0);
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -42,7 +42,6 @@ const GroupSettings = () => {
     isPublic: true,
     requireApproval: true
   });
-  const [saving, setSaving] = useState(false);
   const currentUser = auth.currentUser;
 
   // 获取当前用户角色
@@ -50,11 +49,8 @@ const GroupSettings = () => {
   const isOwner = currentUserMember?.role === 'owner';
   const isAdmin = isOwner || currentUserMember?.role === 'admin';
 
-  useEffect(() => {
-    loadData();
-  }, [roomId]);
-
-  const loadData = async () => {
+  // 加载数据
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -84,30 +80,32 @@ const GroupSettings = () => {
       const membersData = await membersRes.json();
       setMembers(Array.isArray(membersData) ? membersData : []);
       
-      // 加载待审核列表
-      await loadPendingRequests();
+      // 加载待审核数量
+      await loadPendingCount();
       
     } catch (error) {
       console.error('加载数据失败:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [roomId]);
 
-  const loadPendingRequests = async () => {
+  const loadPendingCount = async () => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/pending`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      setPendingRequests(Array.isArray(data) ? data : []);
       setPendingCount(Array.isArray(data) ? data.length : 0);
-      console.log('📋 待审核申请:', data);
     } catch (error) {
-      console.error('加载待审核列表失败:', error);
+      console.error('加载待审核数量失败:', error);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
@@ -190,7 +188,7 @@ const GroupSettings = () => {
       });
       
       if (res.ok) {
-        alert(isAdmin ? `已设为管理员` : `已取消管理员权限`);
+        alert(isAdmin ? `✅ 已设为管理员` : `✅ 已取消管理员权限`);
         loadData();
       } else {
         const data = await res.json();
@@ -229,62 +227,6 @@ const GroupSettings = () => {
     }
   };
 
-  const handleLeaveRoom = async () => {
-    if (!confirm('确定要退出该群聊吗？')) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/leave`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await res.json();
-      if (res.ok) {
-        alert(data.message || '已退出群聊');
-        navigate('/chat');
-      } else {
-        alert(data.error || '退出失败');
-      }
-    } catch (error) {
-      console.error('退出失败:', error);
-      alert('退出失败，请重试');
-    }
-  };
-
-  const handleReport = () => {
-    alert('举报功能开发中，请通过邮件联系我们：support@rp-chat.com');
-  };
-
-  const handleApproveRequest = async (userId: string, approve: boolean) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/approve-request`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ userId, approve })
-      });
-      
-      if (res.ok) {
-        alert(approve ? '已批准加入' : '已拒绝申请');
-        await loadPendingRequests();
-        await loadData(); // 刷新成员列表
-      } else {
-        const data = await res.json();
-        alert(data.error || '操作失败');
-      }
-    } catch (error) {
-      console.error('操作失败:', error);
-      alert('操作失败，请重试');
-    }
-  };
-
   const getRoleBadge = (role: string) => {
     if (role === 'owner') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">群主</span>;
     if (role === 'admin') return <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">管理员</span>;
@@ -306,6 +248,25 @@ const GroupSettings = () => {
     );
   }
 
+  // 如果不是管理员，显示无权限
+  if (!isOwner && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow p-8 text-center">
+          <div className="text-6xl mb-4">🔒</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">无权限访问</h2>
+          <p className="text-gray-500 mb-4">只有群主或管理员可以访问群管理页面</p>
+          <button
+            onClick={() => navigate(`/group/${roomId}`)}
+            className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl"
+          >
+            返回群资料
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 头部 */}
@@ -319,65 +280,72 @@ const GroupSettings = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
             群管理
           </h1>
+          <button
+            onClick={loadData}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition"
+            title="刷新"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      {/* Tab 切换 - 仅管理员可见 */}
-      {(isOwner || isAdmin) && (
-        <div className="bg-white border-b border-gray-100 px-4">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab('basic')}
-              className={`py-3 text-sm font-medium transition relative ${
-                activeTab === 'basic' ? 'text-emerald-600' : 'text-gray-500'
-              }`}
-            >
-              基本设置
-              {activeTab === 'basic' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('members')}
-              className={`py-3 text-sm font-medium transition relative ${
-                activeTab === 'members' ? 'text-emerald-600' : 'text-gray-500'
-              }`}
-            >
-              成员管理
-              {activeTab === 'members' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('pending');
-                loadPendingRequests(); // 点击时刷新
-              }}
-              className={`py-3 text-sm font-medium transition relative ${
-                activeTab === 'pending' ? 'text-emerald-600' : 'text-gray-500'
-              }`}
-            >
-              待审核
-              {pendingCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                  {pendingCount}
-                </span>
-              )}
-              {activeTab === 'pending' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
-              )}
-            </button>
-          </div>
+      {/* Tab 切换 */}
+      <div className="bg-white border-b border-gray-100 px-4">
+        <div className="flex gap-4">
+          <button
+            onClick={() => setActiveTab('basic')}
+            className={`py-3 text-sm font-medium transition relative ${
+              activeTab === 'basic' ? 'text-blue-600' : 'text-gray-500'
+            }`}
+          >
+            基本设置
+            {activeTab === 'basic' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('members')}
+            className={`py-3 text-sm font-medium transition relative ${
+              activeTab === 'members' ? 'text-blue-600' : 'text-gray-500'
+            }`}
+          >
+            成员管理
+            {activeTab === 'members' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('pending');
+              loadPendingCount();
+            }}
+            className={`py-3 text-sm font-medium transition relative ${
+              activeTab === 'pending' ? 'text-blue-600' : 'text-gray-500'
+            }`}
+          >
+            待审核
+            {pendingCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                {pendingCount}
+              </span>
+            )}
+            {activeTab === 'pending' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
+            )}
+          </button>
         </div>
-      )}
+      </div>
 
       <div className={`${isMobile ? 'p-3' : 'p-4'} space-y-4 max-w-2xl mx-auto`}>
         
-        {/* ========== 基本设置 Tab（仅管理员） ========== */}
-        {activeTab === 'basic' && (isOwner || isAdmin) && (
+        {/* 基本设置 Tab */}
+        {activeTab === 'basic' && (
           <>
             <div className="bg-white rounded-2xl shadow p-5">
               <label className="block text-sm font-medium text-gray-700 mb-2">群名称</label>
@@ -385,8 +353,11 @@ const GroupSettings = () => {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                placeholder="群名称"
+                maxLength={30}
               />
+              <p className="text-xs text-gray-400 mt-1">最多30个字符</p>
             </div>
 
             <div className="bg-white rounded-2xl shadow p-5">
@@ -394,9 +365,12 @@ const GroupSettings = () => {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
                 rows={3}
+                placeholder="简单介绍一下这个群..."
+                maxLength={200}
               />
+              <p className="text-xs text-gray-400 mt-1">最多200个字符</p>
             </div>
 
             <div className="bg-white rounded-2xl shadow p-5">
@@ -404,9 +378,10 @@ const GroupSettings = () => {
               <textarea
                 value={formData.announcement}
                 onChange={(e) => setFormData({ ...formData, announcement: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition resize-none"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
                 rows={3}
                 placeholder="群公告..."
+                maxLength={500}
               />
               <p className="text-xs text-gray-400 mt-2">公告会显示在群详情页顶部</p>
             </div>
@@ -422,7 +397,7 @@ const GroupSettings = () => {
                   <button
                     onClick={() => setFormData({ ...formData, isPublic: !formData.isPublic })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
-                      formData.isPublic ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-gray-300'
+                      formData.isPublic ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300'
                     }`}
                   >
                     <span
@@ -441,7 +416,7 @@ const GroupSettings = () => {
                   <button
                     onClick={() => setFormData({ ...formData, requireApproval: !formData.requireApproval })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 ${
-                      formData.requireApproval ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-gray-300'
+                      formData.requireApproval ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300'
                     }`}
                   >
                     <span
@@ -457,26 +432,28 @@ const GroupSettings = () => {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl font-medium hover:from-emerald-600 hover:to-teal-700 transition disabled:opacity-50 shadow-md"
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-3 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-600 transition disabled:opacity-50 shadow-md"
             >
               {saving ? '保存中...' : '保存设置'}
             </button>
           </>
         )}
 
-        {/* ========== 成员管理 Tab（仅管理员） ========== */}
-        {activeTab === 'members' && (isOwner || isAdmin) && (
+        {/* 成员管理 Tab */}
+        {activeTab === 'members' && (
           <div className="bg-white rounded-2xl shadow overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-medium text-gray-800">成员列表</h3>
-              <p className="text-xs text-gray-400 mt-1">共 {members.length} 位成员</p>
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-gray-800">成员列表</h3>
+                <p className="text-xs text-gray-400">共 {members.length} 位成员</p>
+              </div>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
               {members.map(member => {
                 const displayName = getDisplayName(member);
                 return (
-                  <div key={member._id} className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold shadow-sm">
+                  <div key={member._id} className="p-4 flex items-center gap-3 hover:bg-gray-50 transition">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-sm">
                       {displayName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
@@ -490,11 +467,14 @@ const GroupSettings = () => {
                         )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">{member.userId.username}</p>
+                      <p className="text-xs text-gray-400">
+                        加入于 {new Date(member.joinedAt).toLocaleDateString()}
+                      </p>
                     </div>
                     
                     {/* 操作按钮 */}
                     {isOwner && member.role !== 'owner' && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => handleSetAdmin(member.userId._id, member.userId.username, member.role !== 'admin')}
                           className="text-xs text-blue-500 hover:text-blue-600"
@@ -507,7 +487,7 @@ const GroupSettings = () => {
                             setNewTitle(member.title || '');
                             setShowTitleModal(true);
                           }}
-                          className="text-xs text-gray-500 hover:text-emerald-600"
+                          className="text-xs text-gray-500 hover:text-blue-600"
                         >
                           头衔
                         </button>
@@ -521,14 +501,14 @@ const GroupSettings = () => {
                     )}
                     
                     {isAdmin && !isOwner && member.role !== 'owner' && member.role !== 'admin' && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => {
                             setSelectedMember(member);
                             setNewTitle(member.title || '');
                             setShowTitleModal(true);
                           }}
-                          className="text-xs text-gray-500 hover:text-emerald-600"
+                          className="text-xs text-gray-500 hover:text-blue-600"
                         >
                           头衔
                         </button>
@@ -547,101 +527,41 @@ const GroupSettings = () => {
           </div>
         )}
 
-        {/* ========== 待审核 Tab（仅管理员） ========== */}
-        {activeTab === 'pending' && (isOwner || isAdmin) && (
+        {/* 待审核 Tab */}
+        {activeTab === 'pending' && (
           <div className="bg-white rounded-2xl shadow overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-medium text-gray-800">待审核申请</h3>
-              <p className="text-xs text-gray-400 mt-1">共 {pendingCount} 个申请等待处理</p>
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-gray-800">待审核申请</h3>
+                <p className="text-xs text-gray-400">共 {pendingCount} 个申请等待处理</p>
+              </div>
             </div>
             
-            {pendingRequests.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-gray-400">暂无待审核申请</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {pendingRequests.map((req: any) => (
-                  <div key={req._id} className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold shadow-md">
-                        {req.personaId?.name?.charAt(0) || '?'}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-800">{req.personaId?.name || '未知角色'}</span>
-                          <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">待审核</span>
-                        </div>
-                        <p className="text-sm text-gray-500">{req.userId?.username}</p>
-                        {req.message && (
-                          <p className="text-xs text-gray-400 mt-1 line-clamp-1">申请理由：{req.message}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">
-                          申请于 {new Date(req.appliedAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleApproveRequest(req.userId._id, false)}
-                          className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-                        >
-                          拒绝
-                        </button>
-                        <button
-                          onClick={() => handleApproveRequest(req.userId._id, true)}
-                          className="px-3 py-1.5 text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition shadow-sm"
-                        >
-                          批准
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="p-4">
+              <button
+                onClick={() => navigate(`/room/${roomId}/pending`)}
+                className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-3 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-600 transition shadow-md flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                查看待审核申请
+                {pendingCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         )}
-
-        {/* ========== 通用功能（所有人可见） ========== */}
-        <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-gray-50">
-            <h3 className="font-medium text-gray-800">通用功能</h3>
-          </div>
-          
-          {/* 退出群聊 */}
-          <button
-            onClick={handleLeaveRoom}
-            className="w-full p-4 text-left text-red-500 hover:bg-red-50 transition flex items-center gap-3 border-b border-gray-100"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>退出群聊</span>
-          </button>
-          
-          {/* 举报群组 */}
-          <button
-            onClick={handleReport}
-            className="w-full p-4 text-left text-gray-600 hover:bg-gray-50 transition flex items-center gap-3"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span>举报群组</span>
-          </button>
-        </div>
       </div>
 
       {/* 设置头衔弹窗 */}
       {showTitleModal && selectedMember && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
-            <div className="h-2 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
+            <div className="h-2 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">
@@ -663,7 +583,7 @@ const GroupSettings = () => {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="输入头衔（例如：元老、活跃分子）"
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition mb-4"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition mb-4"
                 maxLength={20}
               />
               <p className="text-xs text-gray-400 mb-4">头衔会显示在成员列表中</p>
@@ -680,7 +600,7 @@ const GroupSettings = () => {
                 </button>
                 <button
                   onClick={handleSetTitle}
-                  className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-xl hover:from-emerald-600 hover:to-teal-700 transition shadow-md"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition shadow-md"
                 >
                   确认设置
                 </button>

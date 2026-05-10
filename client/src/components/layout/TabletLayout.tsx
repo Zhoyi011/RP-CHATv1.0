@@ -149,6 +149,7 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
               alt="avatar"
               className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-200"
             />
+            {/* ✅ 修复：只有未读消息大于0时才显示红点 */}
             {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md">
                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -215,6 +216,7 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
                 >
                   {item.icon}
                   <span className="font-medium">{item.name}</span>
+                  {/* ✅ 修复：只有未读消息大于0时才显示红点 */}
                   {item.name === '聊天' && unreadCount > 0 && !isActive(item.path) && (
                     <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                       {unreadCount > 99 ? '99+' : unreadCount}

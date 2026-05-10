@@ -70,6 +70,10 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
     setInputValue('');
   };
 
+  const getAvatarChar = (username: string) => {
+    return username.charAt(0).toUpperCase();
+  };
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 聊天头部 */}
@@ -88,7 +92,7 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
         <div className="flex items-center gap-3 flex-1">
           <div className="relative">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold shadow-md">
-              {targetUser.username.charAt(0).toUpperCase()}
+              {getAvatarChar(targetUser.username)}
             </div>
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
           </div>
@@ -115,15 +119,15 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
               <div key={msg._id} className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
                 {!isSelf && (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
-                    {targetUser.username.charAt(0)}
+                    {getAvatarChar(targetUser.username)}
                   </div>
                 )}
                 
                 <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
                   <div className="flex items-end gap-2">
-                    <div className={`px-4 py-2 rounded-2xl ${
+                    <div className={`px-4 py-2 rounded-2xl break-words whitespace-pre-wrap ${
                       isSelf 
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-tr-none shadow-md' 
+                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
                         : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
                     }`}>
                       {msg.content}
@@ -135,7 +139,7 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
                 </div>
 
                 {isSelf && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
                     {user?.email?.charAt(0).toUpperCase() || 'U'}
                   </div>
                 )}
@@ -160,12 +164,12 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
               }
             }}
             placeholder={`发给 ${targetUser.username}...`}
-            className="flex-1 bg-gray-100 rounded-full px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            className="flex-1 bg-gray-100 rounded-full px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
           <button 
             onClick={handleSendMessage}
             disabled={!inputValue.trim()}
-            className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-5 py-3 rounded-full text-sm font-medium hover:from-emerald-600 hover:to-teal-700 transition disabled:opacity-50 shadow-md"
+            className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-5 py-3 rounded-full text-sm font-medium hover:from-blue-600 hover:to-cyan-600 transition disabled:opacity-50 shadow-md"
           >
             发送
           </button>

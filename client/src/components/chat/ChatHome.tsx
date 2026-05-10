@@ -82,7 +82,7 @@ const MessageList: React.FC<{
                     navigate(`/persona/${msg.personaId._id}`);
                   }
                 }}
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition"
               >
                 {msg.personaId?.name?.charAt(0) || '?'}
               </div>
@@ -96,9 +96,9 @@ const MessageList: React.FC<{
                       navigate(`/persona/${msg.personaId._id}`);
                     }
                   }}
-                  className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-green-600 transition"
+                  className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition"
                 >
-                  <span className="text-sm font-medium text-gray-800 hover:text-green-600">
+                  <span className="text-sm font-medium text-gray-800 hover:text-blue-600">
                     {msg.personaId?.name || '未知用户'}
                   </span>
                 </div>
@@ -111,7 +111,7 @@ const MessageList: React.FC<{
                 )}
                 <div className={`px-4 py-2 rounded-2xl max-w-full ${
                   isSelf 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-tr-none' 
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
                     : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
                 }`}>
                   <div className="break-words whitespace-pre-wrap">
@@ -176,7 +176,7 @@ const MessageList: React.FC<{
                     navigate(`/persona/${selectedPersona._id}`);
                   }
                 }}
-                className="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-md"
+                className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-md"
               >
                 {selectedPersona?.name?.charAt(0) || 'M'}
               </div>
@@ -200,7 +200,7 @@ const ChatHome = () => {
   
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [personas, setPersonas]  = useState<Persona[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
   const [showChatWindow, setShowChatWindow] = useState(false);
@@ -209,10 +209,36 @@ const ChatHome = () => {
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+
+  // 获取待审核数量
+  const fetchPendingCount = useCallback(async () => {
+    if (!selectedRoom || (!isRoomAdmin && !isRoomOwner)) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPendingCount(Array.isArray(data) ? data.length : 0);
+    } catch (error) {
+      console.error('获取待审核数量失败:', error);
+    }
+  }, [selectedRoom, isRoomAdmin, isRoomOwner]);
+
+  useEffect(() => {
+    if (selectedRoom && (isRoomAdmin || isRoomOwner)) {
+      fetchPendingCount();
+      // 每30秒刷新一次
+      const interval = setInterval(fetchPendingCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedRoom, isRoomAdmin, isRoomOwner, fetchPendingCount]);
 
   // ========== 认证检查 ==========
   useEffect(() => {
@@ -357,7 +383,7 @@ const ChatHome = () => {
             }`}
             onClick={() => toast.dismiss(t.id)}
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold">
               {message.personaId?.name?.charAt(0) || '?'}
             </div>
             <div className="flex-1">
@@ -539,7 +565,7 @@ const ChatHome = () => {
   // ========== 渲染加载状态 ==========
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
         <div className="text-white text-xl">加载中...</div>
       </div>
     );
@@ -552,7 +578,7 @@ const ChatHome = () => {
           <p className="text-red-500 mb-4">{error}</p>
           <button 
             onClick={() => window.location.reload()}
-            className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-xl shadow-md"
+            className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl shadow-md"
           >
             重试
           </button>
@@ -589,7 +615,7 @@ const ChatHome = () => {
       <div className="px-4 py-2 flex-shrink-0">
         <button
           onClick={() => setShowCreateRoom(true)}
-          className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-2 rounded-xl hover:from-emerald-600 hover:to-teal-700 transition flex items-center justify-center gap-2 shadow-md"
+          className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition flex items-center justify-center gap-2 shadow-md"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -606,7 +632,7 @@ const ChatHome = () => {
             setSelectedUser(null);
           }}
           className={`flex-1 py-2 text-sm font-medium transition ${
-            !showUserList ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500'
+            !showUserList ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500'
           }`}
         >
           群聊
@@ -617,7 +643,7 @@ const ChatHome = () => {
             setSelectedRoom(null);
           }}
           className={`flex-1 py-2 text-sm font-medium transition ${
-            showUserList ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-500'
+            showUserList ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500'
           }`}
         >
           私聊
@@ -635,7 +661,7 @@ const ChatHome = () => {
                 onClick={() => handleSelectPersona(persona)}
                 className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition flex-shrink-0 ${
                   selectedPersona?._id === persona._id
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm'
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -645,7 +671,7 @@ const ChatHome = () => {
             {personas.length === 0 && (
               <button
                 onClick={() => navigate('/persona')}
-                className="text-sm text-emerald-600 hover:text-emerald-700"
+                className="text-sm text-blue-600 hover:text-blue-700"
               >
                 还没有角色，去申请 →
               </button>
@@ -670,12 +696,12 @@ const ChatHome = () => {
                   key={room._id} 
                   onClick={() => handleSelectRoom(room)}
                   className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 active:bg-gray-100 transition ${
-                    selectedRoom?._id === room._id && !isMobile ? 'bg-emerald-50' : ''
+                    selectedRoom?._id === room._id && !isMobile ? 'bg-blue-50' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
                         {room.name.charAt(0)}
                       </div>
                       {room.onlineCount ? (
@@ -704,7 +730,7 @@ const ChatHome = () => {
                       <p className="text-sm text-gray-500 truncate">
                         {room.description || '暂无描述'}
                       </p>
-                      <p className="text-xs text-green-600 mt-1">
+                      <p className="text-xs text-blue-600 mt-1">
                         {room.onlineCount ? `${room.onlineCount}人在线` : '暂无在线'}
                       </p>
                     </div>
@@ -748,7 +774,7 @@ const ChatHome = () => {
           
           <div className="flex items-center gap-3 flex-1">
             <div className="relative flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white font-bold shadow-md">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md">
                 {selectedRoom?.name.charAt(0) || '?'}
               </div>
               {selectedRoom?.onlineCount ? (
@@ -767,18 +793,37 @@ const ChatHome = () => {
             </div>
           </div>
           
-          {/* ✅ 右上角三个点 - 跳转到群详情页 */}
-          {selectedRoom && (
-            <button
-              onClick={() => navigate(`/group/${selectedRoom._id}`)}
-              className="p-2 hover:bg-gray-100 rounded-full transition"
-              title="群资料"
-            >
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
-          )}
+          {/* 右上角按钮组 */}
+          <div className="flex items-center gap-1">
+            {/* 待审核按钮 - 仅群主/管理员可见 */}
+            {selectedRoom && (isRoomAdmin || isRoomOwner) && (
+              <button
+                onClick={() => navigate(`/room/${selectedRoom._id}/pending`)}
+                className="p-2 hover:bg-gray-100 rounded-full transition relative"
+                title="待审核申请"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {pendingCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
+            )}
+            
+            {/* 群资料按钮 */}
+            {selectedRoom && (
+              <button
+                onClick={() => navigate(`/group/${selectedRoom._id}`)}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+                title="群资料"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 消息列表 */}

@@ -158,6 +158,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
             >
               <div className="relative">
                 {item.icon}
+                {/* ✅ 修复：只有未读消息大于0时才显示红点 */}
                 {item.name === '聊天' && unreadCount > 0 && !isActive(item.path) && (
                   <span className="absolute -top-1 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md">
                     {unreadCount > 99 ? '99+' : unreadCount}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -42,7 +42,35 @@ const GroupDetail = () => {
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
   const [currentUserTitle, setCurrentUserTitle] = useState<string>('');
+  const [pendingCount, setPendingCount] = useState(0);
   const currentUser = auth.currentUser;
+
+  const isOwner = currentUserRole === 'owner';
+  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'owner';
+
+  // 获取待审核数量
+  const fetchPendingCount = useCallback(async () => {
+    if (!roomId || (!isAdmin && !isOwner)) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/pending`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPendingCount(Array.isArray(data) ? data.length : 0);
+    } catch (error) {
+      console.error('获取待审核数量失败:', error);
+    }
+  }, [roomId, isAdmin, isOwner]);
+
+  useEffect(() => {
+    if (roomId && (isAdmin || isOwner)) {
+      fetchPendingCount();
+      const interval = setInterval(fetchPendingCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [roomId, isAdmin, isOwner, fetchPendingCount]);
 
   useEffect(() => {
     loadRoomData();
@@ -141,18 +169,42 @@ const GroupDetail = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
             群资料
           </h1>
-          {/* 右上角三个点 - 进入管理页面 */}
-          <button
-            onClick={() => navigate(`/group/${roomId}/settings`)}
-            className="p-2 hover:bg-gray-100 rounded-full transition"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-            </svg>
-          </button>
+          
+          {/* 右上角按钮组 */}
+          <div className="flex items-center gap-2">
+            {/* 待审核按钮 - 仅群主/管理员可见 */}
+            {(isOwner || isAdmin) && (
+              <button
+                onClick={() => navigate(`/room/${roomId}/pending`)}
+                className="p-2 hover:bg-gray-100 rounded-full transition relative"
+                title="待审核申请"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {pendingCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
+            )}
+            
+            {/* 群管理按钮 - 仅群主/管理员可见 */}
+            {(isOwner || isAdmin) && (
+              <button
+                onClick={() => navigate(`/group/${roomId}/settings`)}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+                title="群管理"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -160,13 +212,13 @@ const GroupDetail = () => {
         {/* 群头像和名称 */}
         <div className="bg-white rounded-2xl shadow p-5">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-3xl shadow-lg">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-3xl shadow-lg">
               {room?.name?.charAt(0) || '?'}
             </div>
             <div className="flex-1">
               <h2 className="text-2xl font-bold text-gray-800">{room?.name}</h2>
               <p className="text-sm text-gray-500 mt-1">创建于 {new Date(room?.createdAt || '').toLocaleDateString()}</p>
-              <p className="text-xs text-emerald-600 mt-1">{members.length} 位成员</p>
+              <p className="text-xs text-blue-600 mt-1">{members.length} 位成员</p>
             </div>
           </div>
         </div>
@@ -207,7 +259,7 @@ const GroupDetail = () => {
             {members.length > 5 && !showAllMembers && (
               <button
                 onClick={() => setShowAllMembers(true)}
-                className="text-sm text-emerald-600 hover:text-emerald-700"
+                className="text-sm text-blue-600 hover:text-blue-700"
               >
                 查看全部 ({members.length})
               </button>
