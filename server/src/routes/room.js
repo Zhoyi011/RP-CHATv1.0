@@ -116,7 +116,7 @@ router.get('/list', authMiddleware, async (req, res) => {
 // ========== 具体路由 ==========
 
 // 获取用户所有房间的未读消息总数
-router/get('/unread-total', authMiddleware, async (req, res) => {
+router.get('/unread-total', authMiddleware, async (req, res) => {
   try {
     const rooms = await Room.find({ 'members.userId': req.userId });
     let totalUnread = 0;
