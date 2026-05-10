@@ -6,7 +6,6 @@ import ChatHome from './components/chat/ChatHome'
 import PersonaManager from './components/persona/PersonaManager'
 import PersonaCreate from './components/persona/PersonaCreate'
 import PersonaDetail from './components/persona/PersonaDetail'
-//import Wallet from './components/wallet/Wallet'
 import Profile from './components/profile/Profile'
 import Changelog from './components/common/Changelog'
 import SearchPage from './components/common/SearchPage'
@@ -14,7 +13,9 @@ import JoinRoom from './components/chat/JoinRoom'
 import PendingRequests from './components/chat/PendingRequests'
 import RoomMembers from './components/chat/RoomMembers'
 import RoomSettings from './components/chat/RoomSettings'
-// ✅ 导入法律条款页面
+// ✅ 导入群详情页
+import GroupDetail from './components/chat/GroupDetail'
+import GroupSettings from './components/chat/GroupSettings'
 import TermsOfService from './components/legal/TermsOfService'
 import PrivacyPolicy from './components/legal/PrivacyPolicy'
 
@@ -36,7 +37,9 @@ function App() {
         <Route path="/room/:roomId/pending" element={<PendingRequests />} />
         <Route path="/room/:roomId/members" element={<RoomMembers />} />
         <Route path="/room/:roomId/settings" element={<RoomSettings />} />
-        {/* ✅ 添加法律条款路由 */}
+        {/* ✅ 添加群详情页路由 */}
+        <Route path="/group/:roomId" element={<GroupDetail />} />
+        <Route path="/group/:roomId/settings" element={<GroupSettings />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="*" element={<div className="p-8 text-center">404 - 页面不存在</div>} />

@@ -43,7 +43,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '房间名称至少需要2个字符' });
     }
     
-    // 获取用户当前使用的角色
+    // ✅ 获取用户当前使用的角色
     const activePersona = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
     const personaId = activePersona?.personaId?._id || null;
     
