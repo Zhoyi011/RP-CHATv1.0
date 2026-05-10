@@ -84,6 +84,7 @@ const changelogRoutes = require('./routes/changelog');
 const searchRoutes = require('./routes/search');
 const voiceRoutes = require('./routes/voice');
 const diamondRoutes = require('./routes/diamond');
+const translateRoutes = require('./routes/translate');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/persona', personaRoutes);
@@ -93,6 +94,8 @@ app.use('/api/changelog', changelogRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/voice', voiceRoutes);
 app.use('/api/diamond', diamondRoutes);
+app.use('/api/translate', translateRoutes);
+
 // ===== 404 =====
 app.use((req, res) => {
   res.status(404).json({ error: '接口不存在' });

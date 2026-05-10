@@ -34,7 +34,7 @@ const adminMiddleware = (req, res, next) => {
 
 // ========== 聊天室路由 ==========
 
-// 创建聊天室 ✅ 修复：添加群主角色关联
+// 创建聊天室
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -43,7 +43,6 @@ router.post('/create', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '房间名称至少需要2个字符' });
     }
     
-    // ✅ 获取用户当前使用的角色
     const activePersona = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
     const personaId = activePersona?.personaId?._id || null;
     
@@ -61,7 +60,6 @@ router.post('/create', authMiddleware, async (req, res) => {
     
     await room.save();
     
-    // 获取完整的成员信息用于返回
     const populatedRoom = await Room.findById(room._id)
       .populate('members.userId', 'username email avatar')
       .populate('members.personaId', 'name avatar displayName');
@@ -115,10 +113,10 @@ router.get('/list', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 具体路由（必须在动态路由之前） ==========
+// ========== 具体路由 ==========
 
 // 获取用户所有房间的未读消息总数
-router.get('/unread-total', authMiddleware, async (req, res) => {
+router/get('/unread-total', authMiddleware, async (req, res) => {
   try {
     const rooms = await Room.find({ 'members.userId': req.userId });
     let totalUnread = 0;
@@ -199,7 +197,7 @@ router.post('/active-persona', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 动态路由（带参数的放在后面） ==========
+// ========== 动态路由 ==========
 
 // 获取聊天室详情
 router.get('/:roomId', authMiddleware, async (req, res) => {
@@ -277,7 +275,7 @@ router.post('/:roomId/mark-read', authMiddleware, async (req, res) => {
   }
 });
 
-// 申请加入群组 ✅ 修复：确保有角色
+// ✅ 申请加入群组
 router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   try {
     const { personaId, message } = req.body;
@@ -299,7 +297,6 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '已有待审核申请' });
     }
     
-    // 如果没传角色，使用当前激活的角色
     let finalPersonaId = personaId;
     if (!finalPersonaId) {
       const activePersona = await ActivePersona.findOne({ userId: req.userId });
@@ -322,7 +319,30 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   }
 });
 
-// 审核加入申请 ✅ 修复：确保成员有角色
+// ✅ 获取待审核列表
+router.get('/:roomId/pending', authMiddleware, async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.roomId)
+      .populate('pendingMembers.userId', 'username email avatar')
+      .populate('pendingMembers.personaId', 'name avatar displayName');
+    
+    if (!room) {
+      return res.status(404).json({ error: '聊天室不存在' });
+    }
+    
+    if (!room.isAdmin(req.userId)) {
+      return res.status(403).json({ error: '没有权限' });
+    }
+    
+    res.json(room.pendingMembers);
+    
+  } catch (error) {
+    console.error('获取待审核列表失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ✅ 审核加入申请
 router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   try {
     const { userId, approve, rejectReason } = req.body;
@@ -342,7 +362,6 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
     }
     
     if (approve) {
-      // 使用申请时选择的角色，如果没有则使用当前激活的角色
       let personaId = pending.personaId;
       if (!personaId) {
         const activePersona = await ActivePersona.findOne({ userId: pending.userId });
@@ -456,7 +475,6 @@ router.post('/:roomId/leave', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '你不是该群成员' });
     }
     
-    // 如果是群主
     if (room.members[memberIndex].role === 'owner') {
       if (room.members.length === 1) {
         await Room.findByIdAndDelete(req.params.roomId);
@@ -540,7 +558,7 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取群成员列表（任何人都可以查看）
+// 获取群成员列表
 router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
@@ -558,32 +576,8 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取待审核列表
-router.get('/:roomId/pending', authMiddleware, async (req, res) => {
-  try {
-    const room = await Room.findById(req.params.roomId)
-      .populate('pendingMembers.userId', 'username email avatar')
-      .populate('pendingMembers.personaId', 'name avatar');
-    
-    if (!room) {
-      return res.status(404).json({ error: '聊天室不存在' });
-    }
-    
-    if (!room.isAdmin(req.userId)) {
-      return res.status(403).json({ error: '没有权限' });
-    }
-    
-    res.json(room.pendingMembers);
-    
-  } catch (error) {
-    console.error('获取待审核列表失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
 // ========== 管理员路由 ==========
 
-// 管理员：获取所有房间（包括已禁用的）
 router.get('/admin/all', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const rooms = await Room.find()
@@ -597,7 +591,6 @@ router.get('/admin/all', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// 管理员：更新房间状态（禁用/启用）
 router.put('/admin/:roomId/status', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { isActive } = req.body;
@@ -622,7 +615,6 @@ router.put('/admin/:roomId/status', authMiddleware, adminMiddleware, async (req,
   }
 });
 
-// 管理员：删除房间（谨慎使用）
 router.delete('/admin/:roomId', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     await Message.deleteMany({ roomId: req.params.roomId });

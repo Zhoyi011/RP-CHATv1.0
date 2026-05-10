@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import EmojiPicker from '../common/EmojiPicker';
+import { smartConvert, type TranslateMode } from '../../services/translateApi';
 
 interface ChatInputProps {
   onSendMessage: (content: string, isAction: boolean) => void;
@@ -14,8 +15,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [translateMode, setTranslateMode] = useState<TranslateMode>('smart');
+  const [isTranslating, setIsTranslating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const emojiContainerRef = useRef<HTMLDivElement>(null);  // 改成 HTMLDivElement
+  const emojiContainerRef = useRef<HTMLDivElement>(null);
 
   // 修复手机键盘问题
   useEffect(() => {
@@ -48,6 +51,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 翻译输入框内容
+  const handleTranslate = async () => {
+    if (!inputValue.trim() || isTranslating) return;
+    
+    setIsTranslating(true);
+    try {
+      const translated = await smartConvert(inputValue);
+      setInputValue(translated);
+      // 切换模式（循环：smart → s2t → t2s）
+      const modes: TranslateMode[] = ['smart', 's2t', 't2s'];
+      const currentIndex = modes.indexOf(translateMode);
+      setTranslateMode(modes[(currentIndex + 1) % modes.length]);
+    } catch (error) {
+      console.error('翻译失败:', error);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   const handleSend = () => {
     if (!inputValue.trim() || disabled) return;
     
@@ -70,15 +92,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
     inputRef.current?.focus();
   };
 
+  const getTranslateButtonLabel = () => {
+    const labels: Record<TranslateMode, string> = {
+      'smart': '简⇄繁',
+      's2t': '简→繁',
+      't2s': '繁→简'
+    };
+    return labels[translateMode];
+  };
+
   return (
     <div className="bg-white border-t border-gray-200 px-4 py-3 flex-shrink-0 relative">
       <div className="flex items-center gap-2">
-        {/* 表情按钮容器 */}
+        {/* 表情按钮 */}
         <div className="relative" ref={emojiContainerRef}>
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 flex-shrink-0"
+            title="表情"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -92,6 +124,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </div>
 
+        {/* ✅ 翻译按钮 */}
+        <button
+          type="button"
+          onClick={handleTranslate}
+          disabled={!inputValue.trim() || isTranslating}
+          className={`px-2 py-1.5 rounded-full text-xs font-medium transition flex-shrink-0 ${
+            !inputValue.trim() || isTranslating
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-blue-500 hover:text-blue-600 hover:bg-blue-50'
+          }`}
+          title={`转换 (${getTranslateButtonLabel()})`}
+        >
+          {isTranslating ? (
+            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          ) : (
+            <span>{getTranslateButtonLabel()}</span>
+          )}
+        </button>
+
+        {/* 输入框 */}
         <input 
           ref={inputRef}
           type="text" 
@@ -99,13 +153,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
           onChange={(e) => setInputValue(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={placeholder}
-          className="flex-1 bg-gray-100 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="flex-1 bg-gray-100 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           disabled={disabled}
         />
+        
+        {/* 发送按钮 */}
         <button 
           onClick={handleSend}
           disabled={disabled || !inputValue.trim()}
-          className="bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-green-600 transition flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:from-blue-600 hover:to-cyan-600 transition flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
         >
           发送
         </button>

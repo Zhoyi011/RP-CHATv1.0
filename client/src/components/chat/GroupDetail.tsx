@@ -127,7 +127,6 @@ const GroupDetail = () => {
     return null;
   };
 
-  // 获取显示名称（优先使用角色名，否则使用用户名）
   const getDisplayName = (member: Member) => {
     if (member.personaId?.name) {
       return member.personaId.name;
@@ -135,17 +134,14 @@ const GroupDetail = () => {
     return member.userId?.username || '未知用户';
   };
 
-  // 获取头像首字母
   const getAvatarChar = (member: Member) => {
     const name = getDisplayName(member);
     return name.charAt(0).toUpperCase();
   };
 
-  // 分离群主、管理员、普通成员
   const owners = members.filter(m => m.role === 'owner');
   const admins = members.filter(m => m.role === 'admin');
   const normalMembers = members.filter(m => m.role === 'member');
-  
   const displayedMembers = showAllMembers ? members : members.slice(0, 5);
 
   if (loading) {
@@ -175,7 +171,7 @@ const GroupDetail = () => {
           
           {/* 右上角按钮组 */}
           <div className="flex items-center gap-2">
-            {/* 待审核按钮 - 仅群主/管理员可见 */}
+            {/* ✅ 待审核按钮 - 仅群主/管理员可见 */}
             {(isOwner || isAdmin) && (
               <button
                 onClick={() => navigate(`/room/${roomId}/pending`)}
@@ -199,8 +195,7 @@ const GroupDetail = () => {
                 title="群管理"
               >
                 <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                 </svg>
               </button>
             )}
@@ -275,7 +270,6 @@ const GroupDetail = () => {
           </div>
           
           <div className="space-y-3">
-            {/* 群主 */}
             {owners.map(member => {
               const displayName = getDisplayName(member);
               const avatarChar = getAvatarChar(member);
@@ -291,16 +285,12 @@ const GroupDetail = () => {
                       {getRoleBadge(member.role)}
                     </div>
                     {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
-                    {!member.personaId && (
-                      <p className="text-xs text-amber-500">未选择角色</p>
-                    )}
                   </div>
                   <span className="text-lg">{getRoleIcon(member.role)}</span>
                 </div>
               );
             })}
             
-            {/* 管理员 */}
             {admins.map(member => {
               const displayName = getDisplayName(member);
               const avatarChar = getAvatarChar(member);
@@ -316,16 +306,12 @@ const GroupDetail = () => {
                       {getRoleBadge(member.role)}
                     </div>
                     {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
-                    {!member.personaId && (
-                      <p className="text-xs text-amber-500">未选择角色</p>
-                    )}
                   </div>
                   <span className="text-lg">{getRoleIcon(member.role)}</span>
                 </div>
               );
             })}
             
-            {/* 普通成员 */}
             {(showAllMembers ? normalMembers : normalMembers.slice(0, 5)).map(member => {
               const displayName = getDisplayName(member);
               const avatarChar = getAvatarChar(member);
@@ -338,9 +324,6 @@ const GroupDetail = () => {
                   <div className="flex-1">
                     <span className="font-medium text-gray-800">{displayName}</span>
                     {member.title && <p className="text-xs text-gray-400">{member.title}</p>}
-                    {!member.personaId && (
-                      <p className="text-xs text-amber-500">未选择角色</p>
-                    )}
                   </div>
                 </div>
               );

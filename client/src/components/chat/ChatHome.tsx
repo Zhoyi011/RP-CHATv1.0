@@ -22,6 +22,7 @@ import {
 } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
+import { smartConvert } from '../../services/translateApi';
 
 // ========== 消息列表组件 ==========
 const MessageList: React.FC<{
@@ -32,10 +33,26 @@ const MessageList: React.FC<{
   navigate: (path: string) => void;
 }> = ({ messages, user, selectedPersona, isMobile, navigate }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [translatingMsgId, setTranslatingMsgId] = useState<string | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleTranslate = async (msg: Message) => {
+    if (translatingMsgId === msg._id) return;
+    
+    setTranslatingMsgId(msg._id);
+    try {
+      const translated = await smartConvert(msg.content);
+      alert(`📝 翻译结果：\n\n原文：${msg.content}\n\n译文：${translated}`);
+    } catch (error) {
+      console.error('翻译失败:', error);
+      alert('翻译失败，请稍后重试');
+    } finally {
+      setTranslatingMsgId(null);
+    }
+  };
 
   if (messages.length === 0) {
     return (
@@ -48,6 +65,7 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
+        // 系统消息
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -58,6 +76,7 @@ const MessageList: React.FC<{
           );
         }
         
+        // 动作消息 (/me)
         if (msg.isAction) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -72,7 +91,7 @@ const MessageList: React.FC<{
         const urls = extractUrls(msg.content);
         
         return (
-          <div key={msg._id} className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
+          <div key={msg._id} className={`group flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
             {!isSelf && (
               <div 
                 onClick={() => {
@@ -107,7 +126,7 @@ const MessageList: React.FC<{
                     {new Date(msg.createdAt).toLocaleTimeString()}
                   </span>
                 )}
-                <div className={`px-4 py-2 rounded-2xl max-w-full ${
+                <div className={`px-4 py-2 rounded-2xl max-w-full relative ${
                   isSelf 
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
                     : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
@@ -179,6 +198,26 @@ const MessageList: React.FC<{
                 {selectedPersona?.name?.charAt(0) || 'M'}
               </div>
             )}
+
+            {/* ✅ 翻译按钮 - 非自己发送的消息显示 */}
+            {!isSelf && (
+              <button
+                onClick={() => handleTranslate(msg)}
+                disabled={translatingMsgId === msg._id}
+                className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                title="简繁转换"
+              >
+                {translatingMsgId === msg._id ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
         );
       })}
@@ -208,6 +247,7 @@ const ChatHome = () => {
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [showRoomMenu, setShowRoomMenu] = useState(false);
 
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -559,6 +599,39 @@ const ChatHome = () => {
     setSelectedUser(null);
   }, []);
 
+  // ========== 退出群聊 ==========
+  const handleLeaveRoom = async () => {
+    if (!selectedRoom) return;
+    if (!confirm('确定要退出该群聊吗？')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${selectedRoom._id}/leave`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || '已退出群聊');
+        window.location.reload();
+      } else {
+        alert(data.error || '退出失败');
+      }
+    } catch (error) {
+      console.error('退出失败:', error);
+      alert('退出失败，请重试');
+    }
+  };
+
+  // ========== 举报群组 ==========
+  const handleReport = () => {
+    alert('举报功能开发中，请通过邮件联系我们：support@rp-chat.com');
+  };
+
   // ========== 渲染加载状态 ==========
   if (!authChecked) {
     return (
@@ -714,7 +787,6 @@ const ChatHome = () => {
                       <div className="flex justify-between items-baseline">
                         <div className="flex items-center gap-2">
                           <h3 className="font-medium text-gray-800 truncate">{room.name}</h3>
-                          {/* ✅ 修复：只有大于0才显示未读数字 */}
                           {room.unreadCount > 0 && (
                             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                               {room.unreadCount}
@@ -791,9 +863,9 @@ const ChatHome = () => {
             </div>
           </div>
           
-          {/* 右上角按钮组 */}
+          {/* ✅ 右上角按钮组 */}
           <div className="flex items-center gap-1">
-            {/* 待审核按钮 - 仅群主/管理员可见 */}
+            {/* 待审核按钮 */}
             {selectedRoom && (isRoomAdmin || isRoomOwner) && (
               <button
                 onClick={() => navigate(`/room/${selectedRoom._id}/pending`)}
@@ -809,17 +881,91 @@ const ChatHome = () => {
               </button>
             )}
             
-            {/* 群资料按钮 */}
+            {/* 三个点菜单 */}
             {selectedRoom && (
-              <button
-                onClick={() => navigate(`/group/${selectedRoom._id}`)}
-                className="p-2 hover:bg-gray-100 rounded-full transition"
-                title="群资料"
-              >
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                </svg>
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowRoomMenu(!showRoomMenu)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition"
+                  title="群菜单"
+                >
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                  </svg>
+                </button>
+                
+                {showRoomMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-20">
+                    <button
+                      onClick={() => {
+                        navigate(`/group/${selectedRoom._id}`);
+                        setShowRoomMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      群资料
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        navigate(`/room/${selectedRoom._id}/members`);
+                        setShowRoomMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                      成员列表
+                    </button>
+                    
+                    {(isRoomAdmin || isRoomOwner) && (
+                      <button
+                        onClick={() => {
+                          navigate(`/group/${selectedRoom._id}/settings`);
+                          setShowRoomMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        群管理
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={() => {
+                        handleReport();
+                        setShowRoomMenu(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      举报群组
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowRoomMenu(false);
+                        handleLeaveRoom();
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      退出群聊
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

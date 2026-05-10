@@ -13,7 +13,6 @@ import JoinRoom from './components/chat/JoinRoom'
 import PendingRequests from './components/chat/PendingRequests'
 import RoomMembers from './components/chat/RoomMembers'
 import RoomSettings from './components/chat/RoomSettings'
-// ✅ 导入群详情页
 import GroupDetail from './components/chat/GroupDetail'
 import GroupSettings from './components/chat/GroupSettings'
 import TermsOfService from './components/legal/TermsOfService'
@@ -30,6 +29,7 @@ function App() {
         <Route path="/persona" element={<PersonaManager />} />
         <Route path="/persona/create" element={<PersonaCreate />} />
         <Route path="/persona/:personaId" element={<PersonaDetail />} />
+        {/* <Route path="/wallet" element={<Wallet />} /> 已删除 */}
         <Route path="/profile" element={<Profile />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/search" element={<SearchPage />} />
@@ -37,7 +37,6 @@ function App() {
         <Route path="/room/:roomId/pending" element={<PendingRequests />} />
         <Route path="/room/:roomId/members" element={<RoomMembers />} />
         <Route path="/room/:roomId/settings" element={<RoomSettings />} />
-        {/* ✅ 添加群详情页路由 */}
         <Route path="/group/:roomId" element={<GroupDetail />} />
         <Route path="/group/:roomId/settings" element={<GroupSettings />} />
         <Route path="/terms" element={<TermsOfService />} />
