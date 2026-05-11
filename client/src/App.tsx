@@ -17,6 +17,7 @@ import GroupDetail from './components/chat/GroupDetail'
 import GroupSettings from './components/chat/GroupSettings'
 import TermsOfService from './components/legal/TermsOfService'
 import PrivacyPolicy from './components/legal/PrivacyPolicy'
+import Settings from './components/settings/Settings';
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
         <Route path="/group/:roomId/settings" element={<GroupSettings />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<div className="p-8 text-center">404 - 页面不存在</div>} />
       </Routes>
     </BrowserRouter>
