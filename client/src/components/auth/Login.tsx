@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   signInWithPopup,
@@ -12,15 +12,53 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.
 const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // ========== 自动检测登录状态 ==========
+  useEffect(() => {
+    const checkExistingAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setCheckingAuth(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          if (userData.hasAccess) {
+            navigate('/chat', { replace: true });
+            return;
+          } else {
+            navigate('/invite', { replace: true });
+            return;
+          }
+        } else {
+          localStorage.removeItem('token');
+        }
+      } catch (err) {
+        console.error('检查登录状态失败:', err);
+      }
+      
+      setCheckingAuth(false);
+    };
+
+    checkExistingAuth();
+  }, [navigate]);
+
+  // ========== Google 登录 ==========
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
     
     try {
       const provider = new GoogleAuthProvider();
-      // 添加自定义参数，强制选择账号
       provider.setCustomParameters({ prompt: 'select_account' });
       
       const result = await signInWithPopup(auth, provider);
@@ -44,7 +82,7 @@ const Login = () => {
         setError(data.error || '登录失败');
       }
     } catch (err: any) {
-      console.error('Firebase 登录失败详情:', err);
+      console.error('Firebase 登录失败:', err);
       if (err.code === 'auth/popup-blocked') {
         setError('登录窗口被拦截，请允许弹窗或重试');
       } else if (err.code === 'auth/cancelled-popup-request') {
@@ -59,6 +97,7 @@ const Login = () => {
     }
   };
 
+  // ========== Apple 登录 ==========
   const handleAppleLogin = async () => {
     setLoading(true);
     setError('');
@@ -86,7 +125,7 @@ const Login = () => {
         setError(data.error || '登录失败');
       }
     } catch (err: any) {
-      console.error('Apple 登录失败详情:', err);
+      console.error('Apple 登录失败:', err);
       if (err.code === 'auth/popup-blocked') {
         setError('登录窗口被拦截，请允许弹窗或重试');
       } else if (err.code === 'auth/cancelled-popup-request') {
@@ -99,45 +138,100 @@ const Login = () => {
     }
   };
 
+  // ========== 加载状态 ==========
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
+        <div className="text-center animate-in fade-in duration-500">
+          <img 
+            src="/favicon.svg" 
+            alt="RP Chat" 
+            className="w-20 h-20 mx-auto mb-4 animate-pulse"
+          />
+          <p className="text-white/60 text-lg">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ========== 登录页面 ==========
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* 背景装饰 - 漂浮的光晕 */}
+      {/* ===== 背景装饰 - 漂浮光晕 ===== */}
       <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
       <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
       <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
       
-      {/* 主卡片 */}
-      <div className="relative bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md border border-white/20">
+      {/* ===== 星星粒子 ===== */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-white rounded-full animate-twinkle"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 3}s`,
+              animationDuration: `${2 + Math.random() * 3}s`,
+              opacity: 0.2 + Math.random() * 0.3,
+            }}
+          />
+        ))}
+      </div>
+      
+      {/* ===== 主卡片 ===== */}
+      <div className="relative bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md border border-white/20 animate-in zoom-in-95 fade-in duration-500">
         {/* 顶部装饰条 */}
         <div className="h-2 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 rounded-t-3xl"></div>
         
         <div className="p-8">
-          {/* Logo 和标题 */}
+          {/* ===== Logo 和标题 ===== */}
           <div className="text-center mb-8">
-            <div className="inline-block p-4 bg-white/20 rounded-2xl backdrop-blur-sm mb-4 border border-white/30">
-              <svg className="w-16 h-16 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
+            <div className="inline-block p-4 bg-white/20 rounded-2xl backdrop-blur-sm mb-4 border border-white/30 
+              hover:scale-105 transition-transform duration-300 hover:bg-white/30">
+              <img 
+                src="/favicon.svg" 
+                alt="RP Chat" 
+                className="w-16 h-16 drop-shadow-lg"
+              />
             </div>
-            <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">RP Chat</h1>
-            <p className="text-white/80 text-sm">角色扮演聊天室 · 开启你的第二人生</p>
+            <h1 className="text-4xl font-bold text-white mb-2 tracking-tight animate-in slide-in-from-bottom-4 fade-in duration-500">
+              RP Chat
+            </h1>
+            <p className="text-white/80 text-sm animate-in slide-in-from-bottom-4 fade-in duration-500 delay-150">
+              角色扮演聊天室 · 开启你的第二人生
+            </p>
           </div>
 
-          {/* 错误提示 */}
+          {/* ===== 错误提示 ===== */}
           {error && (
-            <div className="mb-6 p-4 bg-red-500/20 backdrop-blur-sm border border-red-500/30 text-white rounded-xl text-sm">
-              {error}
+            <div className="mb-6 p-4 bg-red-500/20 backdrop-blur-sm border border-red-500/30 text-white rounded-xl text-sm animate-in slide-in-from-top-2 fade-in duration-300">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{error}</span>
+              </div>
             </div>
           )}
 
-          {/* 登录按钮组 */}
+          {/* ===== 登录按钮组 ===== */}
           <div className="space-y-3">
+            {/* Google 登录按钮 */}
             <button
               onClick={handleGoogleLogin}
               disabled={loading}
-              className="w-full bg-white hover:bg-gray-50 text-gray-800 py-3.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              onMouseEnter={() => setHoveredButton('google')}
+              onMouseLeave={() => setHoveredButton(null)}
+              className="w-full bg-white hover:bg-gray-50 text-gray-800 py-3.5 rounded-xl font-medium 
+                transition-all duration-300 flex items-center justify-center gap-3 shadow-lg 
+                disabled:opacity-50 disabled:cursor-not-allowed
+                hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]
+                animate-in slide-in-from-right-4 fade-in duration-500 delay-200"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 transition-transform duration-300" 
+                style={{ transform: hoveredButton === 'google' ? 'rotate(-10deg) scale(1.1)' : 'rotate(0deg)' }}
+                viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -146,49 +240,56 @@ const Login = () => {
               <span>继续使用 Google</span>
             </button>
 
+            {/* Apple 登录按钮 */}
             <button
               onClick={handleAppleLogin}
               disabled={loading}
-              className="w-full bg-black hover:bg-gray-900 text-white py-3.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              onMouseEnter={() => setHoveredButton('apple')}
+              onMouseLeave={() => setHoveredButton(null)}
+              className="w-full bg-black hover:bg-gray-900 text-white py-3.5 rounded-xl font-medium 
+                transition-all duration-300 flex items-center justify-center gap-3 shadow-lg 
+                disabled:opacity-50 disabled:cursor-not-allowed
+                hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]
+                animate-in slide-in-from-left-4 fade-in duration-500 delay-300"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 transition-transform duration-300" 
+                style={{ transform: hoveredButton === 'apple' ? 'rotate(-10deg) scale(1.1)' : 'rotate(0deg)' }}
+                fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.56-1.702z"/>
               </svg>
               <span>继续使用 Apple</span>
             </button>
           </div>
 
-{/* 装饰性文字 */}
-<div className="mt-8 text-center">
-  <p className="text-white/60 text-xs">
-    继续即表示你同意我们的
-    <a 
-      href="/terms" 
-      className="text-white/90 hover:text-white underline mx-1"
-      onClick={(e) => {
-        e.preventDefault();
-        navigate('/terms');
-      }}
-    >
-      服务条款
-    </a>
-    和
-    <a 
-      href="/privacy" 
-      className="text-white/90 hover:text-white underline mx-1"
-      onClick={(e) => {
-        e.preventDefault();
-        navigate('/privacy');
-      }}
-    >
-      隐私政策
-    </a>
-  </p>
-</div>
+          {/* ===== 装饰性文字 ===== */}
+          <div className="mt-8 text-center animate-in fade-in duration-500 delay-500">
+            <p className="text-white/60 text-xs">
+              继续即表示你同意我们的
+              <span 
+                className="text-white/90 hover:text-white underline mx-1 cursor-pointer hover:no-underline transition-all"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/terms');
+                }}
+              >
+                服务条款
+              </span>
+              和
+              <span 
+                className="text-white/90 hover:text-white underline mx-1 cursor-pointer hover:no-underline transition-all"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/privacy');
+                }}
+              >
+                隐私政策
+              </span>
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* 添加动画关键帧 */}
+      {/* ===== 动画关键帧 ===== */}
       <style>{`
         @keyframes blob {
           0% { transform: translate(0px, 0px) scale(1); }
@@ -196,8 +297,15 @@ const Login = () => {
           66% { transform: translate(-20px, 20px) scale(0.9); }
           100% { transform: translate(0px, 0px) scale(1); }
         }
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.2; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.5); }
+        }
         .animate-blob {
           animation: blob 7s infinite;
+        }
+        .animate-twinkle {
+          animation: twinkle 3s ease-in-out infinite;
         }
         .animation-delay-2000 {
           animation-delay: 2s;
