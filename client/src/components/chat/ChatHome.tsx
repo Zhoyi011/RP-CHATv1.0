@@ -10,6 +10,7 @@ import CreateRoom from './CreateRoom';
 import PrivateChat from './PrivateChat';
 import UserList from '../user/UserList';
 import ChatInput from './ChatInput';
+import LinkPreviewContainer from './LinkPreviewContainer';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
 import { 
@@ -68,6 +69,7 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
+        // 系统消息
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -78,6 +80,7 @@ const MessageList: React.FC<{
           );
         }
         
+        // 动作消息
         if (msg.isAction) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -93,6 +96,7 @@ const MessageList: React.FC<{
         
         return (
           <div key={msg._id} className={`group flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
+            {/* 对方头像 */}
             {!isSelf && (
               <div 
                 onClick={() => {
@@ -100,13 +104,14 @@ const MessageList: React.FC<{
                     navigate(`/persona/${msg.personaId._id}`);
                   }
                 }}
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-sm"
               >
                 {msg.personaId?.name?.charAt(0) || '?'}
               </div>
             )}
             
             <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
+              {/* 对方昵称 */}
               {!isSelf && (
                 <div 
                   onClick={() => {
@@ -121,72 +126,43 @@ const MessageList: React.FC<{
                   </span>
                 </div>
               )}
+              
               <div className="flex items-end gap-2">
+                {/* 时间戳（左侧） */}
                 {!isMobile && !isSelf && (
-                  <span className="text-xs text-gray-400">
-                    {new Date(msg.createdAt).toLocaleTimeString()}
+                  <span className="text-xs text-gray-400 flex-shrink-0">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
-                <div className={`px-4 py-2 rounded-2xl max-w-full relative ${
-                  isSelf 
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
-                    : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
-                }`}>
-                  <div className="break-words whitespace-pre-wrap">
-                    {msg.content}
-                  </div>
-                  
-                  {urls.length > 0 && (
-                    <div className="mt-1 space-y-1">
-                      {urls.map(url => {
-                        try {
-                          const domain = new URL(url).hostname.replace('www.', '');
-                          return (
-                            <a
-                              key={url}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`inline-block text-xs break-all ${
-                                isSelf ? 'text-white/80 hover:text-white' : 'text-blue-500 hover:underline'
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!confirm(`是否打开链接：${url}`)) {
-                                  e.preventDefault();
-                                }
-                              }}
-                            >
-                              🔗 {domain}
-                            </a>
-                          );
-                        } catch {
-                          return (
-                            <a
-                              key={url}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`inline-block text-xs break-all ${
-                                isSelf ? 'text-white/80 hover:text-white' : 'text-blue-500 hover:underline'
-                              }`}
-                            >
-                              🔗 链接
-                            </a>
-                          );
-                        }
-                      })}
+                
+                <div>
+                  {/* 消息气泡 */}
+                  <div className={`px-4 py-2 rounded-2xl max-w-full relative ${
+                    isSelf 
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
+                      : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
+                  }`}>
+                    <div className="break-words whitespace-pre-wrap">
+                      {msg.content}
                     </div>
-                  )}
+                    
+                    {/* 链接预览 */}
+                    {urls.length > 0 && (
+                      <LinkPreviewContainer urls={urls} isSelf={isSelf} />
+                    )}
+                  </div>
                 </div>
+                
+                {/* 时间戳（右侧） */}
                 {isSelf && (
-                  <span className="text-xs text-gray-400">
-                    {new Date(msg.createdAt).toLocaleTimeString()}
+                  <span className="text-xs text-gray-400 flex-shrink-0">
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
               </div>
             </div>
 
+            {/* 自己的头像 */}
             {isSelf && (
               <div 
                 onClick={() => {
@@ -200,12 +176,12 @@ const MessageList: React.FC<{
               </div>
             )}
 
-            {/* 翻译按钮 */}
+            {/* 翻译按钮（对方消息） */}
             {!isSelf && (
               <button
                 onClick={() => handleTranslate(msg.content, msg._id)}
                 disabled={translatingMsgId === msg._id}
-                className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50"
+                className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex-shrink-0"
                 title="简繁转换"
               >
                 {translatingMsgId === msg._id ? (
@@ -233,9 +209,10 @@ const ChatHome = () => {
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const { isMobile, isTablet, isDesktop } = useResponsive();
+  
+  // ========== 状态 ==========
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState<any>(null);
-  
   const [rooms, setRooms] = useState<Room[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -250,12 +227,11 @@ const ChatHome = () => {
   const [isRoomOwner, setIsRoomOwner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [showRoomMenu, setShowRoomMenu] = useState(false);
-
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
 
-  // 获取待审核数量
+  // ========== 获取待审核数量 ==========
   const fetchPendingCount = useCallback(async () => {
     if (!selectedRoom || (!isRoomAdmin && !isRoomOwner)) return;
     
@@ -271,6 +247,7 @@ const ChatHome = () => {
     }
   }, [selectedRoom, isRoomAdmin, isRoomOwner]);
 
+  // 定时刷新待审核数量
   useEffect(() => {
     if (selectedRoom && (isRoomAdmin || isRoomOwner)) {
       fetchPendingCount();
@@ -282,22 +259,22 @@ const ChatHome = () => {
   // ========== 认证检查 ==========
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      console.log('Auth state changed:', firebaseUser?.email);
-      
       if (!firebaseUser) {
         navigate('/');
-      } else {
-        setUser(firebaseUser);
-        setAuthChecked(true);
-        
-        try {
-          const token = localStorage.getItem('token');
-          if (token) {
-            await authApi.getCurrentUser();
-          }
-        } catch (err) {
-          console.error('Token 验证失败:', err);
+        return;
+      }
+      
+      setUser(firebaseUser);
+      setAuthChecked(true);
+      
+      // 验证 token
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          await authApi.getCurrentUser();
         }
+      } catch (err) {
+        console.error('Token 验证失败:', err);
       }
     });
 
@@ -311,29 +288,28 @@ const ChatHome = () => {
     const loadData = async () => {
       try {
         setLoading(true);
-        
         const token = localStorage.getItem('token');
         
-        // 获取当前角色的房间列表
-        const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const roomsData = await roomsRes.json();
+        // 并行加载数据
+        const [roomsRes, personasData, activePersonaRes] = await Promise.all([
+          fetch(`${API_BASE}/room/my-rooms`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).then(res => res.json()),
+          personaApi.getMyPersonas(),
+          roomApi.getActivePersona()
+        ]);
         
-        setRooms(roomsData.rooms || []);
-        if (roomsData.currentPersona) {
-          setCurrentPersona(roomsData.currentPersona);
+        setRooms(roomsRes.rooms || []);
+        if (roomsRes.currentPersona) {
+          setCurrentPersona(roomsRes.currentPersona);
         }
         
-        // 获取我的所有角色
-        const personasData = await personaApi.getMyPersonas();
-        const approvedPersonas = personasData.filter(p => p.status === 'approved');
+        const approvedPersonas = personasData.filter((p: Persona) => p.status === 'approved');
         setPersonas(approvedPersonas);
         
-        // 获取当前激活的角色
-        const activePersona = await roomApi.getActivePersona();
-        if (activePersona.activePersona) {
-          setSelectedPersona(activePersona.activePersona.personaId);
+        // 设置当前选中角色
+        if (activePersonaRes.activePersona) {
+          setSelectedPersona(activePersonaRes.activePersona.personaId);
         } else if (approvedPersonas.length > 0) {
           setSelectedPersona(approvedPersonas[0]);
         }
@@ -363,7 +339,6 @@ const ChatHome = () => {
         });
         
         if (!response.ok) {
-          console.warn('获取成员列表失败:', response.status);
           setIsRoomAdmin(false);
           setIsRoomOwner(false);
           return;
@@ -373,17 +348,12 @@ const ChatHome = () => {
         setRoomMembers(members);
         
         // 通过当前角色 ID 判断权限
-        const currentMember = members.find((m: any) => m.personaId?._id === selectedPersona?._id);
+        const currentMember = members.find((m: any) => 
+          m.personaId?._id === selectedPersona?._id
+        );
         setIsRoomAdmin(currentMember?.role === 'admin' || currentMember?.role === 'owner');
         setIsRoomOwner(currentMember?.role === 'owner');
         
-        console.log('权限检查:', {
-          roomId: selectedRoom._id,
-          personaId: selectedPersona?._id,
-          role: currentMember?.role,
-          isAdmin: currentMember?.role === 'admin' || currentMember?.role === 'owner',
-          isOwner: currentMember?.role === 'owner'
-        });
       } catch (error) {
         console.error('加载成员权限失败:', error);
         setIsRoomAdmin(false);
@@ -399,23 +369,20 @@ const ChatHome = () => {
     if (!authChecked || !user) return;
     
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.log('No token found, skipping socket connection');
-      return;
-    }
+    if (!token) return;
 
-    console.log('🔌 Connecting socket...');
+    console.log('🔌 连接 Socket...');
     socketService.connect(token);
 
-    socketService.onNewMessage((message: Message) => {
-      console.log('📨 收到新消息:', message);
-      
+    // 新消息处理
+    const handleNewMessage = (message: Message) => {
+      // Toast 通知
       const isSelf = message.userId?.firebaseUid === user?.uid || message.userId?._id === user?.uid;
       
       if (!isSelf) {
         toast.custom((t) => (
           <div 
-            className={`bg-white rounded-xl shadow-lg p-3 flex items-center gap-3 transform transition-all ${
+            className={`bg-white rounded-xl shadow-lg p-3 flex items-center gap-3 transform transition-all cursor-pointer ${
               t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
             }`}
             onClick={() => toast.dismiss(t.id)}
@@ -423,9 +390,9 @@ const ChatHome = () => {
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold">
               {message.personaId?.name?.charAt(0) || '?'}
             </div>
-            <div className="flex-1">
-              <p className="font-medium text-sm">{message.personaId?.name}</p>
-              <p className="text-xs text-gray-500 truncate max-w-[200px]">{message.content}</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{message.personaId?.name}</p>
+              <p className="text-xs text-gray-500 truncate">{message.content}</p>
             </div>
           </div>
         ), {
@@ -436,26 +403,29 @@ const ChatHome = () => {
         notificationService.onNewMessage(message);
       }
 
+      // 更新消息列表（去重）
       setMessages(prev => {
         const exists = prev.some(m => m._id === message._id);
         if (exists) return prev;
         return [...prev, message];
       });
       
+      // 更新未读计数
       const messageRoomId = typeof message.roomId === 'string' 
         ? message.roomId 
         : message.roomId?._id;
       
-      if (selectedRoom && selectedRoom._id !== messageRoomId && messageRoomId) {
+      if (messageRoomId && selectedRoom && selectedRoom._id !== messageRoomId) {
         setRooms(prev => prev.map(room => 
           room._id === messageRoomId 
             ? { ...room, unreadCount: (room.unreadCount || 0) + 1 }
             : room
         ));
       }
-    });
+    };
 
-    socketService.onRoomOnlineCount((data) => {
+    // 在线人数更新
+    const handleOnlineCount = (data: { roomId: string; count: number }) => {
       setRooms(prevRooms => 
         prevRooms.map(room => 
           room._id === data.roomId 
@@ -463,22 +433,16 @@ const ChatHome = () => {
             : room
         )
       );
-    });
+    };
 
-    socketService.onUserJoined((data) => {
-      console.log('👤 用户加入:', data);
-    });
-
-    socketService.onUserLeft((data) => {
-      console.log('👋 用户离开:', data);
-    });
-
-    socketService.onPersonaSwitched((data) => {
-      console.log('🎭 角色切换:', data);
-    });
+    socketService.onNewMessage(handleNewMessage);
+    socketService.onRoomOnlineCount(handleOnlineCount);
+    socketService.onUserJoined((data) => console.log('👤 用户加入:', data));
+    socketService.onUserLeft((data) => console.log('👋 用户离开:', data));
+    socketService.onPersonaSwitched((data) => console.log('🎭 角色切换:', data));
 
     return () => {
-      console.log('🔌 Cleaning up socket listeners...');
+      console.log('🔌 清理 Socket 监听...');
       socketService.removeAllListeners();
       socketService.disconnect();
     };
@@ -490,7 +454,6 @@ const ChatHome = () => {
 
     const loadMessages = async () => {
       try {
-        console.log('📡 加载房间消息:', selectedRoom._id);
         const messagesData = await roomApi.getMessages(selectedRoom._id);
         
         if (Array.isArray(messagesData)) {
@@ -506,8 +469,8 @@ const ChatHome = () => {
         
         socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
         
-      } catch (err: any) {
-        console.error('❌ 加载消息失败:', err);
+      } catch (err) {
+        console.error('加载消息失败:', err);
       }
     };
 
@@ -521,7 +484,7 @@ const ChatHome = () => {
   // ========== 选择房间 ==========
   const handleSelectRoom = useCallback(async (room: Room) => {
     if (!selectedPersona) {
-      alert('请先选择一个角色');
+      toast.error('请先选择一个角色');
       return;
     }
     
@@ -563,22 +526,25 @@ const ChatHome = () => {
       setRooms(roomsData.rooms || []);
       setCurrentPersona(roomsData.currentPersona);
       
-      // 清空当前选中的房间
+      // 清空当前选中的房间和消息
       setSelectedRoom(null);
       setMessages([]);
       
+      // 通知 Socket
       if (selectedRoom && user) {
         socketService.switchPersona(user.uid, persona._id);
       }
+      
+      toast.success(`已切换到角色: ${persona.name}`);
     } catch (err: any) {
-      alert(err.message || '切换角色失败');
+      toast.error(err.message || '切换角色失败');
     }
   }, [selectedRoom, user]);
 
   // ========== 发送消息 ==========
   const handleSendMessage = useCallback((content: string, isAction = false) => {
     if (!selectedRoom || !selectedPersona || !user) {
-      alert('请先选择聊天室和角色');
+      toast.error('请先选择聊天室和角色');
       return;
     }
 
@@ -602,60 +568,84 @@ const ChatHome = () => {
   // ========== 退出群聊 ==========
   const handleLeaveRoom = async () => {
     if (!selectedRoom) return;
-    if (!confirm('确定要退出该群聊吗？')) return;
     
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/room/${selectedRoom._id}/leave`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await res.json();
-      if (res.ok) {
-        alert(data.message || '已退出群聊');
-        // 刷新房间列表
-        const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const roomsData = await roomsRes.json();
-        setRooms(roomsData.rooms || []);
-        setSelectedRoom(null);
-        setMessages([]);
-      } else {
-        alert(data.error || '退出失败');
-      }
-    } catch (error) {
-      console.error('退出失败:', error);
-      alert('退出失败，请重试');
-    }
+    toast.custom((t) => (
+      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-4">
+        <p className="text-lg font-semibold text-gray-800 mb-2">退出群聊</p>
+        <p className="text-sm text-gray-600 mb-4">确定要退出「{selectedRoom.name}」吗？</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition"
+          >
+            取消
+          </button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API_BASE}/room/${selectedRoom._id}/leave`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                  toast.success(data.message || '已退出群聊');
+                  const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  const roomsData = await roomsRes.json();
+                  setRooms(roomsData.rooms || []);
+                  setSelectedRoom(null);
+                  setMessages([]);
+                } else {
+                  toast.error(data.error || '退出失败');
+                }
+              } catch (error) {
+                toast.error('退出失败，请重试');
+              }
+            }}
+            className="flex-1 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition shadow-md"
+          >
+            确定退出
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   // ========== 举报群组 ==========
   const handleReport = () => {
-    alert('举报功能开发中，请通过邮件联系我们：support@rp-chat.com');
+    toast('举报功能开发中，请通过邮件联系我们：zhoyi.lee@gmail.com', {
+      icon: '📧',
+      duration: 5000,
+    });
   };
 
-  // ========== 渲染加载状态 ==========
+  // ========== 加载状态 ==========
   if (!authChecked) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
-        <div className="text-white text-xl">加载中...</div>
+        <div className="text-white/60 text-lg animate-pulse">加载中...</div>
       </div>
     );
   }
 
+  // ========== 错误状态 ==========
   if (error) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
+          <div className="text-6xl mb-4">😢</div>
+          <p className="text-red-500 mb-6">{error}</p>
           <button 
             onClick={() => window.location.reload()}
-            className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl shadow-md"
+            className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition"
           >
             重试
           </button>
@@ -669,30 +659,23 @@ const ChatHome = () => {
     <div className="h-full flex flex-col bg-white">
       {/* 搜索栏 */}
       <div className="p-4 border-b border-gray-100 flex-shrink-0">
-        <div className="bg-gray-100 rounded-full px-4 py-2 flex items-center text-gray-400">
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-gray-100 rounded-full px-4 py-2.5 flex items-center text-gray-400">
+          <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input 
             type="text" 
             placeholder="搜索聊天"
-            className="bg-transparent flex-1 outline-none text-gray-600 placeholder-gray-400"
+            className="bg-transparent flex-1 outline-none text-gray-600 placeholder-gray-400 text-sm"
           />
         </div>
       </div>
 
       {/* 创建房间按钮 */}
-      {showCreateRoom && (
-        <CreateRoom
-          onClose={() => setShowCreateRoom(false)}
-          onSuccess={() => window.location.reload()}
-        />
-      )}
-
       <div className="px-4 py-2 flex-shrink-0">
         <button
           onClick={() => setShowCreateRoom(true)}
-          className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition flex items-center justify-center gap-2 shadow-md"
+          className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2.5 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition flex items-center justify-center gap-2 shadow-md text-sm font-medium"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -708,43 +691,57 @@ const ChatHome = () => {
             setShowUserList(false);
             setSelectedUser(null);
           }}
-          className={`flex-1 py-2 text-sm font-medium transition ${
-            !showUserList ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500'
+          className={`flex-1 py-2.5 text-sm font-medium transition relative ${
+            !showUserList ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           群聊
+          {!showUserList && (
+            <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />
+          )}
         </button>
         <button
           onClick={() => {
             setShowUserList(true);
             setSelectedRoom(null);
           }}
-          className={`flex-1 py-2 text-sm font-medium transition ${
-            showUserList ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500'
+          className={`flex-1 py-2.5 text-sm font-medium transition relative ${
+            showUserList ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           私聊
+          {showUserList && (
+            <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />
+          )}
         </button>
       </div>
 
       {/* 角色选择栏 */}
       {!showUserList && (
-        <div className="px-4 py-2 border-b border-gray-100 flex-shrink-0">
-          <div className="text-sm text-gray-500 mb-2">
-            当前角色：
-            {currentPersona && (
-              <span className="ml-1 text-blue-600 font-medium">{currentPersona.name}</span>
-            )}
+        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50/50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-500">
+              当前角色：
+              {currentPersona && (
+                <span className="ml-1 text-blue-600 font-medium">{currentPersona.name}</span>
+              )}
+            </span>
+            <button
+              onClick={() => navigate('/persona')}
+              className="text-xs text-blue-500 hover:text-blue-600 transition"
+            >
+              管理角色
+            </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
             {personas.map(persona => (
               <button
                 key={persona._id}
                 onClick={() => handleSelectPersona(persona)}
-                className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition flex-shrink-0 ${
+                className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition flex-shrink-0 ${
                   selectedPersona?._id === persona._id
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
+                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
                 }`}
               >
                 {persona.name}
@@ -753,7 +750,7 @@ const ChatHome = () => {
             {personas.length === 0 && (
               <button
                 onClick={() => navigate('/persona')}
-                className="text-sm text-blue-600 hover:text-blue-700"
+                className="text-sm text-blue-600 hover:text-blue-700 whitespace-nowrap"
               >
                 还没有角色，去申请 →
               </button>
@@ -764,21 +761,30 @@ const ChatHome = () => {
       
       {/* 列表内容 */}
       <div className="flex-1 overflow-y-auto">
+        {showCreateRoom && (
+          <CreateRoom
+            onClose={() => setShowCreateRoom(false)}
+            onSuccess={() => window.location.reload()}
+          />
+        )}
+        
         {showUserList ? (
           <UserList onSelectUser={handleSelectUser} />
         ) : (
           <>
             {loading ? (
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="flex justify-center items-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              </div>
             ) : rooms.length === 0 ? (
-              <div className="text-center py-8 flex flex-col items-center gap-2">
-                <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              <div className="text-center py-12 flex flex-col items-center gap-3 px-4">
+                <svg className="w-20 h-20 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 <p className="text-gray-400">当前角色还没有加入任何聊天室</p>
                 <button
                   onClick={() => setShowCreateRoom(true)}
-                  className="mt-2 text-blue-500 hover:text-blue-600"
+                  className="mt-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:shadow-lg transition shadow-md"
                 >
                   创建新聊天室 →
                 </button>
@@ -788,43 +794,42 @@ const ChatHome = () => {
                 <div 
                   key={room._id} 
                   onClick={() => handleSelectRoom(room)}
-                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 active:bg-gray-100 transition ${
-                    selectedRoom?._id === room._id && !isMobile ? 'bg-blue-50' : ''
+                  className={`px-4 py-3.5 hover:bg-gray-50 cursor-pointer border-b border-gray-100 active:bg-gray-100 transition ${
+                    selectedRoom?._id === room._id && !isMobile ? 'bg-blue-50 border-l-4 border-blue-500' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
+                    {/* 头像 */}
                     <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
                         {room.name.charAt(0)}
                       </div>
                       {room.onlineCount ? (
-                        <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
+                        <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full border-2 border-white font-medium">
                           {room.onlineCount}
                         </div>
                       ) : (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-gray-400 rounded-full border-2 border-white"></div>
+                        <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-gray-400 rounded-full border-2 border-white"></div>
                       )}
                     </div>
                     
+                    {/* 信息 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <h3 className="font-medium text-gray-800 truncate">{room.name}</h3>
-                          {room.unreadCount > 0 && (
-                            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                              {room.unreadCount}
+                          {room.unreadCount ? (
+                            <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+                              {room.unreadCount > 99 ? '99+' : room.unreadCount}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                         <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
-                          {room.messageCount} 条消息
+                          {room.messageCount || 0} 条
                         </span>
                       </div>
-                      <p className="text-sm text-gray-500 truncate">
+                      <p className="text-sm text-gray-500 truncate mt-0.5">
                         {room.description || '暂无描述'}
-                      </p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        {room.onlineCount ? `${room.onlineCount}人在线` : '暂无在线'}
                       </p>
                     </div>
                   </div>
@@ -841,6 +846,7 @@ const ChatHome = () => {
   const renderChatWindow = () => {
     if (isMobile && !showChatWindow) return null;
     
+    // 私聊窗口
     if (selectedUser) {
       return (
         <PrivateChat
@@ -850,28 +856,29 @@ const ChatHome = () => {
       );
     }
     
+    // 群聊窗口
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
         {/* 聊天头部 */}
-        <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+        <div className="bg-white/90 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
           {isMobile && (
             <button 
               onClick={handleBackToList}
-              className="p-1 hover:bg-gray-100 rounded-full transition"
+              className="p-1.5 hover:bg-gray-100 rounded-full transition"
             >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
           )}
           
-          <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="relative flex-shrink-0">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md">
-                {selectedRoom?.name.charAt(0) || '?'}
+                {selectedRoom?.name?.charAt(0) || '?'}
               </div>
               {selectedRoom?.onlineCount ? (
-                <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
+                <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full border-2 border-white">
                   {selectedRoom.onlineCount}
                 </div>
               ) : (
@@ -880,13 +887,13 @@ const ChatHome = () => {
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="font-medium text-gray-800 truncate">{selectedRoom?.name || '请选择聊天室'}</h2>
-              <p className="text-xs text-gray-500">
-                {selectedPersona ? `使用角色: ${selectedPersona.name}` : '请先选择角色'}
+              <p className="text-xs text-gray-500 truncate">
+                {selectedPersona ? `扮演: ${selectedPersona.name}` : '请先选择角色'}
               </p>
             </div>
           </div>
           
-          {/* ✅ 右上角按钮组 - 使用 Portal 渲染菜单 */}
+          {/* 右上角按钮组 */}
           <div className="flex items-center gap-1">
             {/* 待审核按钮 */}
             {selectedRoom && (isRoomAdmin || isRoomOwner) && (
@@ -904,7 +911,7 @@ const ChatHome = () => {
               </button>
             )}
             
-            {/* ✅ 三个点菜单按钮 */}
+            {/* 菜单按钮 */}
             {selectedRoom && (
               <button
                 onClick={() => setShowRoomMenu(!showRoomMenu)}
@@ -920,7 +927,7 @@ const ChatHome = () => {
         </div>
 
         {/* 消息列表 */}
-        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 scrollbar-thin">
           <MessageList 
             messages={messages} 
             user={user} 
@@ -940,7 +947,7 @@ const ChatHome = () => {
     );
   };
 
-  // ========== 渲染主内容 ==========
+  // ========== 主渲染 ==========
   return (
     <>
       <Toaster 
@@ -954,6 +961,8 @@ const ChatHome = () => {
           },
         }}
       />
+      
+      {/* 响应式布局 */}
       {isDesktop ? (
         <DesktopLayout>
           <div className="h-full flex">
@@ -984,11 +993,11 @@ const ChatHome = () => {
         </MobileLayout>
       )}
       
-      {/* ✅ 使用 Portal 渲染菜单，确保不被气泡遮挡 */}
+      {/* 房间菜单 Portal */}
       {showRoomMenu && selectedRoom && createPortal(
         <div className="fixed inset-0 z-[9999]" onClick={() => setShowRoomMenu(false)}>
           <div 
-            className="absolute right-4 top-20 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1"
+            className="absolute right-4 top-20 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 群资料 */}
@@ -997,9 +1006,9 @@ const ChatHome = () => {
                 navigate(`/group/${selectedRoom._id}`);
                 setShowRoomMenu(false);
               }}
-              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               群资料
@@ -1011,22 +1020,22 @@ const ChatHome = () => {
                 navigate(`/room/${selectedRoom._id}/members`);
                 setShowRoomMenu(false);
               }}
-              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
               成员列表
             </button>
             
-            {/* 群管理 */}
+            {/* 群管理（仅管理员可见） */}
             {(isRoomAdmin || isRoomOwner) && (
               <button
                 onClick={() => {
                   navigate(`/group/${selectedRoom._id}/settings`);
                   setShowRoomMenu(false);
                 }}
-                className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                className="w-full px-4 py-2.5 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-3 transition"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -1036,13 +1045,15 @@ const ChatHome = () => {
               </button>
             )}
             
+            <div className="border-t border-gray-100 my-1"></div>
+            
             {/* 举报群组 */}
             <button
               onClick={() => {
                 handleReport();
                 setShowRoomMenu(false);
               }}
-              className="w-full px-4 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2"
+              className="w-full px-4 py-2.5 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-3 transition"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1054,9 +1065,9 @@ const ChatHome = () => {
             <button
               onClick={() => {
                 setShowRoomMenu(false);
-                handleLeaveRoom();
+                setTimeout(handleLeaveRoom, 150);
               }}
-              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+              className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

@@ -88,6 +88,7 @@ const userRoutes = require('./routes/user');
 const changelogRoutes = require('./routes/changelog');
 const searchRoutes = require('./routes/search');
 const diamondRoutes = require('./routes/diamond');
+const linkPreviewRoutes = require('./routes/linkPreview');
 
 // 语音房路由（可能不存在，用 try-catch 包裹）
 let voiceRoutes;
@@ -107,6 +108,8 @@ app.use('/api/user', userRoutes);
 app.use('/api/changelog', changelogRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/diamond', diamondRoutes);
+app.use('/api/link-preview', linkPreviewRoutes);
+
 if (voiceRoutes) {
   app.use('/api/voice', voiceRoutes);
 }
