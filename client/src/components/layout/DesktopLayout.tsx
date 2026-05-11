@@ -77,7 +77,6 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
         });
         if (response.ok) {
           const data = await response.json();
-          // ✅ 确保是数字
           setUnreadCount(Number(data.total) || 0);
         }
       } catch (error) {
@@ -106,18 +105,36 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* 关闭菜单的透明层 */}
+      {showUserMenu && (
+        <div className="fixed inset-0 z-20" onClick={() => setShowUserMenu(false)} />
+      )}
+
       <aside 
         className={`${
           collapsed ? 'w-20' : 'w-64'
-        } bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col transition-all duration-300 shadow-sm z-20`}
+        } bg-white/80 backdrop-blur-xl border-r border-gray-200/50 flex flex-col transition-all duration-300 shadow-sm z-20 relative`}
       >
+        {/* 折叠按钮 */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-20 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-200 z-30 hover:scale-110 active:scale-90"
+        >
+          <svg 
+            className={`w-3 h-3 text-gray-500 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} 
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
         {/* Logo 区域 */}
         <div className={`h-16 flex items-center ${collapsed ? 'justify-center' : 'px-6'} border-b border-gray-100`}>
           {collapsed ? (
-            <img src="/favicon.svg" alt="Logo" className="w-10 h-10" />
+            <img src="/favicon.svg" alt="Logo" className="w-10 h-10 hover:scale-110 transition-transform duration-200 cursor-pointer" onClick={() => navigate('/chat')} />
           ) : (
-            <div className="flex items-center gap-3">
-              <img src="/favicon.svg" alt="Logo" className="w-10 h-10" />
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/chat')}>
+              <img src="/favicon.svg" alt="Logo" className="w-10 h-10 hover:scale-110 transition-transform duration-200" />
               <div>
                 <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                   RP Chat
@@ -128,40 +145,25 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           )}
         </div>
 
-        {/* 折叠按钮 */}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-20 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all z-30"
-        >
-          <svg 
-            className={`w-3 h-3 text-gray-500 transition-transform ${collapsed ? 'rotate-180' : ''}`} 
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-
         {/* 导航菜单 */}
         <nav className="flex-1 py-6 px-3 space-y-1">
           {navItems.map((item) => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`
-                w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 
+                hover:scale-[1.02] active:scale-[0.98]
                 ${isActive(item.path) 
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md' 
                   : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
                 }
-                ${collapsed ? 'justify-center' : ''}
-              `}
+                ${collapsed ? 'justify-center' : ''}`}
               title={collapsed ? item.name : ''}
             >
               <div className="relative">
                 {item.icon}
-                {/* ✅ 修复：只有未读消息大于0时才显示红点 */}
                 {item.name === '聊天' && unreadCount > 0 && !isActive(item.path) && (
-                  <span className="absolute -top-1 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md">
+                  <span className="absolute -top-1 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md animate-pulse">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -176,7 +178,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           {/* 更新日志 */}
           <button
             onClick={() => navigate('/changelog')}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all ${collapsed ? 'justify-center' : ''}`}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${collapsed ? 'justify-center' : ''}`}
             title={collapsed ? '更新日志' : ''}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,7 +191,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-all ${collapsed ? 'justify-center' : ''}`}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${collapsed ? 'justify-center' : ''}`}
             >
               <div className="relative">
                 <img
@@ -200,40 +202,61 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
                 <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-1 ring-white"></div>
               </div>
               {!collapsed && (
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-left min-w-0">
                   <p className="text-sm font-medium text-gray-700 truncate">
                     {userData?.username || user?.email?.split('@')[0] || '用户'}
                   </p>
                   <div className="flex items-center gap-1">
                     <DiamondBalance size="sm" />
-                    <span className="text-xs text-gray-400 ml-1">钻石</span>
                   </div>
                 </div>
+              )}
+              {!collapsed && (
+                <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} 
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               )}
             </button>
 
             {/* 用户下拉菜单 */}
             {showUserMenu && !collapsed && (
-              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-30">
-                <div className="px-4 py-2 border-b border-gray-100">
+              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in slide-in-from-bottom-2 fade-in duration-200 origin-bottom">
+                {/* 用户信息 */}
+                <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-800">{userData?.username || '用户'}</p>
                   <div className="flex items-center gap-1 mt-1">
                     <DiamondBalance size="sm" />
                     <span className="text-xs text-gray-400">钻石</span>
                   </div>
                 </div>
+
                 <button
                   onClick={() => { navigate('/profile'); setShowUserMenu(false); }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                   个人资料
                 </button>
+
+                <button
+                  onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
+                >
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  设置
+                </button>
+
+                <div className="border-t border-gray-100 my-1"></div>
+
                 <button
                   onClick={handleLogout}
-                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
