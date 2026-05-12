@@ -1,8 +1,8 @@
-const OpenCC = require('opencc');
+const OpenCC = require('opencc-js');
 
 // 初始化转换器
-const s2tConverter = new OpenCC('s2t.json');  // 简体转繁体
-const t2sConverter = new OpenCC('t2s.json');  // 繁体转简体
+const s2tConverter = OpenCC.Converter({ from: 'cn', to: 'twp' });
+const t2sConverter = OpenCC.Converter({ from: 'twp', to: 'cn' });
 
 /**
  * 简体转繁体
@@ -12,7 +12,7 @@ const t2sConverter = new OpenCC('t2s.json');  // 繁体转简体
 async function simplifiedToTraditional(text) {
   if (!text || typeof text !== 'string') return text;
   try {
-    return await s2tConverter.convertPromise(text);
+    return await s2tConverter(text);
   } catch (error) {
     console.error('简转繁失败:', error);
     return text;
@@ -27,7 +27,7 @@ async function simplifiedToTraditional(text) {
 async function traditionalToSimplified(text) {
   if (!text || typeof text !== 'string') return text;
   try {
-    return await t2sConverter.convertPromise(text);
+    return await t2sConverter(text);
   } catch (error) {
     console.error('繁转简失败:', error);
     return text;
