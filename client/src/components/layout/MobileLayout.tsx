@@ -93,6 +93,13 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const currentTab = tabs.find(tab => location.pathname.startsWith(tab.path));
+    if (currentTab) {
+      setActiveTab(currentTab.name.toLowerCase());
+    }
+  }, [location.pathname]);
+
   const handleTabChange = useCallback((tab: string, path: string) => {
     setActiveTab(tab);
     navigate(path);
@@ -108,13 +115,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    const currentTab = tabs.find(tab => location.pathname.startsWith(tab.path));
-    if (currentTab) {
-      setActiveTab(currentTab.name.toLowerCase());
-    }
-  }, [location.pathname, tabs]);
-
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
       {/* 顶部导航栏 */}
@@ -126,12 +126,12 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <DiamondBalance size="sm" />
           
           <button
             onClick={() => navigate('/search')}
-            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition"
+            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -141,7 +141,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="relative focus:outline-none"
+              className="relative focus:outline-none transition-all duration-200 hover:scale-110 active:scale-90"
             >
               <img
                 src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=32`}
@@ -152,8 +152,8 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-20">
-                <div className="px-4 py-2 border-b border-gray-100">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-20 animate-in slide-in-from-top-2 fade-in duration-200 origin-top-right">
+                <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-800">{userData?.username || '用户'}</p>
                   <div className="flex items-center gap-1 mt-1">
                     <DiamondBalance size="sm" />
@@ -162,21 +162,28 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
                 </div>
                 <button
                   onClick={() => { navigate('/profile'); setShowMenu(false); }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150 hover:pl-5"
                 >
-                  个人资料
+                  👤 个人资料
+                </button>
+                <button
+                  onClick={() => { navigate('/settings'); setShowMenu(false); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150 hover:pl-5"
+                >
+                  ⚙️ 设置
                 </button>
                 <button
                   onClick={() => { navigate('/changelog'); setShowMenu(false); }}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150 hover:pl-5"
                 >
-                  更新日志
+                  📋 更新日志
                 </button>
+                <div className="border-t border-gray-100 my-1"></div>
                 <button
                   onClick={handleLogout}
-                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-all duration-150 hover:pl-5"
                 >
-                  退出登录
+                  🚪 退出登录
                 </button>
               </div>
             )}
@@ -195,19 +202,16 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
           <button
             key={tab.name}
             onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
-            className={`
-              flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200
-              ${activeTab === tab.name.toLowerCase() 
+            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200 hover:scale-110 active:scale-90 ${
+              activeTab === tab.name.toLowerCase() 
                 ? 'text-blue-600' 
                 : 'text-gray-400 hover:text-gray-600'
-              }
-            `}
+            }`}
           >
             <div className="relative">
               {tab.icon}
-              {/* ✅ 修复：只有未读消息大于0时才显示红点 */}
               {tab.name === '聊天' && unreadCount > 0 && activeTab !== 'chat' && (
-                <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}

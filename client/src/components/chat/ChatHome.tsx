@@ -998,8 +998,14 @@ const ChatHome = () => {
         <div className="fixed inset-0 z-[9999]" onClick={() => setShowRoomMenu(false)}>
           <div 
             className="absolute right-4 top-20 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 animate-in fade-in zoom-in-95 duration-200"
+            style={{ 
+              maxHeight: 'calc(100vh - 120px)', 
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
+
             {/* 群资料 */}
             <button
               onClick={() => {
