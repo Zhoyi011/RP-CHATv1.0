@@ -4,7 +4,7 @@ const User = require('../models/User');
 const InviteCode = require('../models/InviteCode');
 const jwt = require('jsonwebtoken');
 
-// 验证token中间件
+// ===== 中间件 =====
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
@@ -22,10 +22,16 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// 管理员中间件
 const adminMiddleware = (req, res, next) => {
   if (req.userRole !== 'admin' && req.userRole !== 'owner') {
     return res.status(403).json({ error: '需要管理员权限' });
+  }
+  next();
+};
+
+const ownerMiddleware = (req, res, next) => {
+  if (req.userRole !== 'owner') {
+    return res.status(403).json({ error: '需要群主权限' });
   }
   next();
 };
@@ -108,7 +114,7 @@ router.post('/firebase', async (req, res) => {
   }
 });
 
-// ========== 验证邀请码 ==========
+// ========== 验证邀请码（核心修改）==========
 router.post('/verify-invite', authMiddleware, async (req, res) => {
   try {
     const { inviteCode } = req.body;
@@ -130,24 +136,31 @@ router.post('/verify-invite', authMiddleware, async (req, res) => {
     }
     
     if (user.hasAccess) {
-      return res.status(400).json({ error: '你已经拥有访问权限' });
+      return res.status(400).json({ error: '你已经拥有访问权限，无需重复输入' });
     }
     
+    // ✅ 根据邀请码类型设置角色
+    const newRole = code.type === 'admin' ? 'admin' : 'user';
+    
     user.hasAccess = true;
+    user.role = newRole;
     user.inviteCode = inviteCode.toUpperCase();
     await user.save();
     
+    // 标记邀请码为已使用
     code.usedBy = user._id;
+    code.isActive = false;
     await code.save();
     
-    const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+    console.log(`✅ 用户 ${user.email} 使用 ${code.type} 邀请码，角色设为 ${newRole}`);
     
+    const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
     const token = jwt.sign(
       { 
         userId: user._id, 
         email: user.email, 
         username: user.username,
-        role: user.role,
+        role: newRole,
         hasAccess: true 
       },
       secret,
@@ -173,9 +186,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
-    
     res.json(user.toSafeObject());
-    
   } catch (error) {
     console.error('获取用户信息错误:', error);
     res.status(500).json({ error: '服务器错误' });
@@ -183,15 +194,10 @@ router.get('/me', authMiddleware, async (req, res) => {
 });
 
 // ========== 用户设置 ==========
-
-// 获取设置
 router.get('/settings', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user) {
-      return res.status(404).json({ error: '用户不存在' });
-    }
-    
+    if (!user) return res.status(404).json({ error: '用户不存在' });
     res.json({
       theme: user.theme || 'light',
       notifications: user.notifications !== false,
@@ -199,12 +205,10 @@ router.get('/settings', authMiddleware, async (req, res) => {
       defaultTranslate: user.defaultTranslate || 'off',
     });
   } catch (error) {
-    console.error('获取设置失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// 更新设置
 router.put('/settings', authMiddleware, async (req, res) => {
   try {
     const { theme, notifications, soundEnabled, defaultTranslate } = req.body;
@@ -220,44 +224,65 @@ router.put('/settings', authMiddleware, async (req, res) => {
     const user = await User.findByIdAndUpdate(req.userId, update, { new: true });
     res.json({ message: '设置已保存', user: user.toSafeObject() });
   } catch (error) {
-    console.error('保存设置失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// ========== 管理员：生成邀请码 ==========
+// ========== 管理员：生成邀请码（权限控制）==========
 router.post('/admin/create-invite', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { customCode } = req.body;
+    const user = await User.findById(req.userId);
+    const { type = 'user' } = req.body; // 默认 user 类型
     
-    const generateCode = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let code = '';
-      for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    // ✅ owner 可以创建任意类型
+    if (user.role === 'owner') {
+      // owner 无限制
+    } 
+    // ✅ admin 只能创建 user 类型，且每天 1 个
+    else if (user.role === 'admin') {
+      if (type === 'admin') {
+        return res.status(403).json({ error: '管理员只能创建普通用户邀请码' });
       }
-      return code;
-    };
+      
+      // 检查今天的创建数量
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayCount = await InviteCode.countDocuments({
+        createdBy: req.userId,
+        createdAt: { $gte: today, $lt: tomorrow }
+      });
+      
+      if (todayCount >= 1) {
+        return res.status(429).json({ error: '管理员每天只能创建 1 个邀请码，请明天再试' });
+      }
+    }
     
-    const code = (customCode || generateCode()).toUpperCase();
+    const code = InviteCode.generateCode(6);
     
     const existing = await InviteCode.findOne({ code });
     if (existing) {
-      return res.status(400).json({ error: '邀请码已存在' });
+      return res.status(400).json({ error: '邀请码已存在，请重试' });
     }
     
     const inviteCode = new InviteCode({
       code,
+      type,
       createdBy: req.userId,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7天后过期
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       isActive: true
     });
     
     await inviteCode.save();
     
+    console.log(`✅ ${user.role} ${user.username} 创建了 ${type} 邀请码: ${code}`);
+    
     res.json({
       message: '邀请码创建成功',
       code: inviteCode.code,
+      type: inviteCode.type,
       expiresAt: inviteCode.expiresAt
     });
 
@@ -271,11 +296,10 @@ router.post('/admin/create-invite', authMiddleware, adminMiddleware, async (req,
 router.get('/admin/invite-codes', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const codes = await InviteCode.find()
-      .populate('createdBy', 'username')
+      .populate('createdBy', 'username role')
       .populate('usedBy', 'username email')
       .sort({ createdAt: -1 });
     
-    // 自动更新过期状态
     const now = new Date();
     for (const code of codes) {
       if (code.isActive && code.expiresAt < now && !code.usedBy) {
@@ -299,7 +323,6 @@ router.delete('/admin/invite-codes/:codeId', authMiddleware, adminMiddleware, as
       return res.status(404).json({ error: '邀请码不存在' });
     }
     
-    // 不允许删除已被使用的邀请码
     if (code.usedBy) {
       return res.status(400).json({ error: '已被使用的邀请码不能删除' });
     }
@@ -312,38 +335,26 @@ router.delete('/admin/invite-codes/:codeId', authMiddleware, adminMiddleware, as
   }
 });
 
-// ========== 管理员：查看所有用户 ==========
+// ========== 管理员：用户管理 ==========
 router.get('/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     res.json(users);
   } catch (error) {
-    console.error('获取用户列表失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// ========== 管理员：更新用户状态 ==========
 router.put('/admin/users/:userId/status', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { status } = req.body;
     if (!['active', 'banned', 'muted'].includes(status)) {
       return res.status(400).json({ error: '无效的状态' });
     }
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.userId,
-      { status },
-      { new: true }
-    ).select('-password');
-    
-    if (!user) {
-      return res.status(404).json({ error: '用户不存在' });
-    }
-    
+    const user = await User.findByIdAndUpdate(req.params.userId, { status }, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ error: '用户不存在' });
     res.json({ message: '用户状态已更新', user: user.toSafeObject() });
   } catch (error) {
-    console.error('更新用户状态失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { authApi, type User } from '../../services/api';
 import DiamondBalance from '../diamond/DiamondBalance';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 
 interface Props {
   children: React.ReactNode;
@@ -23,6 +24,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = auth.currentUser;
+  const { isKeyboardOpen } = useKeyboardHeight();
 
   const tabs: TabItem[] = [
     {
@@ -74,13 +76,17 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
         const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/unread-total', {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        const data = await response.json();
-        setUnreadCount(data.total || 0);
+        if (response.ok) {
+          const data = await response.json();
+          setUnreadCount(Number(data.total) || 0);
+        }
       } catch (error) {
         console.error('获取未读消息失败:', error);
       }
     };
     fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
   }, [user]);
 
   useEffect(() => {
@@ -116,9 +122,9 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
+    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col" style={{ height: '-webkit-fill-available' }}>
       {/* 顶部导航栏 */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between flex-shrink-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
           <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
           <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
@@ -131,7 +137,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
           
           <button
             onClick={() => navigate('/search')}
-            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
+            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition-all duration-200 active:scale-90"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -141,7 +147,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="relative focus:outline-none transition-all duration-200 hover:scale-110 active:scale-90"
+              className="relative focus:outline-none transition-all duration-200 active:scale-90"
             >
               <img
                 src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=32`}
@@ -152,9 +158,9 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-20 animate-in slide-in-from-top-2 fade-in duration-200 origin-top-right">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in slide-in-from-top-2 fade-in duration-200 origin-top-right">
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-800">{userData?.username || '用户'}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{userData?.username || '用户'}</p>
                   <div className="flex items-center gap-1 mt-1">
                     <DiamondBalance size="sm" />
                     <span className="text-xs text-gray-400">钻石</span>
@@ -191,37 +197,45 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
         </div>
       </div>
 
-      {/* 主内容区 */}
-      <div className="flex-1 overflow-y-auto pb-20">
+      {/* 主内容区 - 键盘打开时可滚动 */}
+      <div 
+        className="flex-1 overflow-y-auto"
+        style={{ 
+          WebkitOverflowScrolling: 'touch',
+          paddingBottom: isKeyboardOpen ? '0px' : '60px'
+        }}
+      >
         {children}
       </div>
 
-      {/* 底部 Tab 栏 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg">
-        {tabs.map((tab) => (
-          <button
-            key={tab.name}
-            onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
-            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200 hover:scale-110 active:scale-90 ${
-              activeTab === tab.name.toLowerCase() 
-                ? 'text-blue-600' 
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            <div className="relative">
-              {tab.icon}
-              {tab.name === '聊天' && unreadCount > 0 && activeTab !== 'chat' && (
-                <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </div>
-            <span className={`text-xs mt-1 ${activeTab === tab.name.toLowerCase() ? 'font-medium' : ''}`}>
-              {tab.name}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* 底部 Tab 栏 - 键盘打开时隐藏 */}
+      {!isKeyboardOpen && (
+        <div className="bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg flex-shrink-0 z-30">
+          {tabs.map((tab) => (
+            <button
+              key={tab.name}
+              onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
+              className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200 active:scale-90 ${
+                activeTab === tab.name.toLowerCase() 
+                  ? 'text-blue-600' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <div className="relative">
+                {tab.icon}
+                {tab.name === '聊天' && unreadCount > 0 && activeTab !== 'chat' && (
+                  <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className={`text-xs mt-1 ${activeTab === tab.name.toLowerCase() ? 'font-medium' : ''}`}>
+                {tab.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

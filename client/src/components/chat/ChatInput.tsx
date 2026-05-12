@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import EmojiPicker from '../common/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
+import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 
 interface ChatInputProps {
   onSendMessage: (content: string, isAction: boolean) => void;
@@ -18,52 +19,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [isTranslating, setIsTranslating] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [sendAnimation, setSendAnimation] = useState(false);
-  const [initialized, setInitialized] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
 
-  // iOS 键盘修复：初始化
+  // 键盘弹出时确保输入框可见
   useEffect(() => {
-    setInitialized(true);
-  }, []);
-
-  // iOS 键盘修复：聚焦时滚动
-  const handleFocus = () => {
-    setIsFocused(true);
-    
-    // 检测是否是 iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    
-    if (isIOS) {
-      // iOS 需要延迟处理键盘弹起
-      setTimeout(() => {
-        const activeElement = document.activeElement as any;
-        if ('scrollIntoViewIfNeeded' in activeElement) {
-          activeElement.scrollIntoViewIfNeeded(false);
-        }
-        // 回退方案
-        window.scrollTo(0, document.body.scrollHeight);
-      }, 350);
-    } else {
-      // Android 等即时处理
-      setTimeout(() => {
-        window.scrollTo(0, document.body.scrollHeight);
-      }, 100);
+    if (isFocused && isIOS && isKeyboardOpen) {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  };
-
-  // iOS 键盘修复：失焦时恢复
-  const handleBlur = () => {
-    setIsFocused(false);
-    
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isIOS) {
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-      }, 100);
-    }
-  };
+  }, [isKeyboardOpen, isFocused, isIOS]);
 
   // 点击外部关闭表情面板
   useEffect(() => {
@@ -110,10 +76,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
     onSendMessage(content, isAction);
     setInputValue('');
     
-    // iOS 键盘修复：发送后重新聚焦
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
+    // 重新聚焦
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   // 键盘事件
@@ -135,9 +99,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`bg-white border-t border-gray-100 px-3 py-2.5 flex-shrink-0 transition-all duration-300 keyboard-visible ${
+      className={`bg-white border-t border-gray-100 flex-shrink-0 transition-all duration-300 ${
         isFocused ? 'shadow-lg' : 'shadow-sm'
       }`}
+      style={{
+        paddingBottom: isKeyboardOpen ? `${Math.max(keyboardHeight - 40, 0)}px` : '10px',
+        paddingTop: '10px',
+        paddingLeft: '12px',
+        paddingRight: '12px',
+      }}
     >
       {/* 快捷提示 */}
       {inputValue.startsWith('/me ') && (
@@ -151,16 +121,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
-      <div className="flex items-end gap-1.5">
+      <div className="flex items-end gap-2">
         {/* 表情按钮 */}
-        <div className="relative flex-shrink-0" ref={emojiContainerRef}>
+        <div className="relative flex-shrink-0 pb-0.5" ref={emojiContainerRef}>
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className={`p-2 rounded-full transition-all duration-200 ${
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
               showEmojiPicker
                 ? 'text-blue-500 bg-blue-50 rotate-12 scale-110'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 active:scale-90'
             }`}
             title="表情"
           >
@@ -170,7 +140,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </button>
 
           {showEmojiPicker && (
-            <div className="animate-in slide-in-from-bottom-4 fade-in duration-200">
+            <div className="absolute bottom-full left-0 mb-2 animate-in slide-in-from-bottom-4 fade-in duration-200">
               <EmojiPicker
                 onSelect={handleSelectEmoji}
                 onClose={() => setShowEmojiPicker(false)}
@@ -184,9 +154,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
           type="button"
           onClick={handleTranslate}
           disabled={!hasContent || isTranslating}
-          className={`flex-shrink-0 px-2 py-2 rounded-full text-xs font-medium transition-all duration-200 ${
+          className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-200 ${
             hasContent && !isTranslating
-              ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50 active:scale-95'
+              ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50 active:scale-90'
               : 'text-gray-300 cursor-not-allowed'
           }`}
           title="简繁转换"
@@ -196,27 +166,27 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           ) : (
-            <span className="whitespace-nowrap">简⇄繁</span>
+            <span>简⇄繁</span>
           )}
         </button>
 
         {/* 输入框 */}
-        <div className="flex-1 relative">
+        <div className="flex-1 min-w-0">
           <input 
             ref={inputRef}
             type="text" 
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
             placeholder={inputValue.startsWith('/me ') ? '输入动作内容...' : placeholder}
-            className={`w-full bg-gray-100 rounded-2xl px-4 py-2.5 pr-10 text-sm transition-all duration-300 outline-none ${
+            className={`w-full bg-gray-100 rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none ${
               isFocused
                 ? 'bg-white ring-2 ring-blue-400/50 shadow-md'
                 : 'hover:bg-gray-50'
             } ${
-              disabled ? 'opacity-50 cursor-not-allowed' : ''
+              disabled ? 'opacity-50' : ''
             }`}
             disabled={disabled}
             maxLength={2000}
@@ -226,34 +196,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
             spellCheck={false}
             enterKeyHint="send"
           />
-          
-          {inputValue.length > 0 && (
-            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] transition-colors duration-200 ${
-              inputValue.length > 1800
-                ? 'text-red-400'
-                : inputValue.length > 1500
-                ? 'text-amber-400'
-                : 'text-gray-400'
-            }`}>
-              {inputValue.length}/2000
-            </span>
-          )}
         </div>
         
         {/* 发送按钮 */}
         <button 
           onClick={handleSend}
           disabled={disabled || !hasContent}
-          className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+          className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
             hasContent && !disabled
-              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md hover:shadow-lg hover:from-blue-600 hover:to-cyan-600 active:scale-95'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md hover:shadow-lg active:scale-95'
+              : 'bg-gray-200 text-gray-400'
           } ${
-            sendAnimation ? 'scale-90' : ''
+            sendAnimation ? 'scale-90 opacity-80' : ''
           }`}
         >
           {sendAnimation ? (
-            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           ) : (
@@ -261,7 +219,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           )}
-          <span className="hidden sm:inline">发送</span>
         </button>
       </div>
     </div>

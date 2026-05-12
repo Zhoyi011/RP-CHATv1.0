@@ -6,6 +6,11 @@ const inviteCodeSchema = new mongoose.Schema({
     required: true, 
     unique: true 
   },
+  type: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
   createdBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User',
@@ -30,10 +35,10 @@ const inviteCodeSchema = new mongoose.Schema({
 });
 
 // 生成随机邀请码
-inviteCodeSchema.statics.generateCode = function() {
+inviteCodeSchema.statics.generateCode = function(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < length; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;

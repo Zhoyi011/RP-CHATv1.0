@@ -298,11 +298,11 @@ export const adminApi = {
     
   getInviteCodes: () => request<any[]>('/auth/admin/invite-codes'),
   
-  generateInviteCode: (customCode?: string) =>
-    request<{ message: string; code: string; expiresAt: string }>('/auth/admin/create-invite', {
-      method: 'POST',
-      body: JSON.stringify({ customCode }),
-    }),
+  generateInviteCode: (customCode?: string, type?: 'user' | 'admin') =>
+  request<{ message: string; code: string; type: string; expiresAt: string }>('/auth/admin/create-invite', {
+    method: 'POST',
+    body: JSON.stringify({ customCode, type: type || 'user' }),
+  }),
     
   deleteInviteCode: (codeId: string) =>
     request<{ message: string }>(`/auth/admin/invite-codes/${codeId}`, {
