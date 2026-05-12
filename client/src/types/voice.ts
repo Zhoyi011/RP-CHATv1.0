@@ -1,5 +1,6 @@
 // ========== 语音消息 ==========
 export interface VoiceMessage {
+  [x: string]: string | Date;
   _id: string;
   userId: string;
   username: string;

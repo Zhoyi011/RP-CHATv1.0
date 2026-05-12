@@ -1,6 +1,6 @@
 import React from 'react';
 import type { VoiceMessage } from '../../types/voice';
-
+import { formatMessageTime } from '../../utils/timeFormat';
 interface VoiceMessageListProps {
   messages: VoiceMessage[];
   currentUserId: string;
@@ -44,7 +44,7 @@ const VoiceMessageList: React.FC<VoiceMessageListProps> = ({ messages, currentUs
                 <p className="text-sm break-words whitespace-pre-wrap">{msg.content}</p>
               </div>
               <p className="text-xs text-gray-500 mt-1 ml-1">
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatMessageTime(msg.createdAt)}
               </p>
             </div>
           </div>

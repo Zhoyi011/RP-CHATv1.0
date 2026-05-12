@@ -13,6 +13,8 @@ import ChatInput from './ChatInput';
 import LinkPreviewContainer from './LinkPreviewContainer';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
+import { formatMessageTime } from '../../utils/timeFormat';
+import { parseMarkdown } from '../../utils/renderMarkdown';
 import { 
   roomApi, 
   personaApi,
@@ -122,7 +124,7 @@ const MessageList: React.FC<{
               <div className="flex items-end gap-2">
                 {!isMobile && !isSelf && (
                   <span className="text-xs text-gray-400 flex-shrink-0">
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatMessageTime(msg.createdAt)}
                   </span>
                 )}
                 <div>
@@ -131,13 +133,13 @@ const MessageList: React.FC<{
                       ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
                       : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
                   }`}>
-                    <div className="break-words whitespace-pre-wrap">{msg.content}</div>
+                    <div className="break-words whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }} />
                     {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
                   </div>
                 </div>
                 {isSelf && (
                   <span className="text-xs text-gray-400 flex-shrink-0">
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatMessageTime(msg.createdAt)}
                   </span>
                 )}
               </div>

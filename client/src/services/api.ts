@@ -119,6 +119,7 @@ export interface Persona {
   status: 'pending' | 'approved' | 'rejected';
   globalNumber?: number;
   sameNameNumber?: number;
+  userId?: string;
   usageCount?: number;
   viewCount?: number;
   likeCount?: number;
