@@ -86,6 +86,7 @@ export interface Room {
   onlineCount?: number;
   unreadCount?: number;
   memberCount?: number;
+  creatorName: string; // ✅ Persona 名
   createdAt: string;
 }
 
@@ -98,14 +99,13 @@ export interface Message {
   personaId: {
     _id: string;
     name: string;
+    displayName: string;
     avatar?: string;
+    sameNameNumber?: number;
   };
   userId: {
     _id: string;
-    username: string;
-    email?: string;
     firebaseUid?: string;
-    avatar?: string;
   };
 }
 
@@ -118,6 +118,7 @@ export interface Persona {
   tags: string[];
   status: 'pending' | 'approved' | 'rejected';
   globalNumber?: number;
+  sameNameNumber?: number;
   usageCount?: number;
   viewCount?: number;
   likeCount?: number;

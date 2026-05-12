@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const personaSchema = new mongoose.Schema({
-  // 基础信息
   name: { 
     type: String, 
     required: true, 
@@ -22,23 +21,20 @@ const personaSchema = new mongoose.Schema({
     type: String, 
     default: 'https://ui-avatars.com/api/?background=10b981&color=fff&size=128'
   },
-  tags: [{ 
-    type: String, 
-    maxlength: 20 
-  }],
+  tags: [{ type: String, maxlength: 20 }],
   
-  // 编号系统（同一名字的皮有不同编号）
+  // ✅ 编号系统
   globalNumber: { 
     type: Number, 
     unique: true,
     sparse: true
   },
-  usageCount: { 
-    type: Number, 
-    default: 1 
+  sameNameNumber: {
+    type: Number,
+    default: 1
   },
   
-  // ✅ 所属账号（关键关联）
+  // ✅ 所属用户（Google 账号）
   userId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User',
@@ -49,36 +45,19 @@ const personaSchema = new mongoose.Schema({
     ref: 'Persona' 
   },
   
-  // 状态
   status: { 
     type: String, 
     enum: ['pending', 'approved', 'rejected'], 
     default: 'pending' 
   },
-  reviewComment: { 
-    type: String 
-  },
-  reviewedBy: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User' 
-  },
+  reviewComment: { type: String },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reviewedAt: Date,
   
-  // 统计
-  viewCount: { 
-    type: Number, 
-    default: 0 
-  },
-  likeCount: { 
-    type: Number, 
-    default: 0 
-  },
-  postsCount: { 
-    type: Number, 
-    default: 0 
-  },
+  viewCount: { type: Number, default: 0 },
+  likeCount: { type: Number, default: 0 },
+  postsCount: { type: Number, default: 0 },
   
-  // 角色主页
   homepage: {
     background: { type: String, default: '' },
     intro: { type: String, maxlength: 500, default: '' },
@@ -88,7 +67,6 @@ const personaSchema = new mongoose.Schema({
     }
   },
   
-  // 守护榜（可选）
   guardians: [{
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     amount: { type: Number, default: 0 },
@@ -96,7 +74,6 @@ const personaSchema = new mongoose.Schema({
   }],
   totalGuardianAmount: { type: Number, default: 0 },
   
-  // 亲密关系（可选）
   relationships: [{
     targetPersonaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Persona' },
     type: { type: String, enum: ['friend', 'couple', 'soulmate', 'master', 'apprentice'], default: 'friend' },
@@ -104,38 +81,39 @@ const personaSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
   }],
   
-  // 装备（可选）
   equipped: {
     avatarFrame: { type: String, default: '' },
     ring: { type: String, default: '' },
     relationshipCard: { type: String, default: '' }
   },
   
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
-  }
+  // ✅ 该 Persona 在各个群的最后使用时间（用于切皮优先级）
+  lastUsedInRoom: [{
+    roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
+    lastUsedAt: { type: Date, default: Date.now }
+  }],
+  
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
-// 生成编号和显示名称
+// ✅ 保存前自动生成编号
 personaSchema.pre('save', async function(next) {
   this.updatedAt = new Date();
   
   if (this.isNew && this.status === 'approved') {
-    // 同一名字的角色，使用次数+1
-    const sameName = await this.constructor.findOne({ name: this.name })
-      .sort({ usageCount: -1 });
+    // 同名字编号
+    const sameNameCount = await this.constructor.countDocuments({ 
+      name: this.name, 
+      status: 'approved' 
+    });
+    this.sameNameNumber = sameNameCount + 1;
+    this.displayName = `${this.name} #${this.sameNameNumber}`;
     
-    this.usageCount = sameName ? sameName.usageCount + 1 : 1;
-    this.displayName = `${this.name} No.${this.usageCount}`;
-    
-    // 全局唯一编号
-    const last = await this.constructor.findOne({ status: 'approved' }).sort('-globalNumber');
-    this.globalNumber = last ? last.globalNumber + 1 : 1;
+    // 全局编号
+    const lastGlobal = await this.constructor.findOne({ status: 'approved' })
+      .sort({ globalNumber: -1 });
+    this.globalNumber = lastGlobal && lastGlobal.globalNumber ? lastGlobal.globalNumber + 1 : 1;
   } else if (!this.displayName) {
     this.displayName = this.name;
   }
@@ -143,19 +121,48 @@ personaSchema.pre('save', async function(next) {
   next();
 });
 
-// 添加守护
-personaSchema.methods.addGuardian = function(userId, amount) {
-  const existing = this.guardians.find(g => g.userId.toString() === userId.toString());
+// ✅ 更新在群里的最后使用时间
+personaSchema.methods.markUsedInRoom = async function(roomId) {
+  const existing = this.lastUsedInRoom.find(r => r.roomId.toString() === roomId.toString());
   if (existing) {
-    existing.amount += amount;
+    existing.lastUsedAt = new Date();
   } else {
-    this.guardians.push({ userId, amount });
+    this.lastUsedInRoom.push({ roomId, lastUsedAt: new Date() });
   }
-  this.totalGuardianAmount += amount;
-  return this.save();
+  await this.save();
 };
 
-// 返回安全信息
+// ✅ 在群里最后使用的 Persona（用于自动选择发言皮）
+personaSchema.statics.getLastUsedInRoom = async function(userId, roomId) {
+  // 获取用户在群里所有的 Persona
+  const PersonaRoom = require('./PersonaRoom');
+  const personaRooms = await PersonaRoom.find({ roomId });
+  const personaIds = personaRooms.map(pr => pr.personaId);
+  
+  const personas = await this.find({
+    _id: { $in: personaIds },
+    userId,
+    status: 'approved'
+  }).sort({ 'lastUsedInRoom.lastUsedAt': -1 });
+  
+  // 返回最后使用的那个
+  return personas.length > 0 ? personas[0] : null;
+};
+
+// ✅ 用户在群里所有的 Persona
+personaSchema.statics.getPersonasInRoom = async function(userId, roomId) {
+  const PersonaRoom = require('./PersonaRoom');
+  const personaRooms = await PersonaRoom.find({ roomId });
+  const personaIds = personaRooms.map(pr => pr.personaId);
+  
+  return await this.find({
+    _id: { $in: personaIds },
+    userId,
+    status: 'approved'
+  });
+};
+
+// 安全输出
 personaSchema.methods.toSafeObject = function() {
   return {
     _id: this._id,
@@ -165,13 +172,13 @@ personaSchema.methods.toSafeObject = function() {
     avatar: this.avatar,
     tags: this.tags,
     globalNumber: this.globalNumber,
-    usageCount: this.usageCount,
+    sameNameNumber: this.sameNameNumber,
     status: this.status,
     viewCount: this.viewCount,
     likeCount: this.likeCount,
     postsCount: this.postsCount,
-    createdAt: this.createdAt,
-    userId: this.userId
+    userId: this.userId,
+    createdAt: this.createdAt
   };
 };
 

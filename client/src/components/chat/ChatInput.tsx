@@ -2,54 +2,71 @@ import React, { useState, useRef, useEffect } from 'react';
 import EmojiPicker from '../common/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import type { Persona } from '../../services/api';
 
 interface ChatInputProps {
-  onSendMessage: (content: string, isAction: boolean) => void;
+  onSendMessage: (content: string, isAction: boolean, personaId?: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  roomId?: string | null;
+  selectedPersona?: Persona | null;
+  roomPersonas?: Persona[];
+  onSwitchPersona?: (persona: Persona) => void;
+  onLoadRoomPersonas?: () => void;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   disabled = false, 
-  placeholder = "输入消息... 使用 /me 进行动作扮演" 
+  placeholder = "输入消息... 使用 /me 进行动作扮演",
+  roomId,
+  selectedPersona,
+  roomPersonas = [],
+  onSwitchPersona,
+  onLoadRoomPersonas,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [sendAnimation, setSendAnimation] = useState(false);
+  const [showPersonaSwitch, setShowPersonaSwitch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiContainerRef = useRef<HTMLDivElement>(null);
+  const personaSwitchRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
 
-  // 键盘弹出时确保输入框可见
   useEffect(() => {
     if (isFocused && isIOS && isKeyboardOpen) {
       containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [isKeyboardOpen, isFocused, isIOS]);
 
-  // 点击外部关闭表情面板
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (emojiContainerRef.current && !emojiContainerRef.current.contains(e.target as Node)) {
         setShowEmojiPicker(false);
+      }
+      if (personaSwitchRef.current && !personaSwitchRef.current.contains(e.target as Node)) {
+        setShowPersonaSwitch(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 智能翻译
+  useEffect(() => {
+    if (showPersonaSwitch && onLoadRoomPersonas) {
+      onLoadRoomPersonas();
+    }
+  }, [showPersonaSwitch]);
+
   const handleTranslate = async () => {
     if (!inputValue.trim() || isTranslating) return;
-    
     setIsTranslating(true);
     try {
       const simplified = await traditionalToSimplified(inputValue);
-      
       if (simplified === inputValue) {
         const traditional = await simplifiedToTraditional(inputValue);
         setInputValue(traditional);
@@ -63,7 +80,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // 发送消息
   const handleSend = () => {
     if (!inputValue.trim() || disabled) return;
     
@@ -73,14 +89,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setSendAnimation(true);
     setTimeout(() => setSendAnimation(false), 400);
     
-    onSendMessage(content, isAction);
+    onSendMessage(content, isAction, selectedPersona?._id);
     setInputValue('');
-    
-    // 重新聚焦
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
-  // 键盘事件
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -88,13 +101,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // 选择表情
   const handleSelectEmoji = (emoji: string) => {
     setInputValue(prev => prev + emoji);
     inputRef.current?.focus();
   };
 
+  const handleSwitchPersona = (persona: Persona) => {
+    onSwitchPersona?.(persona);
+    setShowPersonaSwitch(false);
+  };
+
   const hasContent = inputValue.trim().length > 0;
+  const canSwitchPersona = roomPersonas.length > 1;
+  const currentDisplayName = selectedPersona?.displayName || selectedPersona?.name || '选择角色';
 
   return (
     <div 
@@ -121,7 +140,69 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
+      {/* 当前发言身份 */}
+      {selectedPersona && (
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold">
+            {selectedPersona.name.charAt(0)}
+          </div>
+          <span className="text-xs text-gray-500">
+            发言身份: <span className="text-blue-600 font-medium">{currentDisplayName}</span>
+          </span>
+        </div>
+      )}
+
       <div className="flex items-end gap-2">
+        {/* ✅ 切皮按钮 */}
+        {canSwitchPersona && (
+          <div className="relative flex-shrink-0 pb-0.5" ref={personaSwitchRef}>
+            <button
+              type="button"
+              onClick={() => setShowPersonaSwitch(!showPersonaSwitch)}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
+                showPersonaSwitch
+                  ? 'text-purple-500 bg-purple-50 rotate-12 scale-110'
+                  : 'text-gray-400 hover:text-purple-500 hover:bg-gray-100 active:scale-90'
+              }`}
+              title="切换发言角色"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </button>
+
+            {showPersonaSwitch && (
+              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200 max-h-60 overflow-y-auto">
+                <div className="px-3 py-2 border-b border-gray-100">
+                  <p className="text-xs text-gray-500">切换发言角色</p>
+                </div>
+                {roomPersonas.map(persona => (
+                  <button
+                    key={persona._id}
+                    onClick={() => handleSwitchPersona(persona)}
+                    className={`w-full px-3 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition text-left ${
+                      selectedPersona?._id === persona._id ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                      {persona.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{persona.displayName || persona.name}</p>
+                      <p className="text-xs text-gray-400">#{persona.sameNameNumber || '?'}</p>
+                    </div>
+                    {selectedPersona?._id === persona._id && (
+                      <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 表情按钮 */}
         <div className="relative flex-shrink-0 pb-0.5" ref={emojiContainerRef}>
           <button
@@ -180,14 +261,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder={inputValue.startsWith('/me ') ? '输入动作内容...' : placeholder}
+            placeholder={placeholder}
             className={`w-full bg-gray-100 rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none ${
-              isFocused
-                ? 'bg-white ring-2 ring-blue-400/50 shadow-md'
-                : 'hover:bg-gray-50'
-            } ${
-              disabled ? 'opacity-50' : ''
-            }`}
+              isFocused ? 'bg-white ring-2 ring-blue-400/50 shadow-md' : 'hover:bg-gray-50'
+            } ${disabled ? 'opacity-50' : ''}`}
             disabled={disabled}
             maxLength={2000}
             autoComplete="off"
@@ -206,19 +283,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
             hasContent && !disabled
               ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md hover:shadow-lg active:scale-95'
               : 'bg-gray-200 text-gray-400'
-          } ${
-            sendAnimation ? 'scale-90 opacity-80' : ''
-          }`}
+          } ${sendAnimation ? 'scale-90 opacity-80' : ''}`}
         >
-          {sendAnimation ? (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          )}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
         </button>
       </div>
     </div>
