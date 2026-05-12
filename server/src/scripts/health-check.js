@@ -95,11 +95,11 @@ async function checkPersonas() {
   if (missingDisplayName > 0) warn('Persona 数据', `${missingDisplayName} 个已审核角色缺少 displayName`);
   
   // 检查是否有重复 globalNumber
-  const dupes = await Persona.aggregate([
+    const dupes = await Persona.aggregate([
     { $match: { globalNumber: { $exists: true, $ne: null } } },
     { $group: { _id: '$globalNumber', count: { $sum: 1 } } },
     { $match: { count: { $gt: 1 } } }
-  ]).toArray();
+    ]);
   if (dupes.length > 0) throw new Error(`${dupes.length} 个重复的 globalNumber，编号系统有问题`);
 }
 
