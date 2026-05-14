@@ -239,7 +239,9 @@ io.on('connection', (socket) => {
         userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
       };
       
-      io.to(roomId).emit('new-message', messageToSend);
+      // ✅ 确保广播给房间里所有人（包括发送者自己）
+    io.in(roomId).emit('new-message', messageToSend);
+    console.log(`📨 消息已广播到房间 ${roomId}:`, messageToSend.content.substring(0, 30));
     } catch (error) {
       console.error('❌ 保存消息失败:', error);
       socket.emit('error', { message: '发送消息失败' });

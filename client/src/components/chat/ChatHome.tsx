@@ -364,7 +364,7 @@ const ChatHome = () => {
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [authChecked, user, selectedPersona, selectedRoom]);
+  }, [authChecked, user]);
 
   // ========== 加入房间加载消息 ==========
   useEffect(() => {
