@@ -4,6 +4,9 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
+import { useLongPress } from '../../hooks/useLongPress';
+import { ContextMenu } from '../common/ContextMenu';
+import type { MenuItem } from '../common/ContextMenu';
 import DesktopLayout from '../layout/DesktopLayout';
 import TabletLayout from '../layout/TabletLayout';
 import MobileLayout from '../layout/MobileLayout';
@@ -21,6 +24,8 @@ import { parseMarkdown } from '../../utils/renderMarkdown';
 import { formatMessageTime } from '../../utils/timeFormat';
 import { smartConvert } from '../../services/translateApi';
 
+console.log('🔧 [ChatHome] 组件模块加载');
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 // ========== 消息列表组件 ==========
@@ -30,22 +35,194 @@ const MessageList: React.FC<{
   selectedPersona: Persona | null;
   isMobile: boolean;
   navigate: (path: string) => void;
-}> = ({ messages, user, selectedPersona, isMobile, navigate }) => {
+  onMessagesChange?: (newMessages: Message[]) => void;
+}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [translatingMsgId, setTranslatingMsgId] = useState<string | null>(null);
+  
+  // ✅ 右键/长按菜单状态
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    message: Message | null;
+  }>({ visible: false, x: 0, y: 0, message: null });
+
+  console.log(`📋 [MessageList] 初始化，消息数量: ${messages.length}`);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ✅ 回复消息
+  const handleReply = useCallback((message: Message) => {
+    console.log(`💬 [MessageList] 回复消息: ${message._id}, 内容: ${message.content.substring(0, 30)}`);
+    toast.success(`回复功能开发中...`, { icon: '💬' });
+  }, []);
+
+  // ✅ 分享消息（复制到剪贴板）
+  const handleShare = useCallback(async (message: Message) => {
+    console.log(`📤 [MessageList] 分享消息: ${message._id}`);
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast.success('消息已复制到剪贴板');
+      console.log(`✅ [MessageList] 消息已复制到剪贴板`);
+    } catch (error) {
+      console.error(`❌ [MessageList] 复制失败:`, error);
+      toast.error('复制失败');
+    }
+  }, []);
+
+  // ✅ 删除消息（软删除，仅自己可见）
+  const handleDelete = useCallback(async (message: Message) => {
+    console.log(`🗑️ [MessageList] 删除消息: ${message._id}`);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/room/message/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ messageId: message._id })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        console.log(`✅ [MessageList] 消息删除成功`);
+        toast.success('消息已删除');
+        // 从本地消息列表中过滤掉该消息
+        if (onMessagesChange) {
+          onMessagesChange(messages.filter(m => m._id !== message._id));
+        }
+      } else {
+        console.error(`❌ [MessageList] 删除失败:`, data.error);
+        toast.error(data.error || '删除失败');
+      }
+    } catch (error) {
+      console.error(`❌ [MessageList] 删除异常:`, error);
+      toast.error('删除失败');
+    }
+  }, [messages, onMessagesChange]);
+
+  // ✅ 撤回消息（仅自己，5分钟内）
+  const handleRecall = useCallback(async (message: Message) => {
+    console.log(`⏪ [MessageList] 撤回消息: ${message._id}`);
+    
+    // 检查是否在5分钟内
+    const messageTime = new Date(message.createdAt).getTime();
+    const now = Date.now();
+    const diffMinutes = (now - messageTime) / 1000 / 60;
+    
+    console.log(`⏱️ [MessageList] 消息发送于 ${diffMinutes.toFixed(1)} 分钟前`);
+    
+    if (diffMinutes > 5) {
+      console.log(`❌ [MessageList] 超过撤回时间限制 (5分钟)`);
+      toast.error('只能撤回5分钟内的消息');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/room/message/recall`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ messageId: message._id })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        console.log(`✅ [MessageList] 消息撤回成功`);
+        toast.success('消息已撤回');
+        // 更新本地消息内容
+        message.content = '该消息已被撤回';
+        message.isRecalled = true;
+        if (onMessagesChange) {
+          onMessagesChange([...messages]);
+        }
+      } else {
+        console.error(`❌ [MessageList] 撤回失败:`, data.error);
+        toast.error(data.error || '撤回失败');
+      }
+    } catch (error) {
+      console.error(`❌ [MessageList] 撤回异常:`, error);
+      toast.error('撤回失败');
+    }
+  }, [messages, onMessagesChange]);
+
+  // ✅ 处理长按/右键
+  const handleMessageLongPress = useCallback((message: Message, position: { x: number; y: number }) => {
+    console.log(`👆 [MessageList] 长按/右键消息: ${message._id}, 位置: (${position.x}, ${position.y})`);
+    setContextMenu({
+      visible: true,
+      x: position.x,
+      y: position.y,
+      message,
+    });
+  }, []);
+
+  // ✅ 获取菜单项
+  const getMenuItems = useCallback((message: Message, isSelf: boolean): MenuItem[] => {
+    console.log(`📋 [MessageList] 生成菜单项, isSelf=${isSelf}`);
+    const items: MenuItem[] = [];
+    
+    // 回复（所有人都可以）
+    items.push({
+      key: 'reply',
+      label: '回复',
+      onClick: () => handleReply(message),
+    });
+    
+    // 分享
+    items.push({
+      key: 'share',
+      label: '分享',
+      onClick: () => handleShare(message),
+    });
+    
+    // 删除（仅自己）
+    if (isSelf) {
+      items.push({
+        key: 'delete',
+        label: '删除',
+        danger: true,
+        onClick: () => handleDelete(message),
+      });
+    }
+    
+    // 撤回（仅自己，5分钟内）
+    if (isSelf) {
+      const messageTime = new Date(message.createdAt).getTime();
+      const canRecall = Date.now() - messageTime <= 5 * 60 * 1000;
+      console.log(`⏱️ [MessageList] 撤回可用: ${canRecall}`);
+      if (canRecall) {
+        items.push({
+          key: 'recall',
+          label: '撤回',
+          onClick: () => handleRecall(message),
+        });
+      }
+    }
+    
+    console.log(`✅ [MessageList] 生成 ${items.length} 个菜单项: ${items.map(i => i.label).join(', ')}`);
+    return items;
+  }, [handleReply, handleShare, handleDelete, handleRecall]);
+
   const handleTranslate = async (content: string, msgId: string) => {
     if (translatingMsgId === msgId) return;
+    console.log(`🌐 [MessageList] 翻译消息: ${msgId}`);
     setTranslatingMsgId(msgId);
     try {
       const translated = await smartConvert(content);
-      alert(`📝 翻译结果：\n\n原文：${content}\n\n译文：${translated}`);
-    } catch { alert('翻译失败'); }
-    finally { setTranslatingMsgId(null); }
+      toast.success(`译文：${translated}`, { duration: 5000 });
+    } catch { 
+      toast.error('翻译失败'); 
+    } finally { 
+      setTranslatingMsgId(null); 
+    }
   };
 
   if (messages.length === 0) {
@@ -55,6 +232,17 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
+        // 检查是否被撤回或删除
+        if (msg.isRecalled) {
+          return (
+            <div key={msg._id} className="flex justify-center">
+              <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full italic">
+                {msg.content}
+              </span>
+            </div>
+          );
+        }
+        
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -84,50 +272,85 @@ const MessageList: React.FC<{
             transition={{ duration: 0.3 }}
             className={`group flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}
           >
+            {/* 对方头像 */}
             {!isSelf && (
-              <div onClick={() => { if (msg.personaId?._id) navigate(`/persona/${msg.personaId._id}`); }}
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-sm">
+              <div 
+                onClick={() => { if (msg.personaId?._id) navigate(`/persona/${msg.personaId._id}`); }}
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-sm"
+              >
                 {(msg.personaId?.displayName || msg.personaId?.name || '?').charAt(0)}
               </div>
             )}
             
             <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
+              {/* 发送者名称 */}
               {!isSelf && (
-                <div onClick={() => { if (msg.personaId?._id) navigate(`/persona/${msg.personaId._id}`); }}
-                  className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition">
+                <div 
+                  onClick={() => { if (msg.personaId?._id) navigate(`/persona/${msg.personaId._id}`); }}
+                  className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition"
+                >
                   <span className="text-sm font-medium text-gray-800">{msg.personaId?.displayName || msg.personaId?.name || '?'}</span>
                   {msg.personaId?.sameNameNumber && <span className="text-[10px] text-gray-400">#{msg.personaId.sameNameNumber}</span>}
                 </div>
               )}
+              
               <div className="flex items-end gap-2">
+                {/* 时间戳（对方消息左侧） */}
                 {!isMobile && !isSelf && (
                   <span className="text-xs text-gray-400 flex-shrink-0">{formatMessageTime(msg.createdAt)}</span>
                 )}
-                <div>
-                  <div className={`px-4 py-2 rounded-2xl max-w-full relative ${
-                    isSelf ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
-                  }`}>
-                    <div className="break-words whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }} />
-                    {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
-                  </div>
+                
+                {/* ✅ 消息气泡 - 添加长按/右键事件 */}
+                <div
+                  {...useLongPress({
+                    duration: 500,
+                    enableMobile: true,
+                    enableContextMenu: true,
+                    onLongPress: (e, pos) => {
+                      if (pos) handleMessageLongPress(msg, pos);
+                    },
+                    onClick: () => {
+                      console.log(`🔘 [MessageList] 点击消息: ${msg._id}`);
+                    },
+                  })}
+                  className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
+                    isSelf 
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
+                      : 'bg-white text-gray-800 rounded-tl-none shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  <div className="break-words whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }} />
+                  {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
                 </div>
+                
+                {/* 时间戳（自己消息右侧） */}
                 {isSelf && <span className="text-xs text-gray-400 flex-shrink-0">{formatMessageTime(msg.createdAt)}</span>}
               </div>
             </div>
 
+            {/* 自己头像 */}
             {isSelf && (
               <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
                 {(selectedPersona?.displayName || selectedPersona?.name || '?').charAt(0)}
               </div>
             )}
 
+            {/* 翻译按钮（对方消息） */}
             {!isSelf && (
-              <button onClick={() => handleTranslate(msg.content, msg._id)} disabled={translatingMsgId === msg._id}
-                className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex-shrink-0" title="简繁转换">
+              <button 
+                onClick={() => handleTranslate(msg.content, msg._id)} 
+                disabled={translatingMsgId === msg._id}
+                className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 flex-shrink-0" 
+                title="简繁转换"
+              >
                 {translatingMsgId === msg._id ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                 ) : (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                  </svg>
                 )}
               </button>
             )}
@@ -135,12 +358,23 @@ const MessageList: React.FC<{
         );
       })}
       <div ref={messagesEndRef} />
+      
+      {/* ✅ 右键/长按菜单 */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={contextMenu.message ? getMenuItems(contextMenu.message, contextMenu.message.personaId?._id === selectedPersona?._id) : []}
+        onClose={() => setContextMenu({ ...contextMenu, visible: false })}
+        theme="dark"
+      />
     </>
   );
 };
 
 // ========== 主组件 ==========
 const ChatHome = () => {
+  console.log('🎨 [ChatHome] 主组件渲染');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
@@ -165,6 +399,14 @@ const ChatHome = () => {
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+
+  console.log(`📊 [ChatHome] 状态: authChecked=${authChecked}, loading=${loading}, selectedRoom=${selectedRoom?._id}`);
+
+  // ✅ 消息变化时的回调
+  const handleMessagesChange = useCallback((newMessages: Message[]) => {
+    console.log(`🔄 [ChatHome] 消息列表更新，数量: ${newMessages.length}`);
+    setMessages(newMessages);
+  }, []);
 
   const fetchPendingCount = useCallback(async () => {
     if (!selectedRoom || (!isRoomAdmin && !isRoomOwner)) return;
@@ -277,12 +519,24 @@ const ChatHome = () => {
       }
     };
 
+    // ✅ 监听消息撤回事件
+    const handleMessageRecalled = (data: { messageId: string; content: string }) => {
+      console.log(`🔔 [ChatHome] 消息被撤回: ${data.messageId}`);
+      setMessages(prev => prev.map(msg => 
+        msg._id === data.messageId 
+          ? { ...msg, content: data.content, isRecalled: true }
+          : msg
+      ));
+    };
+
     socketService.onNewMessage(handleNewMessage);
+    socketService.on('message-recalled', handleMessageRecalled);
     socketService.onRoomOnlineCount((data) => {
       setRooms(prev => prev.map(room => room._id === data.roomId ? { ...room, onlineCount: data.count } : room));
     });
 
     return () => {
+      socketService.off('message-recalled', handleMessageRecalled);
       socketService.removeAllListeners();
       socketService.disconnect();
     };
@@ -480,7 +734,14 @@ const ChatHome = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
-          <MessageList messages={messages} user={user} selectedPersona={selectedPersona} isMobile={isMobile} navigate={navigate} />
+          <MessageList 
+            messages={messages} 
+            user={user} 
+            selectedPersona={selectedPersona} 
+            isMobile={isMobile} 
+            navigate={navigate}
+            onMessagesChange={handleMessagesChange}
+          />
         </div>
 
         <ChatInput

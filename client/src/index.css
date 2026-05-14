@@ -159,3 +159,26 @@ input, textarea {
   bottom: 0;
   background: white;
 }
+
+
+/* 禁用所有输入框的原生键盘 */
+input, 
+textarea,
+[contenteditable="true"] {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* 防止长按弹出菜单 */
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+/* 移动端禁用缩放（可选） */
+@supports (-webkit-touch-callout: none) {
+  input, textarea {
+    font-size: 16px; /* 防止iOS自动缩放 */
+  }
+}

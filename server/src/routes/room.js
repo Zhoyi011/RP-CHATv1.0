@@ -577,4 +577,117 @@ router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
   }
 });
 
+// ========== 撤回消息 ==========
+console.log('🔧 [room.js] 加载撤回消息API');
+
+router.post('/message/recall', authMiddleware, async (req, res) => {
+  const { messageId } = req.body;
+  console.log(`⏪ [API] 撤回消息请求: messageId=${messageId}, userId=${req.userId}`);
+  
+  try {
+    if (!messageId) {
+      console.log(`❌ [API] 消息ID缺失`);
+      return res.status(400).json({ error: '消息ID不能为空' });
+    }
+
+    const message = await Message.findById(messageId);
+    
+    if (!message) {
+      console.log(`❌ [API] 消息不存在: ${messageId}`);
+      return res.status(404).json({ error: '消息不存在' });
+    }
+    
+    console.log(`📋 [API] 找到消息: roomId=${message.roomId}, userId=${message.userId}`);
+    
+    // 获取当前用户的Persona（用于验证是否是消息发送者）
+    const currentPersona = await getActivePersona(req.userId);
+    if (!currentPersona) {
+      console.log(`❌ [API] 用户没有激活的Persona: ${req.userId}`);
+      return res.status(403).json({ error: '请先选择一个角色' });
+    }
+    
+    // 检查权限：只能撤回自己发送的消息
+    if (message.userId.toString() !== currentPersona._id.toString() && 
+        message.personaId?.toString() !== currentPersona._id.toString()) {
+      console.log(`❌ [API] 无权撤回: 消息作者=${message.userId}, 当前Persona=${currentPersona._id}`);
+      return res.status(403).json({ error: '只能撤回自己的消息' });
+    }
+    
+    // 检查时间（5分钟内）
+    const messageTime = new Date(message.createdAt).getTime();
+    const now = Date.now();
+    const diffSeconds = (now - messageTime) / 1000;
+    
+    console.log(`⏱️ [API] 消息发送时间: ${new Date(messageTime).toISOString()}, 现在: ${new Date(now).toISOString()}, 相差: ${diffSeconds}秒`);
+    
+    if (diffSeconds > 5 * 60) {
+      console.log(`❌ [API] 超过撤回时间: ${diffSeconds}秒前`);
+      return res.status(400).json({ error: '只能撤回5分钟内的消息' });
+    }
+    
+    // 标记为已撤回
+    message.isRecalled = true;
+    message.content = '该消息已被撤回';
+    message.recalledAt = new Date();
+    await message.save();
+    
+    console.log(`✅ [API] 消息撤回成功: ${messageId}`);
+    
+    // 通过Socket通知房间内所有人
+    const io = req.app.get('io');
+    if (io) {
+      io.to(message.roomId).emit('message-recalled', { messageId, content: message.content });
+      console.log(`📢 [API] 已通过Socket通知房间 ${message.roomId}`);
+    } else {
+      console.log(`⚠️ [API] Socket.io实例未找到`);
+    }
+    
+    res.json({ success: true, message: '撤回成功' });
+  } catch (error) {
+    console.error('❌ [API] 撤回失败:', error);
+    res.status(500).json({ error: error.message || '撤回失败' });
+  }
+});
+
+// ========== 删除消息（仅自己可见，不是真正的删除）==========
+router.post('/message/delete', authMiddleware, async (req, res) => {
+  const { messageId } = req.body;
+  console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}, userId=${req.userId}`);
+  
+  try {
+    if (!messageId) {
+      return res.status(400).json({ error: '消息ID不能为空' });
+    }
+
+    const message = await Message.findById(messageId);
+    
+    if (!message) {
+      return res.status(404).json({ error: '消息不存在' });
+    }
+    
+    const currentPersona = await getActivePersona(req.userId);
+    if (!currentPersona) {
+      return res.status(403).json({ error: '请先选择一个角色' });
+    }
+    
+    // 只能删除自己的消息
+    if (message.userId.toString() !== currentPersona._id.toString() && 
+        message.personaId?.toString() !== currentPersona._id.toString()) {
+      return res.status(403).json({ error: '只能删除自己的消息' });
+    }
+    
+    // 标记为已删除（软删除）
+    message.isDeletedForUser = true;
+    message.deletedForUserId = req.userId;
+    await message.save();
+    
+    console.log(`✅ [API] 消息标记为已删除: ${messageId}`);
+    
+    res.json({ success: true, message: '删除成功' });
+  } catch (error) {
+    console.error('❌ [API] 删除失败:', error);
+    res.status(500).json({ error: error.message || '删除失败' });
+  }
+});
+
 module.exports = router;

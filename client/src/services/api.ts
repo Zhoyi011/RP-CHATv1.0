@@ -107,6 +107,8 @@ export interface Message {
     _id: string;
     firebaseUid?: string;
   };
+    isRecalled?: boolean;  // ✅ 添加这个字段
+    recalledAt?: string;
 }
 
 export interface Persona {

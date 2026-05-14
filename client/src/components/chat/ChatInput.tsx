@@ -3,7 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker from '../common/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { CustomKeyboard } from '../keyboard/CustomKeyboard'; // ✅ 新增：导入自定义键盘
 import type { Persona } from '../../services/api';
+
+console.log('🔧 [ChatInput] 组件模块加载');
 
 interface ChatInputProps {
   onSendMessage: (content: string, isAction: boolean, personaId?: string) => void;
@@ -26,21 +29,33 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSwitchPersona,
   onLoadRoomPersonas,
 }) => {
+  console.log('🎨 [ChatInput] 组件渲染', { roomId, disabled, selectedPersonaId: selectedPersona?._id });
+
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [sendAnimation, setSendAnimation] = useState(false);
   const [showPersonaSwitch, setShowPersonaSwitch] = useState(false);
+  const [showCustomKeyboard, setShowCustomKeyboard] = useState(false); // ✅ 新增：控制自定义键盘显示
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiContainerRef = useRef<HTMLDivElement>(null);
   const personaSwitchRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
 
+  console.log('📊 [ChatInput] 状态', { 
+    inputLength: inputValue.length, 
+    showEmojiPicker, 
+    showCustomKeyboard,
+    isFocused 
+  });
+
   // 键盘弹出时确保输入框可见
   useEffect(() => {
     if (isFocused && isIOS && isKeyboardOpen) {
+      console.log('📱 [ChatInput] iOS键盘弹出，滚动到视图');
       containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [isKeyboardOpen, isFocused, isIOS]);
@@ -49,35 +64,46 @@ const ChatInput: React.FC<ChatInputProps> = ({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (emojiContainerRef.current && !emojiContainerRef.current.contains(e.target as Node)) {
+        console.log('🔽 [ChatInput] 关闭表情面板');
         setShowEmojiPicker(false);
       }
       if (personaSwitchRef.current && !personaSwitchRef.current.contains(e.target as Node)) {
+        console.log('🔽 [ChatInput] 关闭角色切换面板');
         setShowPersonaSwitch(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      console.log('🧹 [ChatInput] 清理点击外部监听');
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // 加载群内 Persona
   useEffect(() => {
     if (showPersonaSwitch && onLoadRoomPersonas) {
+      console.log('🔄 [ChatInput] 加载群内角色列表');
       onLoadRoomPersonas();
     }
-  }, [showPersonaSwitch]);
+  }, [showPersonaSwitch, onLoadRoomPersonas]);
 
   // 翻译
   const handleTranslate = async () => {
+    console.log('🌐 [ChatInput] 开始简繁转换', { inputLength: inputValue.length });
     if (!inputValue.trim() || isTranslating) return;
     setIsTranslating(true);
     try {
       const simplified = await traditionalToSimplified(inputValue);
       if (simplified === inputValue) {
         const traditional = await simplifiedToTraditional(inputValue);
+        console.log('✅ [ChatInput] 转换为繁体', { original: inputValue.substring(0, 30), converted: traditional.substring(0, 30) });
         setInputValue(traditional);
       } else {
+        console.log('✅ [ChatInput] 转换为简体', { original: inputValue.substring(0, 30), converted: simplified.substring(0, 30) });
         setInputValue(simplified);
       }
+    } catch (error) {
+      console.error('❌ [ChatInput] 简繁转换失败', error);
     } finally {
       setIsTranslating(false);
     }
@@ -85,32 +111,68 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // 发送
   const handleSend = () => {
+    console.log('📤 [ChatInput] 尝试发送消息', { hasContent: !!inputValue.trim(), disabled });
     if (!inputValue.trim() || disabled) return;
     
     const isAction = inputValue.startsWith('/me ');
     const content = isAction ? inputValue.slice(4) : inputValue;
+    
+    console.log('✅ [ChatInput] 发送消息', { 
+      isAction, 
+      contentLength: content.length, 
+      personaId: selectedPersona?._id,
+      contentPreview: content.substring(0, 50)
+    });
     
     setSendAnimation(true);
     setTimeout(() => setSendAnimation(false), 400);
     
     onSendMessage(content, isAction, selectedPersona?._id);
     setInputValue('');
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setShowCustomKeyboard(false); // ✅ 新增：关闭自定义键盘
+    
+    // 重新聚焦自定义键盘
+    setTimeout(() => {
+      console.log('🔧 [ChatInput] 重新打开自定义键盘');
+      setShowCustomKeyboard(true);
+    }, 50);
+  };
+
+  // ✅ 新增：处理自定义键盘的值变化
+  const handleKeyboardChange = (value: string) => {
+    console.log('⌨️ [ChatInput] 自定义键盘输入', { valueLength: value.length, preview: value.substring(0, 30) });
+    setInputValue(value);
+  };
+
+  // ✅ 新增：处理自定义键盘关闭
+  const handleKeyboardClose = () => {
+    console.log('🔽 [ChatInput] 关闭自定义键盘');
+    setShowCustomKeyboard(false);
+  };
+
+  // ✅ 新增：打开自定义键盘（替代原生键盘）
+  const handleOpenKeyboard = () => {
+    console.log('🔧 [ChatInput] 打开自定义键盘');
+    setShowCustomKeyboard(true);
+    setIsFocused(true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 保留原生键盘的Enter支持（PC端备用）
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      console.log('⌨️ [ChatInput] 原生键盘Enter发送');
       handleSend();
     }
   };
 
   const handleSelectEmoji = (emoji: string) => {
+    console.log('😊 [ChatInput] 选择表情', { emoji });
     setInputValue(prev => prev + emoji);
-    inputRef.current?.focus();
   };
 
   const handleSwitchPersona = (persona: Persona) => {
+    console.log('🔄 [ChatInput] 切换角色', { from: selectedPersona?._id, to: persona._id, name: persona.name });
     onSwitchPersona?.(persona);
     setShowPersonaSwitch(false);
   };
@@ -281,31 +343,35 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </motion.button>
 
-        {/* 输入框 */}
+        {/* ✅ 修改：输入框区域 - 使用自定义键盘替代原生input */}
         <motion.div
           className="flex-1 min-w-0"
           animate={{ scale: isFocused ? 1.02 : 1 }}
           transition={{ duration: 0.2 }}
         >
-          <input 
-            ref={inputRef}
-            type="text" 
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            placeholder={placeholder}
-            className={`w-full bg-gray-100 rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none ${
+          {/* 显示输入内容的预览框 */}
+          <div 
+            onClick={handleOpenKeyboard}
+            className={`w-full bg-gray-100 rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 cursor-text min-h-[44px] ${
               isFocused ? 'bg-white ring-2 ring-blue-400/50 shadow-md' : 'hover:bg-gray-50'
             } ${disabled ? 'opacity-50' : ''}`}
-            disabled={disabled}
+          >
+            {inputValue ? (
+              <span className="text-gray-800 break-words">{inputValue}</span>
+            ) : (
+              <span className="text-gray-400">{placeholder}</span>
+            )}
+          </div>
+
+          {/* 自定义键盘组件 */}
+          <CustomKeyboard
+            value={inputValue}
+            onChange={handleKeyboardChange}
+            onClose={handleKeyboardClose}
+            placeholder={placeholder}
             maxLength={2000}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            enterKeyHint="send"
+            theme="light"
+            enableSound={false}
           />
         </motion.div>
         

@@ -33,7 +33,7 @@ function filterMessage(content) {
         // 使用正则替换，忽略大小写，全局匹配
         const regex = new RegExp(word, 'gi');
         const before = filtered;
-        filtered = filtered.replace(regex, (match) => '*'.repeat(match.length));
+        filtered = filtered.replace(regex, (match) => '【已屏蔽脏话】'.repeat(match.length));
         if (before !== filtered) {
             replacedCount++;
             console.log(`  🚫 [contentFilter] 过滤词 "${word}" 被替换`);
