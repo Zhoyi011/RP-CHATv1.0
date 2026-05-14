@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const aiRoutes = require('./routes/ai');
+const { filterMessage, isClean } = require('./services/contentFilter');
 
 require('dotenv').config();
 
