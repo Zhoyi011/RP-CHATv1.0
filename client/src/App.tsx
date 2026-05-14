@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from './contexts/ThemeContext'; // ✅ 导入全局主题
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import InviteCode from './components/auth/InviteCode';
@@ -20,10 +20,13 @@ import TermsOfService from './components/legal/TermsOfService';
 import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import Settings from './components/settings/Settings';
 
-function App() {
-  console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
+console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
+
+const AppContent = () => {
+  const { theme } = useTheme();
+  console.log(`🎨 [AppContent] 当前主题: ${theme}`);
   return (
-    <ThemeProvider>
+    <div className="min-h-screen w-full" style={{ backgroundColor: 'inherit' }}>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
@@ -48,6 +51,14 @@ function App() {
           <Route path="*" element={<div className="p-8 text-center">404 - 页面不存在</div>} />
         </Routes>
       </BrowserRouter>
+    </div>
+  );
+};
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
     </ThemeProvider>
   );
 }

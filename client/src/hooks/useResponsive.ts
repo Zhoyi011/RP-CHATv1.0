@@ -1,37 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+
+console.log('🔧 [useResponsive] 加载响应式 Hook');
 
 export const useResponsive = () => {
   const [windowSize, setWindowSize] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
   });
 
   useEffect(() => {
     const handleResize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
+      const newSize = { width: window.innerWidth, height: window.innerHeight };
+      console.log(`📐 [useResponsive] 窗口大小变化: ${newSize.width}x${newSize.height}`);
+      setWindowSize(newSize);
     };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', handleResize);
+      console.log(`📐 [useResponsive] 初始窗口大小: ${windowSize.width}x${windowSize.height}`);
+      return () => {
+        console.log(`🧹 [useResponsive] 移除 resize 监听`);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
   }, []);
 
-  const width = windowSize.width;
-  const height = windowSize.height;
-  
-  // 更精确的判断
-  return {
-    isMobile: width <= 768,              // 手机: ≤768px
-    isTablet: width > 768 && width <= 1024,  // 平板: 769-1024px
-    isDesktop: width > 1024,              // 电脑: >1024px
-    
-    // 添加手机方向判断
-    isMobilePortrait: width <= 768 && height > width,  // 竖屏
-    isMobileLandscape: width <= 768 && width > height, // 横屏
-    
-    width,
-    height,
-  };
+  const isMobile = windowSize.width < 768;
+  const isTablet = windowSize.width >= 768 && windowSize.width < 1024;
+  const isDesktop = windowSize.width >= 1024;
+
+  console.log(`📱 [useResponsive] 当前设备: 手机=${isMobile}, 平板=${isTablet}, 电脑=${isDesktop}`);
+
+  return { isMobile, isTablet, isDesktop, width: windowSize.width, height: windowSize.height };
 };
