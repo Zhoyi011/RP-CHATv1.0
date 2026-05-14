@@ -129,3 +129,33 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 50%;
   }
 }
+
+/* ========== 安卓键盘修复 ========== */
+
+/* 禁止页面随键盘弹起而滚动 */
+@media (max-width: 768px) {
+  html, body {
+    overflow: hidden;
+    height: 100%;
+    position: fixed;
+    width: 100%;
+  }
+
+  #root {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    height: 100%;
+  }
+}
+
+/* 安卓输入框不缩放 */
+input, textarea {
+  font-size: 16px !important;
+}
+
+/* 软键盘弹出时，让输入区域保持可见 */
+.keyboard-visible {
+  position: sticky;
+  bottom: 0;
+  background: white;
+}

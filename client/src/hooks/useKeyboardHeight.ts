@@ -6,71 +6,56 @@ export const useKeyboardHeight = () => {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // 检测 iOS
     setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
   }, []);
 
   useEffect(() => {
-    const handleViewportChange = () => {
-      if (!window.visualViewport) return;
+    let lastHeight = window.innerHeight;
 
-      const viewportHeight = window.visualViewport.height;
-      const windowHeight = window.innerHeight;
-      const heightDiff = windowHeight - viewportHeight;
+    const handleResize = () => {
+      const currentHeight = window.innerHeight;
+      const heightDiff = lastHeight - currentHeight;
 
-      // iOS 键盘通常 > 250px
-      if (heightDiff > 100) {
+      // 安卓键盘高度通常 > 200px
+      if (heightDiff > 150) {
         setKeyboardHeight(heightDiff);
         setIsKeyboardOpen(true);
-      } else {
+      } else if (heightDiff < -100) {
+        // 键盘收起
         setKeyboardHeight(0);
         setIsKeyboardOpen(false);
       }
+      
+      lastHeight = currentHeight;
     };
 
-    const handleFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        // iOS 需要延迟检测
-        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-          setTimeout(handleViewportChange, 300);
-          setTimeout(handleViewportChange, 600);
-        }
-      }
-    };
+    // 安卓主要用 resize 事件
+    window.addEventListener('resize', handleResize);
 
-    const handleFocusOut = () => {
-      if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-        setTimeout(() => {
+    // iOS 用 visualViewport
+    if (window.visualViewport) {
+      const handleViewport = () => {
+        const viewportH = window.visualViewport!.height;
+        const windowH = window.innerHeight;
+        const diff = windowH - viewportH;
+        
+        if (diff > 150) {
+          setKeyboardHeight(diff);
+          setIsKeyboardOpen(true);
+        } else {
           setKeyboardHeight(0);
           setIsKeyboardOpen(false);
-        }, 100);
-      }
-    };
-
-    // Visual Viewport API
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange);
-      window.visualViewport.addEventListener('scroll', handleViewportChange);
+        }
+      };
+      
+      window.visualViewport.addEventListener('resize', handleViewport);
+      return () => {
+        window.visualViewport?.removeEventListener('resize', handleViewport);
+        window.removeEventListener('resize', handleResize);
+      };
     }
 
-    // 回退方案
-    window.addEventListener('resize', handleViewportChange);
-    document.addEventListener('focusin', handleFocusIn);
-    document.addEventListener('focusout', handleFocusOut);
-
-    // 初始检测
-    handleViewportChange();
-
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleViewportChange);
-        window.visualViewport.removeEventListener('scroll', handleViewportChange);
-      }
-      window.removeEventListener('resize', handleViewportChange);
-      document.removeEventListener('focusin', handleFocusIn);
-      document.removeEventListener('focusout', handleFocusOut);
-    };
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return { keyboardHeight, isKeyboardOpen, isIOS };
