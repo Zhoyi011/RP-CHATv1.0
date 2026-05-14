@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* 默认字体变量 */
+  --font-family-base: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* 深色模式基础样式 */
+html.dark {
+  color-scheme: dark;
+  background-color: #1a1a1a;
+}
+
+html.light {
+  color-scheme: light;
+  background-color: #ffffff;
+}
+
+/* 应用到全局 */
+body {
+  font-family: var(--font-family-base);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 确保所有文本都继承字体 */
+* {
+  font-family: inherit;
+}
 /* ========== 引入猫啃珠圆体 ========== */
 @font-face {
   font-family: 'MaokenZhuyuanTi';

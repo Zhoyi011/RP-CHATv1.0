@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useResponsive } from '../../hooks/useResponsive';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useTheme } from '../../contexts/ThemeContext'; // ✅ 使用全局主题
 import { adminApi } from '../../services/api';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
@@ -23,13 +24,18 @@ const Settings = () => {
   const { isAdmin, isOwner } = usePermissions();
   const canManageInvites = isAdmin || isOwner;
 
-  // ===== 设置状态 =====
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  // ===== 从全局主题获取 =====
+  const { theme, setTheme, fontFamily, setFontFamily, availableFonts, loadCustomFont } = useTheme();
+  
+  // ===== 本地设置状态（通知等仍可存在 localStorage，但最好统一到后端）=====
   const [notifications, setNotifications] = useState(() => localStorage.getItem('notifications') !== 'false');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('soundEnabled') !== 'false');
   const [defaultTranslate, setDefaultTranslate] = useState(() => localStorage.getItem('defaultTranslate') || 'off');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showFontSelector, setShowFontSelector] = useState(false);
+  const [customFontName, setCustomFontName] = useState('');
+  const [loadingFont, setLoadingFont] = useState(false);
 
   // ===== 邀请码状态 =====
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
@@ -38,11 +44,9 @@ const Settings = () => {
   const [showInviteSection, setShowInviteSection] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // ===== 加载设置 =====
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  console.log('🎨 [Settings] 渲染，当前主题:', theme, '字体:', fontFamily);
 
+  // ===== 加载设置（从后端获取通知、声音等）=====
   const loadSettings = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -51,10 +55,6 @@ const Settings = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.theme) {
-          setTheme(data.theme);
-          applyTheme(data.theme);
-        }
         setNotifications(data.notifications !== false);
         setSoundEnabled(data.soundEnabled !== false);
         setDefaultTranslate(data.defaultTranslate || 'off');
@@ -63,6 +63,10 @@ const Settings = () => {
       console.error('加载设置失败:', error);
     }
   };
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
 
   // ===== 加载邀请码 =====
   const loadInviteCodes = useCallback(async () => {
@@ -82,20 +86,6 @@ const Settings = () => {
     if (showInviteSection) loadInviteCodes();
   }, [showInviteSection, loadInviteCodes]);
 
-  // ===== 应用主题 =====
-  const applyTheme = (newTheme: string) => {
-    const root = document.documentElement;
-    root.classList.remove('dark');
-    if (newTheme === 'dark') {
-      root.classList.add('dark');
-    } else if (newTheme === 'auto') {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        root.classList.add('dark');
-      }
-    }
-    localStorage.setItem('theme', newTheme);
-  };
-
   // ===== 保存设置 =====
   const handleSave = async () => {
     setSaving(true);
@@ -113,7 +103,6 @@ const Settings = () => {
       localStorage.setItem('notifications', String(notifications));
       localStorage.setItem('soundEnabled', String(soundEnabled));
       localStorage.setItem('defaultTranslate', defaultTranslate);
-      applyTheme(theme);
       
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -158,12 +147,45 @@ const Settings = () => {
     return { text: '有效', color: 'text-green-600', bg: 'bg-green-50', icon: '🟢' };
   };
 
-  // 计算统计
+  // ===== 字体切换处理 =====
+  const handleFontChange = (fontValue: string) => {
+    console.log(`🔤 [Settings] 切换字体: ${fontValue.substring(0, 50)}`);
+    setFontFamily(fontValue);
+    setShowFontSelector(false);
+  };
+
+  // ===== 加载自定义字体 =====
+  const handleLoadCustomFont = async () => {
+    if (!customFontName.trim()) return;
+    console.log(`📁 [Settings] 尝试加载自定义字体: ${customFontName}`);
+    setLoadingFont(true);
+    const fontUrl = `/fonts/${customFontName}.ttf`;
+    try {
+      const response = await fetch(fontUrl);
+      if (!response.ok) {
+        console.error(`❌ [Settings] 字体文件不存在: ${fontUrl}`);
+        alert(`字体文件不存在: ${customFontName}.ttf\n请将文件放入 public/fonts/ 目录`);
+        setLoadingFont(false);
+        return;
+      }
+      await loadCustomFont(customFontName, fontUrl);
+      alert(`字体 "${customFontName}" 加载成功！`);
+      setCustomFontName('');
+    } catch (error) {
+      console.error(`❌ [Settings] 字体加载失败:`, error);
+      alert(`字体加载失败，请检查文件格式`);
+    } finally {
+      setLoadingFont(false);
+    }
+  };
+
+  // 统计数据
   const validCodes = inviteCodes.filter(c => c.isActive && !c.usedBy && new Date(c.expiresAt) > new Date());
   const validUserCodes = validCodes.filter(c => c.type === 'user');
   const validAdminCodes = validCodes.filter(c => c.type === 'admin');
   const usedCodes = inviteCodes.filter(c => c.usedBy);
 
+  // 动态样式
   const activeTabBg = 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md scale-105';
   const inactiveTabBg = theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200';
   const cardBg = theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-800';
@@ -195,13 +217,14 @@ const Settings = () => {
 
       <div className={`max-w-2xl mx-auto ${isMobile ? 'p-3' : 'p-6'} space-y-4`}>
         
-        {/* ===== 外观设置 ===== */}
+        {/* ===== 外观设置（深色模式 + 字体） ===== */}
         <div className={`rounded-2xl shadow-sm p-5 transition-colors duration-300 ${cardBg}`}>
           <h3 className="font-medium mb-4 flex items-center gap-2">
             <span>🎨</span> 外观设置
           </h3>
           
-          <div className="grid grid-cols-3 gap-2">
+          {/* 主题切换 */}
+          <div className="grid grid-cols-3 gap-2 mb-5">
             {[
               { value: 'light', icon: '☀️', label: '浅色模式', desc: '明亮舒适' },
               { value: 'dark', icon: '🌙', label: '深色模式', desc: '护眼暗色' },
@@ -209,7 +232,7 @@ const Settings = () => {
             ].map(item => (
               <button
                 key={item.value}
-                onClick={() => setTheme(item.value)}
+                onClick={() => setTheme(item.value as any)}
                 className={`p-3 rounded-xl text-center transition-all duration-200 ${
                   theme === item.value ? activeTabBg : inactiveTabBg
                 }`}
@@ -219,6 +242,74 @@ const Settings = () => {
                 <div className="text-[10px] opacity-70">{item.desc}</div>
               </button>
             ))}
+          </div>
+
+          {/* 字体设置 */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                <span>🔤</span> 字体设置
+              </h4>
+              <button
+                onClick={() => setShowFontSelector(!showFontSelector)}
+                className="text-blue-500 text-xs hover:text-blue-600 transition"
+              >
+                {showFontSelector ? '收起' : '选择字体'}
+              </button>
+            </div>
+
+            {/* 当前字体预览 */}
+            <div 
+              className="p-3 rounded-xl mb-3 bg-gray-100 dark:bg-gray-700 text-sm"
+              style={{ fontFamily }}
+            >
+              示例文字：RP Chat 角色扮演聊天室
+            </div>
+
+            {showFontSelector && (
+              <div className="space-y-3 animate-in slide-in-from-top-2 fade-in duration-200">
+                {availableFonts.map((font) => (
+                  <button
+                    key={font.name}
+                    onClick={() => handleFontChange(font.value)}
+                    className={`w-full p-3 rounded-xl text-left transition-all duration-200 ${
+                      fontFamily === font.value
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700'
+                        : 'bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                    style={{ fontFamily: font.value }}
+                  >
+                    <p className="font-medium">{font.displayName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      字体预览：这个聊天室真有趣！
+                    </p>
+                  </button>
+                ))}
+                
+                {/* 自定义字体加载 */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    加载自定义字体（将 .ttf 文件放入 public/fonts/）
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customFontName}
+                      onChange={(e) => setCustomFontName(e.target.value)}
+                      placeholder="字体文件名（不含 .ttf）"
+                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={handleLoadCustomFont}
+                      disabled={loadingFont || !customFontName.trim()}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-xl text-sm hover:bg-blue-600 transition disabled:opacity-50"
+                    >
+                      {loadingFont ? '加载中...' : '加载'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -418,7 +509,7 @@ const Settings = () => {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between py-1">
               <span className="text-gray-500">版本</span>
-              <span className="font-mono">v1.3.0</span>
+              <span className="font-mono">v1.4.0</span>
             </div>
             <div className="flex justify-between py-1">
               <span className="text-gray-500">开发者</span>
