@@ -7,22 +7,22 @@
   font-family: 'MaokenZhuyuanTi';
   font-style: normal;
   font-weight: 400;
-  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+  src: url('/fonts/猫啃圆珠体.ttf') format('truetype');
 }
 @font-face {
   font-family: 'MaokenZhuyuanTi';
   font-weight: 500;
-  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+  src: url('/fonts/猫啃圆珠体.ttf') format('truetype');
 }
 @font-face {
   font-family: 'MaokenZhuyuanTi';
   font-weight: 600;
-  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+  src: url('/fonts/猫啃圆珠体.ttf') format('truetype');
 }
 @font-face {
   font-family: 'MaokenZhuyuanTi';
   font-weight: 700;
-  src: url('/fonts/MaokenZhuyuanTi.ttf') format('truetype');
+  src: url('/fonts/猫啃圆珠体.ttf') format('truetype');
 }
 
 /* ========== 全局基础 ========== */

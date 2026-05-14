@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker from '../common/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
-import { CustomKeyboard } from '../keyboard/CustomKeyboard'; // ✅ 新增：导入自定义键盘
+import { useResponsive } from '../../hooks/useResponsive';
+import { CustomKeyboard } from '../keyboard/CustomKeyboard';
 import type { Persona } from '../../services/api';
 
 console.log('🔧 [ChatInput] 组件模块加载');
@@ -37,22 +38,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [isFocused, setIsFocused] = useState(false);
   const [sendAnimation, setSendAnimation] = useState(false);
   const [showPersonaSwitch, setShowPersonaSwitch] = useState(false);
-  const [showCustomKeyboard, setShowCustomKeyboard] = useState(false); // ✅ 新增：控制自定义键盘显示
+  const [showCustomKeyboard, setShowCustomKeyboard] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
+  const fakeInputRef = useRef<HTMLDivElement>(null);
   const emojiContainerRef = useRef<HTMLDivElement>(null);
   const personaSwitchRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
+  const { isMobile } = useResponsive(); // 用于判断是否移动端
 
-  console.log('📊 [ChatInput] 状态', { 
-    inputLength: inputValue.length, 
-    showEmojiPicker, 
-    showCustomKeyboard,
-    isFocused 
-  });
+  console.log(`📱 [ChatInput] 设备类型: ${isMobile ? '移动端' : 'PC端'}, showCustomKeyboard=${showCustomKeyboard}`);
 
-  // 键盘弹出时确保输入框可见
+  // 键盘弹出时滚动到视图
   useEffect(() => {
     if (isFocused && isIOS && isKeyboardOpen) {
       console.log('📱 [ChatInput] iOS键盘弹出，滚动到视图');
@@ -96,10 +94,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
       const simplified = await traditionalToSimplified(inputValue);
       if (simplified === inputValue) {
         const traditional = await simplifiedToTraditional(inputValue);
-        console.log('✅ [ChatInput] 转换为繁体', { original: inputValue.substring(0, 30), converted: traditional.substring(0, 30) });
+        console.log('✅ [ChatInput] 转换为繁体');
         setInputValue(traditional);
       } else {
-        console.log('✅ [ChatInput] 转换为简体', { original: inputValue.substring(0, 30), converted: simplified.substring(0, 30) });
+        console.log('✅ [ChatInput] 转换为简体');
         setInputValue(simplified);
       }
     } catch (error) {
@@ -109,7 +107,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // 发送
+  // 发送消息
   const handleSend = () => {
     console.log('📤 [ChatInput] 尝试发送消息', { hasContent: !!inputValue.trim(), disabled });
     if (!inputValue.trim() || disabled) return;
@@ -129,46 +127,60 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
     onSendMessage(content, isAction, selectedPersona?._id);
     setInputValue('');
-    setShowCustomKeyboard(false); // ✅ 新增：关闭自定义键盘
+    setShowCustomKeyboard(false);
     
-    // 重新聚焦自定义键盘
-    setTimeout(() => {
-      console.log('🔧 [ChatInput] 重新打开自定义键盘');
-      setShowCustomKeyboard(true);
-    }, 50);
+    // 移动端：重新打开键盘？
+    if (isMobile) {
+      setTimeout(() => {
+        console.log('🔧 [ChatInput] 移动端发送后重新打开自定义键盘');
+        setShowCustomKeyboard(true);
+      }, 50);
+    } else {
+      // PC端：聚焦原生输入框
+      inputRef.current?.focus();
+    }
   };
 
-  // ✅ 新增：处理自定义键盘的值变化
+  // 移动端：打开自定义键盘
+  const openCustomKeyboard = () => {
+    console.log('🔧 [ChatInput] 移动端打开自定义键盘');
+    setShowCustomKeyboard(true);
+    setIsFocused(true);
+    // 强制模糊原生输入框（如果有）
+    if (inputRef.current) inputRef.current.blur();
+  };
+
+  // PC端：键盘事件（原生输入框）
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      console.log('⌨️ [ChatInput] PC端原生键盘发送');
+      handleSend();
+    }
+  };
+
+  // 移动端：自定义键盘值变化
   const handleKeyboardChange = (value: string) => {
     console.log('⌨️ [ChatInput] 自定义键盘输入', { valueLength: value.length, preview: value.substring(0, 30) });
     setInputValue(value);
   };
 
-  // ✅ 新增：处理自定义键盘关闭
+  // 移动端：关闭自定义键盘
   const handleKeyboardClose = () => {
     console.log('🔽 [ChatInput] 关闭自定义键盘');
     setShowCustomKeyboard(false);
-  };
-
-  // ✅ 新增：打开自定义键盘（替代原生键盘）
-  const handleOpenKeyboard = () => {
-    console.log('🔧 [ChatInput] 打开自定义键盘');
-    setShowCustomKeyboard(true);
-    setIsFocused(true);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // 保留原生键盘的Enter支持（PC端备用）
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      console.log('⌨️ [ChatInput] 原生键盘Enter发送');
-      handleSend();
-    }
+    setIsFocused(false);
   };
 
   const handleSelectEmoji = (emoji: string) => {
     console.log('😊 [ChatInput] 选择表情', { emoji });
     setInputValue(prev => prev + emoji);
+    // 移动端保持键盘打开
+    if (isMobile && showCustomKeyboard) {
+      // 键盘已打开，不需要额外操作
+    } else {
+      inputRef.current?.focus();
+    }
   };
 
   const handleSwitchPersona = (persona: Persona) => {
@@ -181,10 +193,67 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const canSwitchPersona = roomPersonas.length > 1;
   const currentDisplayName = selectedPersona?.displayName || selectedPersona?.name || '选择角色';
 
+  // ========== 根据设备类型渲染不同的输入区域 ==========
+  const renderInputArea = () => {
+    if (isMobile) {
+      // 移动端：使用只读模拟框 + 自定义键盘
+      return (
+        <>
+          <div
+            ref={fakeInputRef}
+            onClick={openCustomKeyboard}
+            className={`w-full bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 py-2.5 text-sm cursor-text transition-all duration-300 min-h-[44px] ${
+              isFocused ? 'ring-2 ring-blue-400/50 bg-white dark:bg-gray-700' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+            } ${disabled ? 'opacity-50' : ''}`}
+          >
+            {inputValue ? (
+              <span className="text-gray-800 dark:text-gray-200 break-words">{inputValue}</span>
+            ) : (
+              <span className="text-gray-400 dark:text-gray-500">{placeholder}</span>
+            )}
+          </div>
+          <CustomKeyboard
+            value={inputValue}
+            onChange={handleKeyboardChange}
+            onClose={handleKeyboardClose}
+            placeholder={placeholder}
+            maxLength={2000}
+            theme={document.documentElement.classList.contains('dark') ? 'dark' : 'light'}
+            enableSound={false}
+          />
+        </>
+      );
+    } else {
+      // PC端：使用原生输入框（物理键盘）
+      return (
+        <input 
+          ref={inputRef}
+          type="text" 
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          placeholder={placeholder}
+          className={`w-full bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none ${
+            isFocused ? 'bg-white dark:bg-gray-700 ring-2 ring-blue-400/50 shadow-md' : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+          } ${disabled ? 'opacity-50' : ''}`}
+          disabled={disabled}
+          maxLength={2000}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          enterKeyHint="send"
+        />
+      );
+    }
+  };
+
   return (
     <motion.div 
       ref={containerRef}
-      className={`bg-white border-t border-gray-100 flex-shrink-0 transition-shadow duration-300 ${
+      className={`bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex-shrink-0 transition-shadow duration-300 ${
         isFocused ? 'shadow-lg' : 'shadow-sm'
       }`}
       animate={{ paddingBottom: isKeyboardOpen ? Math.max(keyboardHeight - 40, 0) : 10 }}
@@ -219,8 +288,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold">
               {selectedPersona.name.charAt(0)}
             </div>
-            <span className="text-xs text-gray-500">
-              发言身份: <span className="text-blue-600 font-medium">{currentDisplayName}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              发言身份: <span className="text-blue-600 dark:text-blue-400 font-medium">{currentDisplayName}</span>
             </span>
           </motion.div>
         )}
@@ -237,7 +306,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               whileHover={{ scale: 1.1 }}
               animate={{ rotate: showPersonaSwitch ? 12 : 0, scale: showPersonaSwitch ? 1.1 : 1 }}
               className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                showPersonaSwitch ? 'text-purple-500 bg-purple-50' : 'text-gray-400 hover:text-purple-500 hover:bg-gray-100'
+                showPersonaSwitch ? 'text-purple-500 bg-purple-50 dark:bg-purple-900/30' : 'text-gray-400 hover:text-purple-500 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
               title="切换发言角色"
             >
@@ -253,10 +322,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 20, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-50 max-h-60 overflow-y-auto"
+                  className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 max-h-60 overflow-y-auto"
                 >
-                  <div className="px-3 py-2 border-b border-gray-100">
-                    <p className="text-xs text-gray-500">切换发言角色</p>
+                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">切换发言角色</p>
                   </div>
                   {roomPersonas.map(persona => (
                     <motion.button
@@ -265,14 +334,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       whileHover={{ backgroundColor: '#f9fafb' }}
                       whileTap={{ scale: 0.98 }}
                       className={`w-full px-3 py-2.5 flex items-center gap-3 transition text-left ${
-                        selectedPersona?._id === persona._id ? 'bg-blue-50' : ''
+                        selectedPersona?._id === persona._id ? 'bg-blue-50 dark:bg-blue-900/30' : ''
                       }`}
                     >
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                         {persona.name.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{persona.displayName || persona.name}</p>
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{persona.displayName || persona.name}</p>
                         <p className="text-xs text-gray-400">#{persona.sameNameNumber || '?'}</p>
                       </div>
                       {selectedPersona?._id === persona._id && (
@@ -297,7 +366,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             whileHover={{ scale: 1.1 }}
             animate={{ rotate: showEmojiPicker ? 12 : 0, scale: showEmojiPicker ? 1.1 : 1 }}
             className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-              showEmojiPicker ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              showEmojiPicker ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
             title="表情"
           >
@@ -320,7 +389,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </AnimatePresence>
         </div>
 
-        {/* 简繁转换 */}
+        {/* 简繁转换按钮 */}
         <motion.button
           type="button"
           onClick={handleTranslate}
@@ -329,7 +398,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           whileHover={hasContent && !isTranslating ? { scale: 1.1 } : {}}
           className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
             hasContent && !isTranslating
-              ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50'
+              ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30'
               : 'text-gray-300 cursor-not-allowed'
           }`}
           title="简繁转换"
@@ -343,38 +412,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </motion.button>
 
-        {/* ✅ 修改：输入框区域 - 使用自定义键盘替代原生input */}
-        <motion.div
-          className="flex-1 min-w-0"
-          animate={{ scale: isFocused ? 1.02 : 1 }}
-          transition={{ duration: 0.2 }}
-        >
-          {/* 显示输入内容的预览框 */}
-          <div 
-            onClick={handleOpenKeyboard}
-            className={`w-full bg-gray-100 rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 cursor-text min-h-[44px] ${
-              isFocused ? 'bg-white ring-2 ring-blue-400/50 shadow-md' : 'hover:bg-gray-50'
-            } ${disabled ? 'opacity-50' : ''}`}
-          >
-            {inputValue ? (
-              <span className="text-gray-800 break-words">{inputValue}</span>
-            ) : (
-              <span className="text-gray-400">{placeholder}</span>
-            )}
-          </div>
+        {/* 输入区域：移动端 vs PC端 */}
+        <div className="flex-1 min-w-0">
+          {renderInputArea()}
+        </div>
 
-          {/* 自定义键盘组件 */}
-          <CustomKeyboard
-            value={inputValue}
-            onChange={handleKeyboardChange}
-            onClose={handleKeyboardClose}
-            placeholder={placeholder}
-            maxLength={2000}
-            theme="light"
-            enableSound={false}
-          />
-        </motion.div>
-        
         {/* 发送按钮 */}
         <motion.button 
           onClick={handleSend}
@@ -386,7 +428,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
             hasContent && !disabled
               ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
-              : 'bg-gray-200 text-gray-400'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
           }`}
         >
           <motion.span
