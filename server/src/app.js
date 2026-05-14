@@ -1,20 +1,34 @@
+// ==================== RP Chat 后端服务 ====================
+console.log('🚀 [app] RP Chat 后端服务启动中...');
+console.log(`🕐 [app] 启动时间: ${new Date().toISOString()}`);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const aiRoutes = require('./routes/ai');
-const { filterMessage, isClean } = require('./services/contentFilter');
+
+console.log('📦 [app] 依赖模块加载完成');
 
 require('dotenv').config();
+console.log('🔐 [app] 环境变量已加载');
+
+// ===== 脏话过滤（只声明一次）=====
+console.log('🔧 [app] 加载脏话过滤模块...');
+const { filterMessage, isClean } = require('./services/contentFilter');
+console.log('✅ [app] 脏话过滤模块加载完成');
 
 const app = express();
 
-// ===== 中间件 =====
+// ===== 中间件配置 =====
+console.log('🔧 [app] 配置中间件...');
+
 app.use(helmet({
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
   contentSecurityPolicy: false,
 }));
+console.log('  ✅ Helmet 安全配置完成');
 
 app.use(cors({
   origin: [
@@ -28,11 +42,17 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+console.log('  ✅ CORS 配置完成，允许的源:', [
+    'localhost:5173', 'localhost:3000', 
+    'rp-chat-v1-0.vercel.app', 'rp-chatv1-0.onrender.com'
+]);
 
 app.options('*', cors());
 app.use(express.json());
+console.log('  ✅ JSON 解析中间件配置完成');
 
-// ===== 限流 =====
+// ===== 限流配置 =====
+console.log('🔧 [app] 配置限流...');
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 200,
@@ -43,28 +63,39 @@ const limiter = rateLimit({
   skip: (req) => req.path.includes('/voice') || req.path.includes('/socket.io')
 });
 app.use('/api', limiter);
+console.log('  ✅ 限流配置完成，限制: 200次/分钟');
 
 // ===== 数据库连接 =====
-console.log('📡 正在连接 MongoDB...');
+console.log('📡 [app] 正在连接 MongoDB...');
+console.log(`  📍 MongoDB URI: ${process.env.MONGODB_URI ? '已配置 ✅' : '未配置 ❌'}`);
+
 mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 30000,
   socketTimeoutMS: 45000,
   connectTimeoutMS: 30000
 })
 .then(() => {
-  console.log('✅ MongoDB 连接成功');
-  console.log('🚀 服务已就绪');
+  console.log('✅ [MongoDB] 连接成功！');
+  console.log('🚀 [app] 服务已就绪');
 })
 .catch(err => {
-  console.error('❌ MongoDB 连接失败:', err.message);
+  console.error('❌ [MongoDB] 连接失败:', err.message);
+  console.error('📋 [MongoDB] 请检查: 1) URI是否正确 2) 网络是否可达 3) IP白名单');
 });
 
 // ===== 健康检查 =====
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'RP Chat API 运行正常!', timestamp: new Date().toISOString() });
+  console.log(`📊 [API] /api/test 被访问 - IP: ${req.ip}`);
+  res.json({ 
+    message: 'RP Chat API 运行正常!', 
+    timestamp: new Date().toISOString(),
+    status: 'online'
+  });
 });
 
-// ===== 路由 =====
+// ===== 路由加载 =====
+console.log('🔧 [app] 加载路由模块...');
+
 const authRoutes = require('./routes/auth');
 const personaRoutes = require('./routes/persona');
 const roomRoutes = require('./routes/room');
@@ -74,21 +105,26 @@ const searchRoutes = require('./routes/search');
 const diamondRoutes = require('./routes/diamond');
 const translateRoutes = require('./routes/translate');
 
+console.log('  ✅ 基础路由加载完成');
+
 let voiceRoutes;
 try {
   voiceRoutes = require('./routes/voice');
+  console.log('  ✅ 语音房路由加载完成');
 } catch (err) {
-  console.log('⚠️ 语音房路由未加载（可忽略）');
+  console.log('  ⚠️ 语音房路由未加载（可忽略）:', err.message);
 }
 
-// 链接预览
 let linkPreviewRoutes;
 try {
   linkPreviewRoutes = require('./routes/linkPreview');
+  console.log('  ✅ 链接预览路由加载完成');
 } catch (err) {
-  console.log('⚠️ 链接预览路由未加载（可忽略）');
+  console.log('  ⚠️ 链接预览路由未加载（可忽略）:', err.message);
 }
 
+// ===== 注册路由 =====
+console.log('🔧 [app] 注册路由...');
 app.use('/api/auth', authRoutes);
 app.use('/api/persona', personaRoutes);
 app.use('/api/room', roomRoutes);
@@ -100,26 +136,31 @@ if (voiceRoutes) app.use('/api/voice', voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', linkPreviewRoutes);
 app.use('/api/translate', translateRoutes);
 app.use('/api/ai', aiRoutes);
+console.log('  ✅ 所有路由注册完成');
 
-// ===== 404 =====
+// ===== 404 处理 =====
 app.use((req, res) => {
+  console.log(`⚠️ [404] 未找到接口: ${req.method} ${req.url}`);
   res.status(404).json({ error: '接口不存在' });
 });
 
 // ===== 错误处理 =====
 app.use((err, req, res, next) => {
-  console.error('服务器错误:', err);
+  console.error('❌ [Error] 服务器错误:', err);
+  console.error('  📍 URL:', req.method, req.url);
+  console.error('  📍 错误堆栈:', err.stack);
   res.status(500).json({ error: err.message || '服务器内部错误' });
 });
 
-// ===== 启动服务器 =====
+// ===== 启动 HTTP 服务器 =====
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
-  console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
-  console.log(`📡 API 地址: http://localhost:${PORT}/api/test`);
+  console.log(`🚀 [HTTP] 服务器运行在 http://localhost:${PORT}`);
+  console.log(`📡 [API] 测试地址: http://localhost:${PORT}/api/test`);
 });
 
-// ===== Socket.IO =====
+// ===== Socket.IO 配置 =====
+console.log('🔧 [Socket] 配置 Socket.IO...');
 const io = require('socket.io')(server, {
   cors: {
     origin: [
@@ -136,74 +177,95 @@ const io = require('socket.io')(server, {
   transports: ['websocket', 'polling']
 });
 
-console.log('🎙️ Socket.IO 服务已启动');
-
-// ===== 脏话过滤 =====
-const { filterMessage, isClean } = require('./services/contentFilter');
+console.log('🎙️ [Socket] Socket.IO 服务已启动');
 
 // ===== 在线用户存储 =====
 const onlineUsers = new Map();
 const voiceRooms = new Map();
 
+console.log('📊 [Storage] 在线用户和语音房存储已初始化');
+
 // 定期清理无效连接
 setInterval(() => {
+  let cleanedCount = 0;
   voiceRooms.forEach((roomUsers, roomId) => {
     roomUsers.forEach((userInfo, socketId) => {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket || !socket.connected) {
         roomUsers.delete(socketId);
+        cleanedCount++;
       }
     });
     if (roomUsers.size === 0) voiceRooms.delete(roomId);
   });
+  if (cleanedCount > 0) {
+    console.log(`🧹 [Cleanup] 清理了 ${cleanedCount} 个无效语音房连接`);
+  }
 }, 60000);
 
-// ===== Socket 事件 =====
+// ===== Socket 事件处理 =====
 io.on('connection', (socket) => {
-  console.log('🟢 新客户端连接:', socket.id);
+  console.log(`🟢 [Socket] 新客户端连接: ${socket.id}`);
   
-  socket.emit('connected', { id: socket.id });
+  socket.emit('connected', { id: socket.id, timestamp: Date.now() });
+  console.log(`  📨 [Socket] 发送 connected 事件到 ${socket.id}`);
   
   // 心跳
   const heartbeat = setInterval(() => {
-    if (socket.connected) socket.emit('ping');
-    else clearInterval(heartbeat);
+    if (socket.connected) {
+      socket.emit('ping');
+      console.log(`💓 [Socket] 发送 ping 到 ${socket.id}`);
+    } else {
+      clearInterval(heartbeat);
+      console.log(`💀 [Socket] ${socket.id} 已断开，停止心跳`);
+    }
   }, 25000);
   
-  socket.on('pong', () => {});
+  socket.on('pong', () => {
+    console.log(`💓 [Socket] 收到 pong 从 ${socket.id}`);
+  });
 
   // ========== 文字聊天 ==========
   socket.on('join-room', async ({ roomId, userId, personaId }) => {
+    console.log(`📡 [Socket] ${socket.id} 请求加入房间: ${roomId}, 用户: ${userId}, 角色: ${personaId}`);
     try {
       socket.join(roomId);
       onlineUsers.set(socket.id, { userId, roomId, personaId, socketId: socket.id });
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === roomId);
       io.to(roomId).emit('room-online-count', { roomId, count: roomUsers.length });
-      console.log(`👤 用户 ${userId} 使用角色 ${personaId} 加入房间 ${roomId}`);
+      console.log(`✅ [Socket] 用户 ${userId} 加入房间 ${roomId} 成功，当前在线: ${roomUsers.length}`);
     } catch (error) {
-      console.error('加入房间失败:', error);
+      console.error(`❌ [Socket] 加入房间失败:`, error);
+      socket.emit('error', { message: '加入房间失败' });
     }
   });
 
   socket.on('send-message', async (data) => {
     const { roomId, userId, personaId, content, isAction } = data;
+    console.log(`📨 [Socket] 收到消息，房间: ${roomId}, 用户: ${userId}, 内容长度: ${content?.length}`);
     
     try {
       if (!roomId || !userId || !personaId || !content) {
+        console.log(`⚠️ [Socket] 消息格式错误:`, { roomId, userId, personaId, contentLength: content?.length });
         socket.emit('error', { message: '消息格式错误' });
         return;
       }
       
+      console.log(`🔍 [Socket] 查询用户: ${userId}`);
       const User = require('./models/User');
       const user = await User.findOne({ firebaseUid: userId });
       
       if (!user) {
+        console.log(`❌ [Socket] 用户不存在: ${userId}`);
         socket.emit('error', { message: '用户不存在' });
         return;
       }
+      console.log(`✅ [Socket] 找到用户: ${user.username}`);
 
-      // ✅ 过滤脏话
+      // 过滤脏话
+      console.log(`🔍 [Socket] 过滤前消息: ${content.substring(0, 50)}...`);
       const cleanContent = filterMessage(content);
+      console.log(`✅ [Socket] 过滤后消息: ${cleanContent.substring(0, 50)}...`);
       
       const Message = require('./models/Message');
       const message = new Message({
@@ -215,13 +277,18 @@ io.on('connection', (socket) => {
       });
       
       await message.save();
+      console.log(`💾 [Socket] 消息已保存，ID: ${message._id}`);
       
       const Persona = require('./models/Persona');
       const persona = await Persona.findById(personaId);
       
-      if (!persona) return;
+      if (!persona) {
+        console.log(`❌ [Socket] 角色不存在: ${personaId}`);
+        return;
+      }
+      console.log(`✅ [Socket] 找到角色: ${persona.name}`);
 
-      // ✅ 更新 Persona 在群里的最后使用时间
+      // 更新 Persona 在群里的最后使用时间
       await persona.markUsedInRoom(roomId);
       
       const messageToSend = {
@@ -240,38 +307,43 @@ io.on('connection', (socket) => {
         userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
       };
       
-      // ✅ 确保广播给房间里所有人（包括发送者自己）
-    io.in(roomId).emit('new-message', messageToSend);
-    console.log(`📨 消息已广播到房间 ${roomId}:`, messageToSend.content.substring(0, 30));
+      io.in(roomId).emit('new-message', messageToSend);
+      console.log(`📢 [Socket] 消息已广播到房间 ${roomId}`);
     } catch (error) {
-      console.error('❌ 保存消息失败:', error);
+      console.error('❌ [Socket] 保存消息失败:', error);
       socket.emit('error', { message: '发送消息失败' });
     }
   });
   
   socket.on('switch-persona', ({ userId, newPersonaId }) => {
+    console.log(`🔄 [Socket] ${userId} 切换角色到 ${newPersonaId}`);
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
       userInfo.personaId = newPersonaId;
       onlineUsers.set(socket.id, userInfo);
       socket.to(userInfo.roomId).emit('persona-switched', { userId, newPersonaId });
+      console.log(`✅ [Socket] 角色切换完成，已通知房间 ${userInfo.roomId}`);
+    } else {
+      console.log(`⚠️ [Socket] 未找到用户信息，无法切换角色`);
     }
   });
   
   socket.on('leave-room', () => {
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
+      console.log(`👋 [Socket] 用户 ${userInfo.userId} 离开房间 ${userInfo.roomId}`);
       socket.leave(userInfo.roomId);
       onlineUsers.delete(socket.id);
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === userInfo.roomId);
       io.to(userInfo.roomId).emit('room-online-count', { roomId: userInfo.roomId, count: roomUsers.length });
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
+      console.log(`✅ [Socket] 用户已离开，房间剩余: ${roomUsers.length}`);
     }
   });
 
   // ========== 语音房 ==========
   socket.on('join-voice-room', ({ roomId, userId, personaId, personaName, username, avatar }) => {
-    console.log(`🎙️ 用户 ${username} (${userId}) 加入语音房 ${roomId}`);
+    console.log(`🎙️ [Socket] 用户 ${username}(${userId}) 加入语音房 ${roomId}`);
     
     if (!voiceRooms.has(roomId)) voiceRooms.set(roomId, new Map());
     const roomUsers = voiceRooms.get(roomId);
@@ -279,7 +351,10 @@ io.on('connection', (socket) => {
     let isCreator = false;
     const VoiceRoom = require('./models/VoiceRoom');
     VoiceRoom.findById(roomId).then(room => {
-      if (room && room.creatorId && room.creatorId.toString() === userId) isCreator = true;
+      if (room && room.creatorId && room.creatorId.toString() === userId) {
+        isCreator = true;
+        console.log(`👑 [Socket] 用户 ${userId} 是语音房创建者`);
+      }
     }).catch(console.error);
     
     const userInfo = { userId, personaId, personaName, username, avatar, muted: false, speaking: false, socketId: socket.id, isCreator };
@@ -291,6 +366,7 @@ io.on('connection', (socket) => {
     socket.data.userInfo = userInfo;
     
     socket.to(`voice-${roomId}`).emit('user-joined-voice', userInfo);
+    console.log(`📢 [Socket] 已通知语音房 ${roomId} 有新用户加入`);
     
     socket.emit('voice-users', {
       users: Array.from(roomUsers.values()).map(u => ({
@@ -298,21 +374,28 @@ io.on('connection', (socket) => {
         username: u.username, avatar: u.avatar, muted: u.muted, speaking: u.speaking, isCreator: u.isCreator
       }))
     });
+    console.log(`📋 [Socket] 发送当前语音房用户列表，共 ${roomUsers.size} 人`);
     
     const VoiceRoomModel = require('./models/VoiceRoom');
     VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
   });
   
   socket.on('leave-voice-room', ({ roomId, userId }) => {
+    console.log(`🚪 [Socket] 用户 ${userId} 离开语音房 ${roomId}`);
     const roomUsers = voiceRooms.get(roomId);
     if (roomUsers) {
       let leftUserInfo = null;
       for (const [sid, info] of roomUsers.entries()) {
         if (info.userId === userId) { leftUserInfo = info; roomUsers.delete(sid); break; }
       }
-      if (leftUserInfo) socket.to(`voice-${roomId}`).emit('user-left-voice', { userId });
-      if (roomUsers.size === 0) voiceRooms.delete(roomId);
-      else {
+      if (leftUserInfo) {
+        socket.to(`voice-${roomId}`).emit('user-left-voice', { userId });
+        console.log(`📢 [Socket] 已通知语音房用户离开`);
+      }
+      if (roomUsers.size === 0) {
+        voiceRooms.delete(roomId);
+        console.log(`🗑️ [Socket] 语音房 ${roomId} 已清空，删除记录`);
+      } else {
         const VoiceRoomModel = require('./models/VoiceRoom');
         VoiceRoomModel.findByIdAndUpdate(roomId, { memberCount: roomUsers.size }).catch(console.error);
       }
@@ -321,13 +404,16 @@ io.on('connection', (socket) => {
     delete socket.data.voiceRoomId;
     delete socket.data.userId;
     delete socket.data.userInfo;
+    console.log(`✅ [Socket] 用户 ${userId} 已离开语音房`);
   });
   
   socket.on('voice-signal', ({ roomId, targetUserId, signal }) => {
+    console.log(`📡 [Socket] WebRTC 信号，房间: ${roomId}, 目标: ${targetUserId}`);
     socket.to(`voice-${roomId}`).emit('voice-signal', { fromUserId: socket.data.userId, signal });
   });
   
   socket.on('voice-mute', ({ roomId, userId, muted }) => {
+    console.log(`🔇 [Socket] 用户 ${userId} ${muted ? '静音' : '取消静音'}`);
     const roomUsers = voiceRooms.get(roomId);
     if (roomUsers) {
       for (const [sid, info] of roomUsers.entries()) {
@@ -338,16 +424,19 @@ io.on('connection', (socket) => {
   });
   
   socket.on('voice-message', ({ roomId, message }) => {
+    console.log(`💬 [Socket] 语音房间文字消息，房间: ${roomId}`);
     socket.to(`voice-${roomId}`).emit('voice-message', message);
   });
 
-  // ========== 断开 ==========
+  // ========== 断开连接 ==========
   socket.on('disconnect', () => {
-    console.log('🔌 客户端断开:', socket.id);
+    console.log(`🔌 [Socket] 客户端断开: ${socket.id}`);
+    console.log(`  📍 断开时间: ${new Date().toISOString()}`);
     clearInterval(heartbeat);
     
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
+      console.log(`  👤 用户 ${userInfo.userId} 从房间 ${userInfo.roomId} 断开`);
       onlineUsers.delete(socket.id);
       const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === userInfo.roomId);
       io.to(userInfo.roomId).emit('room-online-count', { roomId: userInfo.roomId, count: roomUsers.length });
@@ -356,6 +445,7 @@ io.on('connection', (socket) => {
     
     const voiceRoomId = socket.data.voiceRoomId;
     if (voiceRoomId) {
+      console.log(`  🎙️ 用户从语音房 ${voiceRoomId} 断开`);
       const roomUsers = voiceRooms.get(voiceRoomId);
       if (roomUsers) {
         let leftUserId = null;
@@ -363,16 +453,22 @@ io.on('connection', (socket) => {
         for (const [sid, info] of roomUsers.entries()) {
           if (sid === socket.id) { leftUserId = info.userId; leftUserInfo = info; roomUsers.delete(sid); break; }
         }
-        if (leftUserId) socket.to(`voice-${voiceRoomId}`).emit('user-left-voice', { userId: leftUserId });
-        if (roomUsers.size === 0) voiceRooms.delete(voiceRoomId);
-        else {
+        if (leftUserId) {
+          socket.to(`voice-${voiceRoomId}`).emit('user-left-voice', { userId: leftUserId });
+        }
+        if (roomUsers.size === 0) {
+          voiceRooms.delete(voiceRoomId);
+        } else {
           const VoiceRoomModel = require('./models/VoiceRoom');
           VoiceRoomModel.findByIdAndUpdate(voiceRoomId, { memberCount: roomUsers.size }).catch(console.error);
         }
       }
     }
+    console.log(`✅ [Socket] 断开清理完成`);
   });
 });
+
+console.log('✅ [app] 所有初始化完成，等待请求...');
 
 module.exports.io = io;
 module.exports.server = server;
