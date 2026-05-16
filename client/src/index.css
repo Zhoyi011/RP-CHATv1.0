@@ -56,13 +56,14 @@ body {
 }
 
 /* ========== 主题背景（由 ThemeContext 添加 html.dark / html.light）========== */
-html.light {
-  background-color: #f9fafb;
-  color-scheme: light;
+html.dark body,
+html.dark #root {
+  background-color: #111827 !important;
 }
-html.dark {
-  background-color: #111827;
-  color-scheme: dark;
+
+html.light body,
+html.light #root {
+  background-color: #f9fafb !important;
 }
 
 /* 让所有页面容器继承背景 */
@@ -109,4 +110,124 @@ input, textarea {
 }
 .dark ::-webkit-scrollbar-thumb {
   background: #4b5563;
+}
+
+/* ========== 全局深色模式强制样式 ========== */
+
+/* 1. 根背景 */
+html.dark {
+  background-color: #111827 !important;
+}
+
+/* 2. body 和 #root 背景 */
+html.dark body,
+html.dark #root {
+  background-color: #111827 !important;
+}
+
+/* 3. 所有页面容器背景 */
+html.dark .min-h-screen,
+html.dark .h-full,
+html.dark .w-full {
+  background-color: #111827 !important;
+}
+
+/* 4. 强制覆盖所有白色背景 */
+html.dark .bg-white {
+  background-color: #1f2937 !important;
+}
+
+html.dark .bg-gray-50 {
+  background-color: #111827 !important;
+}
+
+html.dark .bg-gray-100 {
+  background-color: #1f2937 !important;
+}
+
+html.dark .bg-gray-50\/50,
+html.dark .bg-gray-100\/50 {
+  background-color: #1f2937 !important;
+}
+
+/* 5. 强制文字颜色 */
+html.dark .text-gray-800,
+html.dark .text-gray-700,
+html.dark .text-gray-900 {
+  color: #f3f4f6 !important;
+}
+
+html.dark .text-gray-600,
+html.dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+html.dark .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+/* 6. 边框颜色 */
+html.dark .border-gray-100,
+html.dark .border-gray-200 {
+  border-color: #374151 !important;
+}
+
+/* 7. 输入框背景 */
+html.dark input,
+html.dark textarea {
+  background-color: #374151 !important;
+  color: #f3f4f6 !important;
+}
+
+/* 8. 输入框占位符 */
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #9ca3af !important;
+}
+/* ========== 额外覆盖聊天输入框和其他遗漏组件 ========== */
+
+/* 输入框容器 */
+html.dark .bg-white\/90,
+html.dark .backdrop-blur-xl {
+  background-color: #1f2937 !important;
+  backdrop-filter: none !important;
+}
+
+/* 输入框内部区域 */
+html.dark .bg-gray-100 {
+  background-color: #374151 !important;
+}
+
+/* 消息气泡（对方消息） */
+html.dark .bg-white.rounded-2xl,
+html.dark .rounded-2xl.bg-white {
+  background-color: #374151 !important;
+  color: #f3f4f6 !important;
+}
+
+/* 角色切换面板 */
+html.dark .bg-white.rounded-xl {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+}
+
+/* 表情面板 */
+html.dark .emoji-picker,
+html.dark [class*="EmojiPicker"] {
+  background-color: #1f2937 !important;
+}
+
+/* 私聊页面 */
+html.dark .bg-white\/90 {
+  background-color: #1f2937 !important;
+}
+
+/* 侧边栏列表项 hover */
+html.dark .hover\:bg-gray-50:hover {
+  background-color: #374151 !important;
+}
+
+/* 所有下拉菜单 */
+html.dark .bg-white.shadow-xl {
+  background-color: #1f2937 !important;
 }
