@@ -7,6 +7,8 @@ const PersonaRoom = require('../models/PersonaRoom');
 const UserReadRecord = require('../models/UserReadRecord');
 const jwt = require('jsonwebtoken');
 
+console.log('🔧 [room.js] 加载路由模块');
+
 // ===== 中间件 =====
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -78,7 +80,6 @@ router.post('/create', authMiddleware, async (req, res) => {
     
     await room.save();
     
-    // ✅ 创建群主 PersonaRoom
     await PersonaRoom.create({
       personaId: persona._id,
       roomId: room._id,
@@ -87,7 +88,7 @@ router.post('/create', authMiddleware, async (req, res) => {
       joinedAt: new Date()
     });
     
-    console.log(`✅ 房间创建: ${room.name}，群主: ${persona.displayName} (${persona.name} #${persona.sameNameNumber})`);
+    console.log(`✅ 房间创建: ${room.name}，群主: ${persona.displayName}`);
     
     res.status(201).json({
       message: '聊天室创建成功',
@@ -112,11 +113,9 @@ router.post('/create', authMiddleware, async (req, res) => {
 // ========== 我的房间列表 ==========
 router.get('/my-rooms', authMiddleware, async (req, res) => {
   try {
-    // 获取用户所有 Persona
     const personas = await Persona.find({ userId: req.userId, status: 'approved' });
     const personaIds = personas.map(p => p._id);
     
-    // 获取这些 Persona 加入的所有房间
     const personaRooms = await PersonaRoom.find({ personaId: { $in: personaIds } })
       .populate({
         path: 'roomId',
@@ -125,7 +124,6 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
     
     const validRooms = personaRooms.filter(pr => pr.roomId).map(pr => pr.roomId);
     
-    // 去重
     const uniqueRooms = [];
     const seen = new Set();
     for (const room of validRooms) {
@@ -144,7 +142,6 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       });
       const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
       
-      // ✅ 获取创建者 Persona 名称
       let creatorName = '?';
       if (room.createdBy) {
         const creatorPersona = await Persona.findById(room.createdBy);
@@ -165,7 +162,6 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       };
     }));
     
-    // ✅ 当前激活 Persona
     const activePersona = await getActivePersona(req.userId);
     
     res.json({ 
@@ -406,32 +402,44 @@ router.get('/:roomId/pending', authMiddleware, async (req, res) => {
   }
 });
 
+// ========== 批准/拒绝入群申请 ==========
 router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   try {
     const { personaId, approve } = req.body;
-    const room = await Room.findById(req.params.roomId);
+    const { roomId } = req.params;
+    
+    console.log(`📋 [API] 处理申请: roomId=${roomId}, personaId=${personaId}, approve=${approve}`);
+    
+    const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: '聊天室不存在' });
     
-    const { hasPermission } = await checkRoomPermission(req.userId, req.params.roomId);
-    if (!hasPermission) return res.status(403).json({ error: '没有权限' });
+    const { hasPermission } = await checkRoomPermission(req.userId, roomId);
+    if (!hasPermission) {
+      return res.status(403).json({ error: '没有权限' });
+    }
     
-    if (!room.pendingMembers?.length) return res.status(404).json({ error: '没有待审核申请' });
+    if (!room.pendingMembers || room.pendingMembers.length === 0) {
+      return res.status(404).json({ error: '没有待审核申请' });
+    }
     
     const pendingIndex = room.pendingMembers.findIndex(p => p.personaId?.toString() === personaId);
-    if (pendingIndex === -1) return res.status(404).json({ error: '申请不存在' });
+    if (pendingIndex === -1) {
+      return res.status(404).json({ error: '申请不存在' });
+    }
     
     const pending = room.pendingMembers[pendingIndex];
     
     if (approve) {
-      const existing = await PersonaRoom.findOne({ personaId: pending.personaId, roomId: room._id });
+      const existing = await PersonaRoom.findOne({ personaId: pending.personaId, roomId });
       if (!existing) {
         await PersonaRoom.create({
           personaId: pending.personaId,
-          roomId: room._id,
+          roomId,
           userId: pending.userId,
           role: 'member',
           joinedAt: new Date()
         });
+        console.log(`✅ [API] 角色已加入群`);
       }
     }
     
@@ -440,7 +448,8 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
     
     res.json({ message: approve ? '已批准加入' : '已拒绝申请' });
   } catch (error) {
-    res.status(500).json({ error: '服务器错误' });
+    console.error('❌ [API] 处理申请失败:', error);
+    res.status(500).json({ error: error.message || '处理失败' });
   }
 });
 
@@ -448,7 +457,7 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
 router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
   try {
     const { personaId, isAdmin } = req.body;
-    const { hasPermission, role, persona } = await checkRoomPermission(req.userId, req.params.roomId);
+    const { hasPermission, role } = await checkRoomPermission(req.userId, req.params.roomId);
     
     if (!hasPermission) return res.status(403).json({ error: '没有权限' });
     if (role !== 'owner') return res.status(403).json({ error: '只有群主可以设置管理员' });
@@ -557,80 +566,122 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取用户在群里可用的 Persona ==========
+// ========== 获取用户在群里可用的 Persona（已加入群的角色）==========
 router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
   try {
-    const personas = await Persona.getPersonasInRoom(req.userId, req.params.roomId);
-    res.json(personas.map(p => ({
+    const { roomId } = req.params;
+    console.log(`📋 [API] 获取用户在群 ${roomId} 中的角色`);
+    
+    const allPersonas = await Persona.find({ userId: req.userId, status: 'approved' });
+    const personaIds = allPersonas.map(p => p._id);
+    
+    const personaRooms = await PersonaRoom.find({ 
+      roomId,
+      personaId: { $in: personaIds }
+    });
+    
+    const joinedPersonaIds = new Set(personaRooms.map(pr => pr.personaId.toString()));
+    const joinedPersonas = allPersonas.filter(p => joinedPersonaIds.has(p._id.toString()));
+    
+    console.log(`✅ [API] 用户在群中有 ${joinedPersonas.length} 个角色`);
+    
+    res.json(joinedPersonas.map(p => ({
       _id: p._id,
       name: p.name,
       displayName: p.displayName,
       avatar: p.avatar,
-      sameNameNumber: p.sameNameNumber
+      sameNameNumber: p.sameNameNumber,
+      status: p.status
     })));
   } catch (error) {
+    console.error('获取群内角色失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// ========== 撤回消息 ==========
-console.log('🔧 [room.js] 加载撤回消息API');
+// ========== 直接添加角色到群聊（管理员/群主专用）==========
+router.post('/:roomId/add-persona', authMiddleware, async (req, res) => {
+  try {
+    const { personaId } = req.body;
+    const { roomId } = req.params;
+    
+    console.log(`➕ [API] 添加角色到群: roomId=${roomId}, personaId=${personaId}`);
+    
+    if (!personaId) {
+      return res.status(400).json({ error: '请指定角色' });
+    }
+    
+    const { hasPermission, role } = await checkRoomPermission(req.userId, roomId);
+    if (!hasPermission || (role !== 'owner' && role !== 'admin')) {
+      return res.status(403).json({ error: '只有群主或管理员可以添加角色' });
+    }
+    
+    const persona = await Persona.findOne({ _id: personaId, userId: req.userId, status: 'approved' });
+    if (!persona) {
+      return res.status(404).json({ error: '角色不存在或未审核' });
+    }
+    
+    const existing = await PersonaRoom.findOne({ personaId, roomId });
+    if (existing) {
+      return res.status(400).json({ error: '该角色已在群中' });
+    }
+    
+    await PersonaRoom.create({
+      personaId,
+      roomId,
+      userId: req.userId,
+      role: 'member',
+      joinedAt: new Date()
+    });
+    
+    console.log(`✅ [API] 角色 ${persona.displayName} 已添加到群`);
+    
+    res.json({ success: true, message: '角色已加入群聊' });
+  } catch (error) {
+    console.error('❌ [API] 添加角色失败:', error);
+    res.status(500).json({ error: error.message || '操作失败' });
+  }
+});
 
+// ========== 撤回消息 ==========
 router.post('/message/recall', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
-  console.log(`⏪ [API] 撤回消息请求: messageId=${messageId}, userId=${req.userId}`);
+  console.log(`⏪ [API] 撤回消息请求: messageId=${messageId}`);
   
   try {
     if (!messageId) {
-      console.log(`❌ [API] 消息ID缺失`);
       return res.status(400).json({ error: '消息ID不能为空' });
     }
 
     const message = await Message.findById(messageId);
-    
     if (!message) {
-      console.log(`❌ [API] 消息不存在: ${messageId}`);
       return res.status(404).json({ error: '消息不存在' });
     }
     
-    console.log(`📋 [API] 找到消息: roomId=${message.roomId}, userId=${message.userId}`);
-    
     const currentPersona = await getActivePersona(req.userId);
     if (!currentPersona) {
-      console.log(`❌ [API] 用户没有激活的Persona: ${req.userId}`);
       return res.status(403).json({ error: '请先选择一个角色' });
     }
     
     if (message.userId.toString() !== currentPersona._id.toString() && 
         message.personaId?.toString() !== currentPersona._id.toString()) {
-      console.log(`❌ [API] 无权撤回: 消息作者=${message.userId}, 当前Persona=${currentPersona._id}`);
       return res.status(403).json({ error: '只能撤回自己的消息' });
     }
     
-    const messageTime = new Date(message.createdAt).getTime();
-    const now = Date.now();
-    const diffSeconds = (now - messageTime) / 1000;
-    
-    console.log(`⏱️ [API] 消息发送时间: ${new Date(messageTime).toISOString()}, 现在: ${new Date(now).toISOString()}, 相差: ${diffSeconds}秒`);
-    
+    const diffSeconds = (Date.now() - new Date(message.createdAt).getTime()) / 1000;
     if (diffSeconds > 5 * 60) {
-      console.log(`❌ [API] 超过撤回时间: ${diffSeconds}秒前`);
       return res.status(400).json({ error: '只能撤回5分钟内的消息' });
     }
     
     message.isRecalled = true;
     message.content = '该消息已被撤回';
-    message.recalledAt = new Date();
     await message.save();
     
-    console.log(`✅ [API] 消息撤回成功: ${messageId}`);
+    console.log(`✅ [API] 消息撤回成功`);
     
     const io = req.app.get('io');
     if (io) {
       io.to(message.roomId).emit('message-recalled', { messageId, content: message.content });
-      console.log(`📢 [API] 已通过Socket通知房间 ${message.roomId}`);
-    } else {
-      console.log(`⚠️ [API] Socket.io实例未找到`);
     }
     
     res.json({ success: true, message: '撤回成功' });
@@ -640,10 +691,10 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 删除消息（仅自己可见，不是真正的删除）==========
+// ========== 删除消息 ==========
 router.post('/message/delete', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
-  console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}, userId=${req.userId}`);
+  console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}`);
   
   try {
     if (!messageId) {
@@ -651,7 +702,6 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
     }
 
     const message = await Message.findById(messageId);
-    
     if (!message) {
       return res.status(404).json({ error: '消息不存在' });
     }
@@ -666,12 +716,9 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '只能删除自己的消息' });
     }
     
-    message.isDeletedForUser = true;
-    message.deletedForUserId = req.userId;
-    await message.save();
+    await Message.findByIdAndDelete(messageId);
     
-    console.log(`✅ [API] 消息标记为已删除: ${messageId}`);
-    
+    console.log(`✅ [API] 消息删除成功`);
     res.json({ success: true, message: '删除成功' });
   } catch (error) {
     console.error('❌ [API] 删除失败:', error);
@@ -681,99 +728,68 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
 
 // ========== 转让群主 ==========
 router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
-  console.log(`👑 [API] 转让群主请求`);
-  console.log(`  📍 参数: roomId=${req.params.roomId}`);
-  console.log(`  📍 Body:`, req.body);
-  console.log(`  👤 当前用户: ${req.userId}`);
-  
   try {
     const { newOwnerId } = req.body;
     const { roomId } = req.params;
     
+    console.log(`👑 [API] 转让群主请求: roomId=${roomId}, newOwnerId=${newOwnerId}`);
+    
     if (!newOwnerId) {
-      console.log(`❌ [API] 新群主ID缺失`);
       return res.status(400).json({ error: '请指定新群主' });
     }
     
-    // 获取当前用户的激活 Persona
     const currentPersona = await getActivePersona(req.userId);
     if (!currentPersona) {
-      console.log(`❌ [API] 当前用户没有激活的角色`);
       return res.status(403).json({ error: '请先选择一个角色' });
     }
     
-    console.log(`👤 [API] 当前群主角色: ${currentPersona._id} (${currentPersona.displayName})`);
-    
-    // 检查房间是否存在
     const room = await Room.findById(roomId);
     if (!room) {
-      console.log(`❌ [API] 房间不存在: ${roomId}`);
       return res.status(404).json({ error: '聊天室不存在' });
     }
     
-    // 验证当前用户是否是群主
     const currentPersonaRoom = await PersonaRoom.findOne({
       personaId: currentPersona._id,
-      roomId: roomId
+      roomId
     });
     
     if (!currentPersonaRoom || currentPersonaRoom.role !== 'owner') {
-      console.log(`❌ [API] 当前用户不是群主: role=${currentPersonaRoom?.role}`);
       return res.status(403).json({ error: '只有群主可以转让群主' });
     }
     
-    // 获取新群主的 PersonaRoom
     const newOwnerPersonaRoom = await PersonaRoom.findOne({
       personaId: newOwnerId,
-      roomId: roomId
+      roomId
     });
     
     if (!newOwnerPersonaRoom) {
-      console.log(`❌ [API] 新群主不是群成员: ${newOwnerId}`);
       return res.status(404).json({ error: '新群主不在群聊中' });
     }
     
-    console.log(`👑 [API] 新群主角色: ${newOwnerId}`);
-    
-    // 转让群主：将原群主降为管理员，新群主升为群主
     await PersonaRoom.findOneAndUpdate(
-      { personaId: currentPersona._id, roomId: roomId },
+      { personaId: currentPersona._id, roomId },
       { role: 'admin' }
     );
-    console.log(`✅ [API] 原群主 ${currentPersona._id} 已降为管理员`);
     
     await PersonaRoom.findOneAndUpdate(
-      { personaId: newOwnerId, roomId: roomId },
+      { personaId: newOwnerId, roomId },
       { role: 'owner' }
     );
-    console.log(`✅ [API] 新群主 ${newOwnerId} 已升为群主`);
     
-    // 更新 Room 表的 createdBy
     room.createdBy = newOwnerId;
     await room.save();
-    console.log(`✅ [API] 房间 ${roomId} 的 createdBy 已更新为 ${newOwnerId}`);
     
-    console.log(`✅ [API] 群主转让成功: ${currentPersona.displayName} -> ${newOwnerId}`);
+    console.log(`✅ [API] 群主转让成功`);
     
-    // 通过 Socket 通知房间内所有人
     const io = req.app.get('io');
     if (io) {
       io.to(roomId).emit('owner-transferred', {
         oldOwnerId: currentPersona._id,
-        newOwnerId: newOwnerId,
-        newOwnerName: newOwnerPersonaRoom.personaId?.displayName || '新群主'
+        newOwnerId
       });
-      console.log(`📢 [API] 已通过Socket通知房间 ${roomId} 群主已转让`);
-    } else {
-      console.log(`⚠️ [API] Socket.io实例未找到，无法发送通知`);
     }
     
-    res.json({
-      success: true,
-      message: '群主转让成功',
-      newOwnerId: newOwnerId
-    });
-    
+    res.json({ success: true, message: '群主转让成功', newOwnerId });
   } catch (error) {
     console.error('❌ [API] 转让群主失败:', error);
     res.status(500).json({ error: error.message || '转让失败' });
@@ -781,3 +797,5 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+console.log('✅ [room.js] 路由模块加载完成');

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useLongPress } from '../../hooks/useLongPress';
+import { useQuickSwitchPersona } from '../../hooks/useQuickSwitchPersona';
 import { ContextMenu, type MenuItem } from '../common/ContextMenu';
 import DesktopLayout from '../layout/DesktopLayout';
 import TabletLayout from '../layout/TabletLayout';
@@ -26,7 +27,7 @@ console.log('🔧 [ChatHome] 组件模块加载');
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
-// ========== 消息气泡组件（独立组件，解决 Hook 调用问题）==========
+// ========== 消息气泡组件 ==========
 const MessageBubble: React.FC<{
   message: Message;
   isSelf: boolean;
@@ -41,7 +42,6 @@ const MessageBubble: React.FC<{
   
   const urls = extractUrls(message.content);
   
-  // ✅ 在组件顶层调用 useLongPress，符合 Hook 规则
   const longPressProps = useLongPress({
     duration: 500,
     enableMobile: true,
@@ -57,7 +57,6 @@ const MessageBubble: React.FC<{
 
   return (
     <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
-      {/* 对方头像 */}
       {!isSelf && (
         <div 
           onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
@@ -85,7 +84,6 @@ const MessageBubble: React.FC<{
             <span className="text-xs text-gray-400 flex-shrink-0">{formatMessageTime(message.createdAt)}</span>
           )}
           
-          {/* 消息气泡 - 绑定长按/右键事件 */}
           <div
             {...longPressProps}
             className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
@@ -108,7 +106,6 @@ const MessageBubble: React.FC<{
         </div>
       )}
 
-      {/* 翻译按钮（仅对方消息） */}
       {!isSelf && (
         <button 
           onClick={() => onTranslate(message.content, message._id)} 
@@ -144,8 +141,6 @@ const MessageList: React.FC<{
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [translatingMsgId, setTranslatingMsgId] = useState<string | null>(null);
-  
-  // 右键/长按菜单状态
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -157,13 +152,11 @@ const MessageList: React.FC<{
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 回复消息
   const handleReply = useCallback((message: Message) => {
     console.log(`💬 [MessageList] 回复消息: ${message._id}`);
     toast.success(`回复功能开发中...`, { icon: '💬' });
   }, []);
 
-  // 分享消息（复制到剪贴板）
   const handleShare = useCallback(async (message: Message) => {
     console.log(`📤 [MessageList] 分享消息: ${message._id}`);
     try {
@@ -175,7 +168,6 @@ const MessageList: React.FC<{
     }
   }, []);
 
-  // 删除消息（软删除）
   const handleDelete = useCallback(async (message: Message) => {
     console.log(`🗑️ [MessageList] 删除消息: ${message._id}`);
     try {
@@ -200,7 +192,6 @@ const MessageList: React.FC<{
     }
   }, [messages, onMessagesChange]);
 
-  // 撤回消息（仅自己，5分钟内）
   const handleRecall = useCallback(async (message: Message) => {
     console.log(`⏪ [MessageList] 撤回消息: ${message._id}`);
     const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
@@ -233,13 +224,11 @@ const MessageList: React.FC<{
     }
   }, [messages, onMessagesChange]);
 
-  // 处理长按/右键
   const handleMessageLongPress = useCallback((message: Message, position: { x: number; y: number }) => {
     console.log(`👆 [MessageList] 长按/右键消息: ${message._id}, 位置: (${position.x}, ${position.y})`);
     setContextMenu({ visible: true, x: position.x, y: position.y, message });
   }, []);
 
-  // 获取菜单项
   const getMenuItems = useCallback((message: Message): MenuItem[] => {
     const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
     console.log(`📋 [MessageList] 生成菜单项, isSelf=${isSelf}`);
@@ -256,7 +245,6 @@ const MessageList: React.FC<{
     return items;
   }, [selectedPersona, handleReply, handleShare, handleDelete, handleRecall]);
 
-  // 翻译消息
   const handleTranslate = async (content: string, msgId: string) => {
     if (translatingMsgId === msgId) return;
     console.log(`🌐 [MessageList] 翻译消息: ${msgId}`);
@@ -278,7 +266,6 @@ const MessageList: React.FC<{
   return (
     <>
       {messages.map(msg => {
-        // 被撤回的消息
         if (msg.isRecalled) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -288,7 +275,6 @@ const MessageList: React.FC<{
             </div>
           );
         }
-        // 系统消息
         if (msg.userId?._id === 'system') {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -296,7 +282,6 @@ const MessageList: React.FC<{
             </div>
           );
         }
-        // 动作消息
         if (msg.isAction) {
           return (
             <div key={msg._id} className="flex justify-center">
@@ -325,7 +310,6 @@ const MessageList: React.FC<{
       })}
       <div ref={messagesEndRef} />
       
-      {/* 右键/长按菜单 */}
       <ContextMenu
         visible={contextMenu.visible}
         x={contextMenu.x}
@@ -365,17 +349,118 @@ const ChatHome = () => {
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+  
+  // ========== 快捷切换角色相关状态 ==========
+  const [showPersonaQuickSwitch, setShowPersonaQuickSwitch] = useState(false);
+  const [personaSearchTerm, setPersonaSearchTerm] = useState('');
+  const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
+  const personaSwitchPanelRef = useRef<HTMLDivElement>(null);
 
   console.log(`📊 [ChatHome] 状态: authChecked=${authChecked}, loading=${loading}, selectedRoom=${selectedRoom?._id}`);
   console.log(`📱 [ChatHome] 响应式: 桌面=${isDesktop}, 平板=${isTablet}, 手机=${isMobile}`);
 
-  // 消息变化回调
+  // 加载所有可用角色
+  const loadAvailablePersonas = useCallback(async () => {
+    if (!selectedRoom) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/room/${selectedRoom._id}/my-personas`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const available = data.filter((p: Persona) => p.status === 'approved');
+        setAvailablePersonas(available);
+        console.log(`📋 [ChatHome] 可用角色数量: ${available.length}`);
+      } else {
+        setAvailablePersonas([]);
+      }
+    } catch (error) {
+      console.error('加载可用角色失败:', error);
+      setAvailablePersonas([]);
+    }
+  }, [selectedRoom]);
+
+  // 点击外部关闭快捷切换面板
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (personaSwitchPanelRef.current && !personaSwitchPanelRef.current.contains(e.target as Node)) {
+        setShowPersonaQuickSwitch(false);
+        setPersonaSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 当房间变化时重新加载可用角色
+  useEffect(() => {
+    if (selectedRoom) {
+      loadAvailablePersonas();
+    }
+  }, [selectedRoom, loadAvailablePersonas]);
+
+  // 快捷切换角色
+  const handleQuickSwitchPersona = useCallback(async (persona: Persona) => {
+    if (!selectedRoom) return;
+    console.log(`🔄 [ChatHome] 快捷切换角色: ${persona.displayName || persona.name}`);
+    
+    if (selectedPersona?._id === persona._id) {
+      console.log(`⚠️ [ChatHome] 已经是当前角色，跳过切换`);
+      setShowPersonaQuickSwitch(false);
+      return;
+    }
+    
+    try {
+      await roomApi.setActivePersona(persona._id);
+      setSelectedPersona(persona);
+      
+      const token = localStorage.getItem('token');
+      const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await roomsRes.json();
+      setRooms(data.rooms || []);
+      if (data.currentPersona) setCurrentPersona(data.currentPersona);
+      
+      if (selectedRoom && user) {
+        socketService.switchPersona(user.uid, persona._id);
+      }
+      
+      toast.success(`已切换至 ${persona.displayName || persona.name}`, {
+        icon: '🎭',
+        duration: 2000
+      });
+      
+      setShowPersonaQuickSwitch(false);
+      setPersonaSearchTerm('');
+    } catch (err: any) {
+      console.error(`❌ [ChatHome] 切换失败:`, err);
+      toast.error(err.message || '切换失败');
+    }
+  }, [selectedRoom, selectedPersona, user]);
+
+  // 快捷键切换角色 Hook
+  const { personaCount } = useQuickSwitchPersona({
+    enabled: selectedRoom !== null && availablePersonas.length > 1,
+    personas: availablePersonas,
+    currentPersona: selectedPersona,
+    onSwitch: handleQuickSwitchPersona,
+    shortcutKey: 'Tab'
+  });
+  
+  console.log(`⌨️ [ChatHome] 快捷键可用角色数: ${personaCount}`);
+
+  // 过滤后的角色列表
+  const filteredPersonas = availablePersonas.filter(p =>
+    (p.displayName || p.name).toLowerCase().includes(personaSearchTerm.toLowerCase())
+  );
+
   const handleMessagesChange = useCallback((newMessages: Message[]) => {
     console.log(`🔄 [ChatHome] 消息列表更新，数量: ${newMessages.length}`);
     setMessages(newMessages);
   }, []);
 
-  // 获取待审核数量
   const fetchPendingCount = useCallback(async () => {
     if (!selectedRoom || (!isRoomAdmin && !isRoomOwner)) return;
     try {
@@ -394,7 +479,6 @@ const ChatHome = () => {
     }
   }, [selectedRoom, isRoomAdmin, isRoomOwner, fetchPendingCount]);
 
-  // 认证监听
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (!firebaseUser) { navigate('/'); return; }
@@ -405,7 +489,6 @@ const ChatHome = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 加载初始数据
   useEffect(() => {
     if (!authChecked || !user) return;
     const loadData = async () => {
@@ -428,7 +511,6 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-  // 权限检查
   useEffect(() => {
     if (!selectedRoom || !selectedPersona) return;
     const loadPermissions = async () => {
@@ -445,7 +527,6 @@ const ChatHome = () => {
     loadPermissions();
   }, [selectedRoom, selectedPersona]);
 
-  // 加载群内 Persona
   const loadRoomPersonas = useCallback(async () => {
     if (!selectedRoom) return;
     try {
@@ -461,7 +542,6 @@ const ChatHome = () => {
 
   useEffect(() => { if (selectedRoom) loadRoomPersonas(); }, [selectedRoom]);
 
-  // Socket 事件
   useEffect(() => {
     if (!authChecked || !user) return;
     const token = localStorage.getItem('token');
@@ -514,7 +594,6 @@ const ChatHome = () => {
     };
   }, [authChecked, user, selectedPersona, selectedRoom]);
 
-  // 加载消息
   useEffect(() => {
     if (!selectedRoom || !selectedPersona || !user) return;
     const loadMessages = async () => {
@@ -530,7 +609,6 @@ const ChatHome = () => {
     return () => { socketService.leaveRoom(); };
   }, [selectedRoom, selectedPersona, user]);
 
-  // 选择房间
   const handleSelectRoom = useCallback(async (room: Room) => {
     if (!selectedPersona) { toast.error('请先选择一个角色'); return; }
     try { await roomApi.markRead(room._id); setRooms(prev => prev.map(r => r._id === room._id ? { ...r, unreadCount: 0 } : r)); } catch {}
@@ -607,6 +685,8 @@ const ChatHome = () => {
   };
 
   const handleReport = () => toast('举报功能开发中，请通过邮件联系我们：zhoyi.lee@gmail.com', { icon: '📧', duration: 5000 });
+
+  const currentDisplayName = selectedPersona?.displayName || selectedPersona?.name || '选择角色';
 
   if (!authChecked) return <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center"><div className="text-white/60 text-lg animate-pulse">加载中...</div></div>;
   if (error) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-center"><div className="text-6xl mb-4">😢</div><p className="text-red-500 mb-6">{error}</p><button onClick={() => window.location.reload()} className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition">重试</button></div></div>;
@@ -707,7 +787,8 @@ const ChatHome = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+        {/* 消息列表区域 */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-inherit">
           <MessageList 
             messages={messages} 
             user={user} 
@@ -717,6 +798,108 @@ const ChatHome = () => {
             onMessagesChange={handleMessagesChange}
           />
         </div>
+
+        {/* ✅ 发言身份区域 - 快捷切换角色 */}
+        {selectedRoom && selectedPersona && (
+          <div className="relative px-4 pb-1" ref={personaSwitchPanelRef}>
+            <button
+              onClick={() => setShowPersonaQuickSwitch(!showPersonaQuickSwitch)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+            >
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold">
+                {selectedPersona.name.charAt(0)}
+              </div>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                发言: <span className="text-blue-600 dark:text-blue-400 font-medium">{currentDisplayName}</span>
+              </span>
+              <svg className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${showPersonaQuickSwitch ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              {availablePersonas.length > 1 && (
+                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
+                  Tab
+                </span>
+              )}
+            </button>
+            
+            {/* 快捷切换面板 */}
+            <AnimatePresence>
+              {showPersonaQuickSwitch && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute left-0 bottom-full mb-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden"
+                >
+                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      切换角色 ({availablePersonas.length})
+                    </span>
+                    <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+                      Tab / Shift+Tab
+                    </span>
+                  </div>
+                  
+                  <div className="px-3 pt-2 pb-1">
+                    <input
+                      type="text"
+                      placeholder="搜索角色..."
+                      value={personaSearchTerm}
+                      onChange={(e) => setPersonaSearchTerm(e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 dark:text-gray-200"
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div className="max-h-64 overflow-y-auto">
+                    {filteredPersonas.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs text-gray-400">
+                        暂无匹配角色
+                      </div>
+                    ) : (
+                      filteredPersonas.map(persona => {
+                        const isCurrent = selectedPersona?._id === persona._id;
+                        return (
+                          <button
+                            key={persona._id}
+                            onClick={() => handleQuickSwitchPersona(persona)}
+                            className={`
+                              w-full px-3 py-2 flex items-center gap-3 text-left transition-colors
+                              hover:bg-gray-50 dark:hover:bg-gray-700
+                              ${isCurrent ? 'bg-blue-50 dark:bg-blue-900/30' : ''}
+                            `}
+                          >
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                              {persona.name.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                                {persona.displayName || persona.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400">
+                                #{persona.sameNameNumber || '?'}
+                              </p>
+                            </div>
+                            {isCurrent && (
+                              <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                  
+                  <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-700 text-[10px] text-gray-400">
+                    💡 点击切换角色
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         <ChatInput
           onSendMessage={handleSendMessage}
