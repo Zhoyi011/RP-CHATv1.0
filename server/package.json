@@ -32,6 +32,7 @@
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
+    "@types/node": "^25.8.0",
     "nodemon": "^3.0.1"
   }
 }

@@ -641,3 +641,19 @@ html.dark .bubble-tail-left::before {
     box-shadow: none !important;
   }
 }
+
+/* 安卓键盘弹出时保持布局稳定 */
+@media (max-width: 768px) {
+  /* 确保根元素高度正确 */
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+  
+  /* 允许内部滚动 */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

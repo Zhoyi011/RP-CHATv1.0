@@ -10,53 +10,68 @@ export const useKeyboardHeight = () => {
   }, []);
 
   useEffect(() => {
-    let lastHeight = window.innerHeight;
+    let lastVisualHeight = window.visualViewport?.height || window.innerHeight;
+    let timer: ReturnType<typeof setTimeout>;
 
     const handleResize = () => {
-      const currentHeight = window.innerHeight;
-      const heightDiff = lastHeight - currentHeight;
-
-      // 安卓键盘高度通常 > 200px
-      if (heightDiff > 150) {
-        setKeyboardHeight(heightDiff);
-        setIsKeyboardOpen(true);
-      } else if (heightDiff < -100) {
-        // 键盘收起
-        setKeyboardHeight(0);
-        setIsKeyboardOpen(false);
-      }
+      if (timer) clearTimeout(timer);
       
-      lastHeight = currentHeight;
+      timer = setTimeout(() => {
+        const visualViewport = window.visualViewport;
+        
+        if (visualViewport) {
+          const currentVisualHeight = visualViewport.height;
+          const windowHeight = window.innerHeight;
+          const diff = windowHeight - currentVisualHeight;
+          
+          // 键盘弹出时，visualViewport 高度会减少
+          if (diff > 150) {
+            setKeyboardHeight(diff);
+            setIsKeyboardOpen(true);
+            console.log(`📱 [Keyboard] 键盘弹出，高度差: ${diff}px`);
+          } 
+          // 键盘收起时，差异很小
+          else if (diff < 50 && keyboardHeight > 0) {
+            setKeyboardHeight(0);
+            setIsKeyboardOpen(false);
+            console.log(`📱 [Keyboard] 键盘收起`);
+          }
+        } else {
+          // 降级方案
+          const currentHeight = window.innerHeight;
+          const heightDiff = lastVisualHeight - currentHeight;
+          
+          if (heightDiff > 150) {
+            setKeyboardHeight(heightDiff);
+            setIsKeyboardOpen(true);
+          } else if (heightDiff < -100 && keyboardHeight > 0) {
+            setKeyboardHeight(0);
+            setIsKeyboardOpen(false);
+          }
+          lastVisualHeight = currentHeight;
+        }
+      }, 50);
     };
 
-    // 安卓主要用 resize 事件
-    window.addEventListener('resize', handleResize);
-
-    // iOS 用 visualViewport
+    // 优先使用 visualViewport（iOS 和 Android 都支持）
     if (window.visualViewport) {
-      const handleViewport = () => {
-        const viewportH = window.visualViewport!.height;
-        const windowH = window.innerHeight;
-        const diff = windowH - viewportH;
-        
-        if (diff > 150) {
-          setKeyboardHeight(diff);
-          setIsKeyboardOpen(true);
-        } else {
-          setKeyboardHeight(0);
-          setIsKeyboardOpen(false);
-        }
-      };
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
       
-      window.visualViewport.addEventListener('resize', handleViewport);
       return () => {
-        window.visualViewport?.removeEventListener('resize', handleViewport);
-        window.removeEventListener('resize', handleResize);
+        window.visualViewport?.removeEventListener('resize', handleResize);
+        window.visualViewport?.removeEventListener('scroll', handleResize);
+        if (timer) clearTimeout(timer);
       };
     }
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    
+    // 降级方案
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (timer) clearTimeout(timer);
+    };
+  }, [keyboardHeight]);
 
   return { keyboardHeight, isKeyboardOpen, isIOS };
 };

@@ -122,9 +122,9 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col" style={{ height: '-webkit-fill-available' }}>
-      {/* 顶部导航栏 */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between flex-shrink-0 z-20 shadow-sm">
+    <div className="relative h-screen w-full bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* 顶部导航栏 - fixed */}
+      <div className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between z-20 shadow-sm">
         <div className="flex items-center gap-3">
           <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
           <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
@@ -197,45 +197,48 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
         </div>
       </div>
 
-      {/* 主内容区 - 键盘打开时可滚动 */}
+      {/* 主内容区 - 避开顶部和底部栏 */}
       <div 
-        className="flex-1 overflow-y-auto"
+        className="absolute top-[61px] bottom-0 left-0 right-0 overflow-y-auto"
         style={{ 
           WebkitOverflowScrolling: 'touch',
-          paddingBottom: isKeyboardOpen ? '0px' : '60px'
+          bottom: isKeyboardOpen ? '0px' : '65px'
         }}
       >
         {children}
       </div>
 
-      {/* 底部 Tab 栏 - 键盘打开时隐藏 */}
-      {!isKeyboardOpen && (
-        <div className="bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg flex-shrink-0 z-30">
-          {tabs.map((tab) => (
-            <button
-              key={tab.name}
-              onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
-              className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200 active:scale-90 ${
-                activeTab === tab.name.toLowerCase() 
-                  ? 'text-blue-600' 
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <div className="relative">
-                {tab.icon}
-                {tab.name === '聊天' && unreadCount > 0 && activeTab !== 'chat' && (
-                  <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </div>
-              <span className={`text-xs mt-1 ${activeTab === tab.name.toLowerCase() ? 'font-medium' : ''}`}>
-                {tab.name}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 底部 Tab 栏 - fixed 定位 */}
+      <div 
+        className={`fixed left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg z-30 transition-all duration-300 ${
+          isKeyboardOpen ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+        }`}
+        style={{ bottom: 0 }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.name}
+            onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
+            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all duration-200 active:scale-90 ${
+              activeTab === tab.name.toLowerCase() 
+                ? 'text-blue-600' 
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <div className="relative">
+              {tab.icon}
+              {tab.name === '聊天' && unreadCount > 0 && activeTab !== 'chat' && (
+                <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-pulse">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <span className={`text-xs mt-1 ${activeTab === tab.name.toLowerCase() ? 'font-medium' : ''}`}>
+              {tab.name}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 };

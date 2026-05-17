@@ -74,8 +74,9 @@ router.post('/create', authMiddleware, async (req, res) => {
     const room = new Room({
       name: name.trim(),
       description: description || '',
-      createdBy: persona._id,
-      creatorUserId: req.userId
+      createdBy: persona._id,           // ✅ 群主 Persona ID
+      creatorUserId: req.userId,        // ✅ 群主用户 ID
+      creatorName: persona.displayName || persona.name  // ✅ 群主名称
     });
     
     await room.save();
@@ -96,7 +97,7 @@ router.post('/create', authMiddleware, async (req, res) => {
         _id: room._id,
         name: room.name,
         description: room.description,
-        creatorName: persona.displayName
+        creatorName: persona.displayName || persona.name
       }
     });
     
@@ -110,7 +111,7 @@ router.post('/create', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 我的房间列表（包含最后一条消息）==========
+// ========== 我的房间列表（包含最后一条消息和群主信息）==========
 router.get('/my-rooms', authMiddleware, async (req, res) => {
   try {
     const personas = await Persona.find({ userId: req.userId, status: 'approved' });
@@ -134,7 +135,7 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
     }
     
     const roomsWithStats = await Promise.all(uniqueRooms.map(async (room) => {
-      // ✅ 获取最后一条消息
+      // 获取最后一条消息
       const lastMessage = await Message.findOne({ roomId: room._id })
         .sort({ createdAt: -1 })
         .populate('personaId', 'name displayName avatar sameNameNumber')
@@ -148,13 +149,42 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       });
       const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
       
+      // ✅ 获取群主名称 - 多种方式
       let creatorName = '?';
-      if (room.createdBy) {
+      
+      // 方式1：使用房间存储的 creatorName
+      if (room.creatorName) {
+        creatorName = room.creatorName;
+      }
+      // 方式2：通过 room.createdBy (Persona ID)
+      else if (room.createdBy) {
         const creatorPersona = await Persona.findById(room.createdBy);
-        creatorName = creatorPersona ? creatorPersona.displayName : '?';
+        if (creatorPersona) {
+          creatorName = creatorPersona.displayName || creatorPersona.name;
+        }
+      }
+      // 方式3：通过 PersonaRoom 查找 owner
+      if (creatorName === '?') {
+        const ownerPR = await PersonaRoom.findOne({ 
+          roomId: room._id, 
+          role: 'owner' 
+        }).populate('personaId');
+        if (ownerPR?.personaId) {
+          creatorName = ownerPR.personaId.displayName || ownerPR.personaId.name;
+        }
+      }
+      // 方式4：通过 creatorUserId 查找用户默认角色
+      if (creatorName === '?' && room.creatorUserId) {
+        const defaultPersona = await Persona.findOne({ 
+          userId: room.creatorUserId, 
+          status: 'approved' 
+        });
+        if (defaultPersona) {
+          creatorName = defaultPersona.displayName || defaultPersona.name;
+        }
       }
       
-      // ✅ 格式化最后一条消息
+      // 格式化最后一条消息
       let formattedLastMessage = null;
       if (lastMessage) {
         formattedLastMessage = {
@@ -175,13 +205,13 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         unreadCount,
         memberCount,
         onlineCount: 0,
-        creatorName,
+        creatorName,                    // ✅ 群主名称
         createdAt: room.createdAt,
-        lastMessage: formattedLastMessage  // ✅ 新增字段
+        lastMessage: formattedLastMessage
       };
     }));
     
-    // ✅ 按最后消息时间排序（最新的在前）
+    // 按最后消息时间排序（最新的在前）
     roomsWithStats.sort((a, b) => {
       const timeA = a.lastMessage?.createdAt || a.createdAt;
       const timeB = b.lastMessage?.createdAt || b.createdAt;
@@ -280,10 +310,16 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
     const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
     const messageCount = await Message.countDocuments({ roomId: room._id });
     
+    // 获取群主名称
     let creatorName = '?';
-    if (room.createdBy) {
+    if (room.creatorName) {
+      creatorName = room.creatorName;
+    } else if (room.createdBy) {
       const creator = await Persona.findById(room.createdBy);
-      creatorName = creator ? creator.displayName : '?';
+      creatorName = creator ? (creator.displayName || creator.name) : '?';
+    } else if (room.creatorUserId) {
+      const defaultPersona = await Persona.findOne({ userId: room.creatorUserId, status: 'approved' });
+      creatorName = defaultPersona ? (defaultPersona.displayName || defaultPersona.name) : '?';
     }
     
     res.json({
@@ -792,6 +828,8 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '新群主不在群聊中' });
     }
     
+    const newOwnerPersona = await Persona.findById(newOwnerId);
+    
     await PersonaRoom.findOneAndUpdate(
       { personaId: currentPersona._id, roomId },
       { role: 'admin' }
@@ -803,6 +841,7 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
     );
     
     room.createdBy = newOwnerId;
+    room.creatorName = newOwnerPersona?.displayName || newOwnerPersona?.name || '?';
     await room.save();
     
     console.log(`✅ [API] 群主转让成功`);
