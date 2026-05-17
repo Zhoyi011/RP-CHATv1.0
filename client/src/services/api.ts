@@ -77,17 +77,34 @@ export interface UserSettings {
   defaultTranslate: 'off' | 'simplified' | 'traditional';
 }
 
+// 找到 Room 接口（大约在文件开头部分）
 export interface Room {
   _id: string;
   name: string;
   description?: string;
+  avatar?: string;
   announcement?: string;
-  messageCount: number;
-  onlineCount?: number;
+  createdBy?: string;
+  creatorUserId?: string;
+  creatorName?: string;
+  createdAt: string;
+  updatedAt?: string;
+  isPublic?: boolean;
+  requireApproval?: boolean;
+  isActive?: boolean;
+  messageCount?: number;
   unreadCount?: number;
   memberCount?: number;
-  creatorName: string; // ✅ Persona 名
-  createdAt: string;
+  onlineCount?: number;
+  inviteCode?: string;
+  // ✅ 添加 lastMessage 字段
+  lastMessage?: {
+    content: string;
+    senderName: string;
+    createdAt: string;
+    isAction: boolean;
+    isRecalled: boolean;
+  };
 }
 
 export interface Message {
