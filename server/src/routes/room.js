@@ -110,7 +110,7 @@ router.post('/create', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 我的房间列表 ==========
+// ========== 我的房间列表（包含最后一条消息）==========
 router.get('/my-rooms', authMiddleware, async (req, res) => {
   try {
     const personas = await Persona.find({ userId: req.userId, status: 'approved' });
@@ -134,6 +134,12 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
     }
     
     const roomsWithStats = await Promise.all(uniqueRooms.map(async (room) => {
+      // ✅ 获取最后一条消息
+      const lastMessage = await Message.findOne({ roomId: room._id })
+        .sort({ createdAt: -1 })
+        .populate('personaId', 'name displayName avatar sameNameNumber')
+        .lean();
+      
       const messageCount = await Message.countDocuments({ roomId: room._id });
       const lastRead = await UserReadRecord.findOne({ userId: req.userId, roomId: room._id });
       const unreadCount = await Message.countDocuments({
@@ -148,6 +154,18 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         creatorName = creatorPersona ? creatorPersona.displayName : '?';
       }
       
+      // ✅ 格式化最后一条消息
+      let formattedLastMessage = null;
+      if (lastMessage) {
+        formattedLastMessage = {
+          content: lastMessage.isRecalled ? '消息已被撤回' : lastMessage.content,
+          senderName: lastMessage.personaId?.displayName || lastMessage.personaId?.name || '未知',
+          createdAt: lastMessage.createdAt,
+          isAction: lastMessage.isAction || false,
+          isRecalled: lastMessage.isRecalled || false
+        };
+      }
+      
       return {
         _id: room._id,
         name: room.name,
@@ -158,9 +176,17 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         memberCount,
         onlineCount: 0,
         creatorName,
-        createdAt: room.createdAt
+        createdAt: room.createdAt,
+        lastMessage: formattedLastMessage  // ✅ 新增字段
       };
     }));
+    
+    // ✅ 按最后消息时间排序（最新的在前）
+    roomsWithStats.sort((a, b) => {
+      const timeA = a.lastMessage?.createdAt || a.createdAt;
+      const timeB = b.lastMessage?.createdAt || b.createdAt;
+      return new Date(timeB) - new Date(timeA);
+    });
     
     const activePersona = await getActivePersona(req.userId);
     

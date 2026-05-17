@@ -174,7 +174,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const hasContent = inputValue.trim().length > 0;
   const canSwitchPersona = roomPersonas.length > 1;
-  const currentDisplayName = selectedPersona?.displayName || selectedPersona?.name || '选择角色';
 
   return (
     <motion.div 
@@ -207,21 +206,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 当前发言身份 */}
-      {selectedPersona && (
-        <motion.div
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="flex items-center gap-2 mb-2 px-1"
-        >
-          <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold shadow-sm">
-            {selectedPersona.name.charAt(0).toUpperCase()}
-          </div>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            发言身份: <span className="text-blue-600 dark:text-blue-400 font-medium">{currentDisplayName}</span>
-          </span>
-        </motion.div>
-      )}
+      {/* ❌ 已删除重复的"当前发言身份"显示区块 */}
+      {/* 发言身份现在只在 ChatHome 中统一显示 */}
 
       <div className="flex items-end gap-2">
         {/* 角色切换按钮 */}

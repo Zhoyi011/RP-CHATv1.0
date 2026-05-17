@@ -59,9 +59,10 @@ const PendingRequests = () => {
     }
   };
 
-  const handleApprove = async (userId: string, approve: boolean, rejectReason?: string) => {
+  // ✅ 修复：使用 personaId 而不是 userId
+  const handleApprove = async (personaId: string, approve: boolean, rejectReason?: string) => {
     if (processingId) return;
-    setProcessingId(userId);
+    setProcessingId(personaId);
     
     try {
       const token = localStorage.getItem('token');
@@ -71,12 +72,16 @@ const PendingRequests = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ userId, approve, rejectReason })
+        body: JSON.stringify({ 
+          personaId,  // ✅ 后端期望的是 personaId
+          approve, 
+          rejectReason 
+        })
       });
       
       const data = await res.json();
       if (res.ok) {
-        setRequests(prev => prev.filter(r => r.userId._id !== userId));
+        setRequests(prev => prev.filter(r => r.personaId._id !== personaId));
         alert(approve ? '✅ 已批准加入' : '❌ 已拒绝申请');
         setShowDetail(false);
       } else {
@@ -181,9 +186,9 @@ const PendingRequests = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleApprove(req.userId._id, false);
+                          handleApprove(req.personaId._id, false);
                         }}
-                        disabled={processingId === req.userId._id}
+                        disabled={processingId === req.personaId._id}
                         className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition disabled:opacity-50"
                       >
                         拒绝
@@ -191,9 +196,9 @@ const PendingRequests = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleApprove(req.userId._id, true);
+                          handleApprove(req.personaId._id, true);
                         }}
-                        disabled={processingId === req.userId._id}
+                        disabled={processingId === req.personaId._id}
                         className="px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition shadow-sm disabled:opacity-50"
                       >
                         批准
@@ -253,15 +258,15 @@ const PendingRequests = () => {
               
               <div className="flex gap-3">
                 <button
-                  onClick={() => handleApprove(selectedRequest.userId._id, false)}
-                  disabled={processingId === selectedRequest.userId._id}
+                  onClick={() => handleApprove(selectedRequest.personaId._id, false)}
+                  disabled={processingId === selectedRequest.personaId._id}
                   className="flex-1 bg-red-500 text-white px-4 py-2 rounded-xl hover:bg-red-600 transition shadow-md disabled:opacity-50"
                 >
                   拒绝申请
                 </button>
                 <button
-                  onClick={() => handleApprove(selectedRequest.userId._id, true)}
-                  disabled={processingId === selectedRequest.userId._id}
+                  onClick={() => handleApprove(selectedRequest.personaId._id, true)}
+                  disabled={processingId === selectedRequest.personaId._id}
                   className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition shadow-md disabled:opacity-50"
                 >
                   批准加入

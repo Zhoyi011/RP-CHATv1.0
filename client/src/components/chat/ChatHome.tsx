@@ -67,17 +67,7 @@ const MessageBubble: React.FC<{
       )}
       
       <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
-        {!isSelf && (
-          <div 
-            onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
-            className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition"
-          >
-            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              {message.personaId?.displayName || message.personaId?.name || '?'}
-            </span>
-            {message.personaId?.sameNameNumber && <span className="text-[10px] text-gray-400">#{message.personaId.sameNameNumber}</span>}
-          </div>
-        )}
+        {/* 消息气泡内不再显示角色名，避免重复 */}
         
         <div className="flex items-end gap-2">
           {!isMobile && !isSelf && (
@@ -733,21 +723,68 @@ const ChatHome = () => {
             </div>
           ) : (
             rooms.map(room => (
-              <div key={room._id} onClick={() => handleSelectRoom(room)} className={`px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border-b border-gray-100 dark:border-gray-800 active:bg-gray-100 transition ${selectedRoom?._id === room._id && !isMobile ? 'bg-blue-50 dark:bg-gray-800 border-l-4 border-blue-500' : ''}`}>
+              <div 
+                key={room._id} 
+                onClick={() => handleSelectRoom(room)} 
+                className={`px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border-b border-gray-100 dark:border-gray-800 active:bg-gray-100 transition ${selectedRoom?._id === room._id && !isMobile ? 'bg-blue-50 dark:bg-gray-800 border-l-4 border-blue-500' : ''}`}
+              >
                 <div className="flex items-center gap-3">
                   <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">{room.name.charAt(0)}</div>
-                    {room.onlineCount ? <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full border-2 border-white font-medium">{room.onlineCount}</div> : <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-gray-400 rounded-full border-2 border-white"></div>}
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                      {room.name.charAt(0)}
+                    </div>
+                    {room.onlineCount ? (
+                      <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full border-2 border-white font-medium">
+                        {room.onlineCount}
+                      </div>
+                    ) : (
+                      <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-gray-400 rounded-full border-2 border-white"></div>
+                    )}
                   </div>
+                  
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline">
                       <div className="flex items-center gap-2 min-w-0">
-                        <h3 className="font-medium text-gray-800 dark:text-gray-200 truncate">{room.name}</h3>
-                        {room.unreadCount ? <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0">{room.unreadCount > 99 ? '99+' : room.unreadCount}</span> : null}
+                        <h3 className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                          {room.name}
+                        </h3>
+                        {room.unreadCount > 0 ? (
+                          <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+                            {room.unreadCount > 99 ? '99+' : room.unreadCount}
+                          </span>
+                        ) : null}
                       </div>
-                      <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{room.messageCount || 0} 条</span>
+                      <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                        {room.messageCount || 0} 条
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">群主: {room.creatorName || '?'}</p>
+                    
+                    {/* ✅ 显示最后一条消息（替代群主信息） */}
+                    {room.lastMessage ? (
+                      <div className="mt-0.5">
+                        {room.lastMessage.isAction ? (
+                          <p className="text-xs text-purple-500 dark:text-purple-400 truncate">
+                            * {room.lastMessage.senderName} {room.lastMessage.content} *
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-400 truncate">
+                            <span className="font-medium text-gray-500 dark:text-gray-400">
+                              {room.lastMessage.senderName}:
+                            </span>{' '}
+                            {room.lastMessage.content.length > 35 
+                              ? room.lastMessage.content.substring(0, 35) + '...' 
+                              : room.lastMessage.content}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-0.5">暂无消息</p>
+                    )}
+                    
+                    {/* 可选：保留群主信息（缩小显示） */}
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      群主: {room.creatorName || '?'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -799,7 +836,7 @@ const ChatHome = () => {
           />
         </div>
 
-        {/* ✅ 发言身份区域 - 快捷切换角色 */}
+        {/* ✅ 发言身份区域 - 快捷切换角色（唯一显示位置） */}
         {selectedRoom && selectedPersona && (
           <div className="relative px-4 pb-1" ref={personaSwitchPanelRef}>
             <button
