@@ -1,253 +1,367 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { auth } from '../../firebase/config';
-import { useResponsive } from '../../hooks/useResponsive';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTheme } from '../../contexts/ThemeContext';
+import toast from 'react-hot-toast';
+
+console.log('🔧 [RoomMembers] 组件加载');
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 interface Member {
   _id: string;
-  userId: {
-    _id: string;
-    username: string;
-    email: string;
-    avatar?: string;
-  };
-  personaId: {
+  personaId?: {
     _id: string;
     name: string;
+    displayName: string;
     avatar?: string;
-  } | null;
+    sameNameNumber?: number;
+    globalNumber?: number;
+  };
   role: 'owner' | 'admin' | 'member';
-  nickname: string;
-  title: string;
+  title?: string;
   joinedAt: string;
 }
 
+interface Persona {
+  _id: string;
+  name: string;
+  displayName: string;
+}
+
 const RoomMembers = () => {
-  const { roomId } = useParams();
+  const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { isMobile } = useResponsive();
+  const { theme } = useTheme();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [roomName, setRoomName] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentUserRole, setCurrentUserRole] = useState<string>('');
-  const currentUser = auth.currentUser;
-  const isOwner = currentUserRole === 'owner';
-  const isAdmin = isOwner || currentUserRole === 'admin';
+  const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
+  const [userRole, setUserRole] = useState<string>('member');
+  const [showKickConfirm, setShowKickConfirm] = useState<string | null>(null);
+  const [showSetAdmin, setShowSetAdmin] = useState<string | null>(null);
+  const [showTransferConfirm, setShowTransferConfirm] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadMembers();
-  }, [roomId]);
+  console.log(`🎨 [RoomMembers] 渲染，房间ID: ${roomId}, 成员数: ${members.length}`);
 
-  const loadMembers = async () => {
+  // 获取当前激活的角色
+  const loadCurrentPersona = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      
-      const roomRes = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}`, {
+      const res = await fetch(`${API_BASE}/room/active-persona`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const roomData = await roomRes.json();
-      setRoomName(roomData.name);
-      
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/members`, {
+      if (res.ok) {
+        const data = await res.json();
+        if (data.activePersona) {
+          setCurrentPersona(data.activePersona);
+          console.log(`✅ [RoomMembers] 当前角色: ${data.activePersona.displayName}`);
+        }
+      }
+    } catch (error) {
+      console.error('加载当前角色失败:', error);
+    }
+  }, []);
+
+  // 加载成员列表
+  const loadMembers = useCallback(async () => {
+    if (!roomId) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/room/${roomId}/members`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
       const data = await res.json();
-      setMembers(Array.isArray(data) ? data : []);
+      console.log(`📋 [RoomMembers] 加载到 ${data?.length || 0} 个成员`);
+      setMembers(data || []);
       
-      const currentMember = (Array.isArray(data) ? data : []).find(
-        (m: Member) => m.userId._id === currentUser?.uid
-      );
-      setCurrentUserRole(currentMember?.role || '');
+      const currentMember = (data || []).find((m: Member) => m.personaId?._id === currentPersona?._id);
+      setUserRole(currentMember?.role || 'member');
+      console.log(`👑 [RoomMembers] 用户角色: ${currentMember?.role || 'member'}`);
     } catch (error) {
       console.error('加载成员失败:', error);
+      toast.error('加载成员列表失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [roomId, currentPersona]);
 
-  const handleKickMember = async (userId: string, username: string) => {
-    if (!confirm(`确定要将 ${username} 移出群聊吗？`)) return;
-    
+  useEffect(() => {
+    loadCurrentPersona();
+  }, [loadCurrentPersona]);
+
+  useEffect(() => {
+    if (currentPersona) {
+      loadMembers();
+    }
+  }, [currentPersona, loadMembers]);
+
+  // 设置管理员
+  const handleSetAdmin = async (memberPersonaId: string, isAdmin: boolean) => {
+    console.log(`🔧 [RoomMembers] 设置管理员: ${memberPersonaId}, isAdmin=${isAdmin}`);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/kick-member`, {
+      const response = await fetch(`${API_BASE}/room/${roomId}/set-admin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({ personaId: memberPersonaId, isAdmin })
       });
       
-      if (res.ok) {
-        alert('已移出群聊');
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(isAdmin ? '已设为管理员' : '已取消管理员');
         loadMembers();
       } else {
-        const data = await res.json();
-        alert(data.error || '操作失败');
+        toast.error(data.error || '操作失败');
       }
     } catch (error) {
-      console.error('踢出失败:', error);
-      alert('操作失败，请重试');
+      console.error('设置管理员失败:', error);
+      toast.error('操作失败');
+    } finally {
+      setShowSetAdmin(null);
     }
   };
 
-  const handleSetAdmin = async (userId: string, username: string, isAdmin: boolean) => {
+  // 踢出成员
+  const handleKickMember = async (memberPersonaId: string) => {
+    console.log(`🔧 [RoomMembers] 踢出成员: ${memberPersonaId}`);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/set-admin`, {
+      const response = await fetch(`${API_BASE}/room/${roomId}/kick-member`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ userId, isAdmin })
+        body: JSON.stringify({ personaId: memberPersonaId })
       });
       
-      if (res.ok) {
-        alert(isAdmin ? `✅ 已设为管理员` : `✅ 已取消管理员权限`);
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('已踢出群聊');
         loadMembers();
       } else {
-        const data = await res.json();
-        alert(data.error || '操作失败');
+        toast.error(data.error || '操作失败');
       }
     } catch (error) {
-      console.error('操作失败:', error);
-      alert('操作失败，请重试');
+      console.error('踢出成员失败:', error);
+      toast.error('操作失败');
+    } finally {
+      setShowKickConfirm(null);
     }
   };
 
-  const getRoleBadge = (role: string) => {
-    if (role === 'owner') {
-      return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">👑 群主</span>;
+  // ✅ 转让群主
+  const handleTransferOwner = async (memberPersonaId: string) => {
+    console.log(`🔧 [RoomMembers] 转让群主给: ${memberPersonaId}`);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/room/${roomId}/transfer-owner`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newOwnerId: memberPersonaId })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('群主已转让');
+        // 重新加载数据
+        await loadCurrentPersona();
+        await loadMembers();
+      } else {
+        toast.error(data.error || '操作失败');
+      }
+    } catch (error) {
+      console.error('转让群主失败:', error);
+      toast.error('操作失败');
+    } finally {
+      setShowTransferConfirm(null);
     }
-    if (role === 'admin') {
-      return <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">🛡️ 管理员</span>;
-    }
-    return <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">成员</span>;
   };
 
-  const getDisplayName = (member: Member) => {
-    if (member.personaId?.name) {
-      return member.personaId.name;
-    }
-    return member.userId?.username || '未知用户';
-  };
-
-  const filteredMembers = members.filter(member =>
-    getDisplayName(member).toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.userId.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const canManage = userRole === 'owner' || userRole === 'admin';
+  const isOwner = userRole === 'owner';
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-gray-400">加载中...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-500 dark:text-gray-400">加载成员列表中...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className={`min-h-screen transition-colors duration-300 ${
+      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+    }`}>
       {/* 头部 */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-100 rounded-lg transition">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={`sticky top-0 z-10 backdrop-blur-xl border-b transition-colors duration-300 ${
+        theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/80 border-gray-100'
+      }`}>
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+          >
+            <svg className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-            成员列表
-          </h1>
-          <button
-            onClick={loadMembers}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition"
-            title="刷新"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mt-1">{roomName} · {members.length} 位成员</p>
-        
-        {/* 搜索框 */}
-        <div className="mt-3">
-          <div className="bg-gray-100 rounded-full px-4 py-2 flex items-center">
-            <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="搜索成员..."
-              className="bg-transparent flex-1 outline-none text-sm"
-            />
-          </div>
+          <h1 className="text-xl font-bold text-gray-800 dark:text-white">成员列表</h1>
+          <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">
+            {members.length} 人
+          </span>
         </div>
       </div>
 
-      <div className={`${isMobile ? 'p-3' : 'p-4'} space-y-2`}>
-        {filteredMembers.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow p-8 text-center">
-            <p className="text-gray-400">未找到匹配的成员</p>
+      <div className="max-w-2xl mx-auto p-4 space-y-2">
+        {members.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-400 dark:text-gray-500">暂无成员</p>
           </div>
         ) : (
-          filteredMembers.map(member => {
-            const displayName = getDisplayName(member);
-            const isCurrentUser = member.userId._id === currentUser?.uid;
-            
-            return (
-              <div key={member._id} className="bg-white rounded-xl shadow p-4 hover:shadow-md transition">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                    {displayName.charAt(0).toUpperCase()}
+          members.map((member) => (
+            <div
+              key={member.personaId?._id || member._id}
+              className={`p-4 rounded-xl transition-colors ${
+                theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
+              } shadow-sm`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {/* 头像 */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md flex-shrink-0">
+                    {(member.personaId?.displayName || member.personaId?.name || '?').charAt(0)}
                   </div>
-                  <div className="flex-1">
+                  
+                  {/* 信息 */}
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-800">{displayName}</span>
-                      {getRoleBadge(member.role)}
+                      <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                        {member.personaId?.displayName || member.personaId?.name || '未知角色'}
+                      </p>
                       {member.title && (
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full">
                           {member.title}
                         </span>
                       )}
-                      {isCurrentUser && (
-                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">我</span>
-                      )}
                     </div>
-                    <p className="text-sm text-gray-500">{member.userId.username}</p>
-                    <p className="text-xs text-gray-400">
-                      加入于 {new Date(member.joinedAt).toLocaleDateString()}
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      #{member.personaId?.sameNameNumber || member.personaId?.globalNumber || '?'}
                     </p>
                   </div>
-                  
-                  {/* 管理员操作按钮 */}
-                  {(isOwner || (isAdmin && member.role !== 'owner')) && !isCurrentUser && (
-                    <div className="flex gap-2">
-                      {isOwner && member.role !== 'owner' && (
-                        <button
-                          onClick={() => handleSetAdmin(member.userId._id, member.userId.username, member.role !== 'admin')}
-                          className="text-xs text-blue-500 hover:text-blue-600 whitespace-nowrap"
-                        >
-                          {member.role === 'admin' ? '取消管理' : '设为管理'}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleKickMember(member.userId._id, member.userId.username)}
-                        className="text-xs text-red-500 hover:text-red-600 whitespace-nowrap"
-                      >
-                        踢出
-                      </button>
-                    </div>
-                  )}
+                </div>
+
+                {/* 角色标签 */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    member.role === 'owner' 
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      : member.role === 'admin'
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                  }`}>
+                    {member.role === 'owner' ? '群主' : member.role === 'admin' ? '管理员' : '成员'}
+                  </span>
                 </div>
               </div>
-            );
-          })
+
+              {/* 操作按钮（仅管理员/群主可见，且不能操作自己和群主） */}
+              {canManage && member.role !== 'owner' && member.personaId?._id !== currentPersona?._id && (
+                <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+                  {/* 转让群主（仅当前群主可见） */}
+                  {isOwner && (
+                    showTransferConfirm === member.personaId?._id ? (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleTransferOwner(member.personaId!._id)}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white"
+                        >
+                          确认转让
+                        </button>
+                        <button
+                          onClick={() => setShowTransferConfirm(null)}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowTransferConfirm(member.personaId!._id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition"
+                      >
+                        转让群主
+                      </button>
+                    )
+                  )}
+                  
+                  {/* 设置/取消管理员 */}
+                  {showSetAdmin === member.personaId?._id ? (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleSetAdmin(member.personaId!._id, member.role !== 'admin')}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white"
+                      >
+                        确认
+                      </button>
+                      <button
+                        onClick={() => setShowSetAdmin(null)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowSetAdmin(member.personaId!._id)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition"
+                    >
+                      {member.role === 'admin' ? '取消管理员' : '设为管理员'}
+                    </button>
+                  )}
+                  
+                  {/* 踢出群聊 */}
+                  {showKickConfirm === member.personaId?._id ? (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleKickMember(member.personaId!._id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white"
+                      >
+                        确认踢出
+                      </button>
+                      <button
+                        onClick={() => setShowKickConfirm(null)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowKickConfirm(member.personaId!._id)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition"
+                    >
+                      踢出群聊
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
         )}
       </div>
     </div>

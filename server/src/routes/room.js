@@ -160,7 +160,7 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         unreadCount,
         memberCount,
         onlineCount: 0,
-        creatorName, // ✅ Persona 名称
+        creatorName,
         createdAt: room.createdAt
       };
     }));
@@ -283,7 +283,6 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(100);
     
-    // ✅ 不返回 userId 敏感信息
     const safeMessages = messages.reverse().map(msg => ({
       _id: msg._id,
       content: msg.content,
@@ -368,7 +367,6 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
     const personaRooms = await PersonaRoom.find({ roomId: req.params.roomId })
       .populate('personaId', 'name displayName avatar sameNameNumber globalNumber');
     
-    // ✅ 只返回 Persona 信息，不返回用户信息
     const members = personaRooms.map(pr => ({
       _id: pr._id,
       personaId: pr.personaId ? {
@@ -398,11 +396,9 @@ router.get('/:roomId/pending', authMiddleware, async (req, res) => {
     
     if (!room) return res.status(404).json({ error: '聊天室不存在' });
     
-    // ✅ 使用统一权限检查
     const { hasPermission } = await checkRoomPermission(req.userId, req.params.roomId);
     if (!hasPermission) return res.status(403).json({ error: '没有权限' });
     
-    // 过滤掉 null 的 personaId
     const pending = (room.pendingMembers || []).filter(p => p.personaId);
     res.json(pending);
   } catch (error) {
@@ -599,21 +595,18 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
     
     console.log(`📋 [API] 找到消息: roomId=${message.roomId}, userId=${message.userId}`);
     
-    // 获取当前用户的Persona（用于验证是否是消息发送者）
     const currentPersona = await getActivePersona(req.userId);
     if (!currentPersona) {
       console.log(`❌ [API] 用户没有激活的Persona: ${req.userId}`);
       return res.status(403).json({ error: '请先选择一个角色' });
     }
     
-    // 检查权限：只能撤回自己发送的消息
     if (message.userId.toString() !== currentPersona._id.toString() && 
         message.personaId?.toString() !== currentPersona._id.toString()) {
       console.log(`❌ [API] 无权撤回: 消息作者=${message.userId}, 当前Persona=${currentPersona._id}`);
       return res.status(403).json({ error: '只能撤回自己的消息' });
     }
     
-    // 检查时间（5分钟内）
     const messageTime = new Date(message.createdAt).getTime();
     const now = Date.now();
     const diffSeconds = (now - messageTime) / 1000;
@@ -625,7 +618,6 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '只能撤回5分钟内的消息' });
     }
     
-    // 标记为已撤回
     message.isRecalled = true;
     message.content = '该消息已被撤回';
     message.recalledAt = new Date();
@@ -633,7 +625,6 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
     
     console.log(`✅ [API] 消息撤回成功: ${messageId}`);
     
-    // 通过Socket通知房间内所有人
     const io = req.app.get('io');
     if (io) {
       io.to(message.roomId).emit('message-recalled', { messageId, content: message.content });
@@ -670,13 +661,11 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '请先选择一个角色' });
     }
     
-    // 只能删除自己的消息
     if (message.userId.toString() !== currentPersona._id.toString() && 
         message.personaId?.toString() !== currentPersona._id.toString()) {
       return res.status(403).json({ error: '只能删除自己的消息' });
     }
     
-    // 标记为已删除（软删除）
     message.isDeletedForUser = true;
     message.deletedForUserId = req.userId;
     await message.save();
@@ -687,6 +676,107 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('❌ [API] 删除失败:', error);
     res.status(500).json({ error: error.message || '删除失败' });
+  }
+});
+
+// ========== 转让群主 ==========
+router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
+  console.log(`👑 [API] 转让群主请求`);
+  console.log(`  📍 参数: roomId=${req.params.roomId}`);
+  console.log(`  📍 Body:`, req.body);
+  console.log(`  👤 当前用户: ${req.userId}`);
+  
+  try {
+    const { newOwnerId } = req.body;
+    const { roomId } = req.params;
+    
+    if (!newOwnerId) {
+      console.log(`❌ [API] 新群主ID缺失`);
+      return res.status(400).json({ error: '请指定新群主' });
+    }
+    
+    // 获取当前用户的激活 Persona
+    const currentPersona = await getActivePersona(req.userId);
+    if (!currentPersona) {
+      console.log(`❌ [API] 当前用户没有激活的角色`);
+      return res.status(403).json({ error: '请先选择一个角色' });
+    }
+    
+    console.log(`👤 [API] 当前群主角色: ${currentPersona._id} (${currentPersona.displayName})`);
+    
+    // 检查房间是否存在
+    const room = await Room.findById(roomId);
+    if (!room) {
+      console.log(`❌ [API] 房间不存在: ${roomId}`);
+      return res.status(404).json({ error: '聊天室不存在' });
+    }
+    
+    // 验证当前用户是否是群主
+    const currentPersonaRoom = await PersonaRoom.findOne({
+      personaId: currentPersona._id,
+      roomId: roomId
+    });
+    
+    if (!currentPersonaRoom || currentPersonaRoom.role !== 'owner') {
+      console.log(`❌ [API] 当前用户不是群主: role=${currentPersonaRoom?.role}`);
+      return res.status(403).json({ error: '只有群主可以转让群主' });
+    }
+    
+    // 获取新群主的 PersonaRoom
+    const newOwnerPersonaRoom = await PersonaRoom.findOne({
+      personaId: newOwnerId,
+      roomId: roomId
+    });
+    
+    if (!newOwnerPersonaRoom) {
+      console.log(`❌ [API] 新群主不是群成员: ${newOwnerId}`);
+      return res.status(404).json({ error: '新群主不在群聊中' });
+    }
+    
+    console.log(`👑 [API] 新群主角色: ${newOwnerId}`);
+    
+    // 转让群主：将原群主降为管理员，新群主升为群主
+    await PersonaRoom.findOneAndUpdate(
+      { personaId: currentPersona._id, roomId: roomId },
+      { role: 'admin' }
+    );
+    console.log(`✅ [API] 原群主 ${currentPersona._id} 已降为管理员`);
+    
+    await PersonaRoom.findOneAndUpdate(
+      { personaId: newOwnerId, roomId: roomId },
+      { role: 'owner' }
+    );
+    console.log(`✅ [API] 新群主 ${newOwnerId} 已升为群主`);
+    
+    // 更新 Room 表的 createdBy
+    room.createdBy = newOwnerId;
+    await room.save();
+    console.log(`✅ [API] 房间 ${roomId} 的 createdBy 已更新为 ${newOwnerId}`);
+    
+    console.log(`✅ [API] 群主转让成功: ${currentPersona.displayName} -> ${newOwnerId}`);
+    
+    // 通过 Socket 通知房间内所有人
+    const io = req.app.get('io');
+    if (io) {
+      io.to(roomId).emit('owner-transferred', {
+        oldOwnerId: currentPersona._id,
+        newOwnerId: newOwnerId,
+        newOwnerName: newOwnerPersonaRoom.personaId?.displayName || '新群主'
+      });
+      console.log(`📢 [API] 已通过Socket通知房间 ${roomId} 群主已转让`);
+    } else {
+      console.log(`⚠️ [API] Socket.io实例未找到，无法发送通知`);
+    }
+    
+    res.json({
+      success: true,
+      message: '群主转让成功',
+      newOwnerId: newOwnerId
+    });
+    
+  } catch (error) {
+    console.error('❌ [API] 转让群主失败:', error);
+    res.status(500).json({ error: error.message || '转让失败' });
   }
 });
 
