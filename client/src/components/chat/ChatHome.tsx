@@ -27,6 +27,37 @@ console.log('🔧 [ChatHome] 组件模块加载');
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
+// ========== 时间分隔线辅助函数 ==========
+// 检查是否需要显示时间分隔线（默认30分钟间隔）
+const shouldShowTimeDivider = (prevMsg: Message | null, currentMsg: Message): boolean => {
+  if (!prevMsg) return true; // 第一条消息显示时间
+  
+  const prevTime = new Date(prevMsg.createdAt).getTime();
+  const currentTime = new Date(currentMsg.createdAt).getTime();
+  const diffMinutes = (currentTime - prevTime) / 1000 / 60;
+  
+  // 间隔超过30分钟就显示时间分隔线
+  return diffMinutes > 30;
+};
+
+// 格式化时间分隔线显示
+const formatDividerTime = (date: Date): string => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  if (msgDate.getTime() === today.getTime()) {
+    // 今天：显示 "今天 HH:MM"
+    return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  } else if (msgDate.getTime() === today.getTime() - 86400000) {
+    // 昨天：显示 "昨天 HH:MM"
+    return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  } else {
+    // 其他：显示 "YYYY/MM/DD HH:MM"
+    return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }
+};
+
 // ========== 消息气泡组件 ==========
 const MessageBubble: React.FC<{
   message: Message;
@@ -55,6 +86,26 @@ const MessageBubble: React.FC<{
     },
   });
 
+  // 获取发送者显示名称（智能处理编号）
+  const getSenderDisplayName = () => {
+    let name = message.personaId?.displayName || message.personaId?.name || '?';
+    const number = message.personaId?.sameNameNumber;
+    
+    // 检查名称中是否已经包含 #编号
+    const hasNumberInName = /#\d+/.test(name);
+    
+    // 如果已经有编号，直接返回；否则才添加编号
+    if (hasNumberInName) {
+      return name;
+    }
+    return number ? `${name} #${number}` : name;
+  };
+  
+  // 格式化消息内时间（只显示时分）
+  const formatBubbleTime = (date: Date): string => {
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
       {!isSelf && (
@@ -67,13 +118,28 @@ const MessageBubble: React.FC<{
       )}
       
       <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
-        {/* 消息气泡内不再显示角色名，避免重复 */}
+        {/* 角色名显示 - 非自己的消息 */}
+        {!isSelf && (
+          <div 
+            onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
+            className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition"
+          >
+            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+              {getSenderDisplayName()}
+            </span>
+          </div>
+        )}
+        
+        {/* 角色名显示 - 自己的消息 */}
+        {isSelf && (
+          <div className="flex justify-end mb-1 mr-1">
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+              {getSenderDisplayName()}
+            </span>
+          </div>
+        )}
         
         <div className="flex items-end gap-2">
-          {!isMobile && !isSelf && (
-            <span className="text-xs text-gray-400 flex-shrink-0">{formatMessageTime(message.createdAt)}</span>
-          )}
-          
           <div
             {...longPressProps}
             className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
@@ -84,9 +150,14 @@ const MessageBubble: React.FC<{
           >
             <div className="break-words whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} />
             {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
+            
+            {/* ✅ 气泡内时间戳 - 右下角/左下角 */}
+            <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+              <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
+                {formatBubbleTime(new Date(message.createdAt))}
+              </span>
+            </div>
           </div>
-          
-          {isSelf && <span className="text-xs text-gray-400 flex-shrink-0">{formatMessageTime(message.createdAt)}</span>}
         </div>
       </div>
 
@@ -255,47 +326,64 @@ const MessageList: React.FC<{
 
   return (
     <>
-      {messages.map(msg => {
-        if (msg.isRecalled) {
-          return (
-            <div key={msg._id} className="flex justify-center">
-              <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full italic">
-                {msg.content}
-              </span>
-            </div>
-          );
-        }
-        if (msg.userId?._id === 'system') {
-          return (
-            <div key={msg._id} className="flex justify-center">
-              <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">{msg.content}</span>
-            </div>
-          );
-        }
-        if (msg.isAction) {
-          return (
-            <div key={msg._id} className="flex justify-center">
-              <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
-                * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
-              </span>
-            </div>
-          );
-        }
-        
-        const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
+      {messages.map((msg, index) => {
+        const prevMsg = index > 0 ? messages[index - 1] : null;
+        const showDivider = shouldShowTimeDivider(prevMsg, msg);
         
         return (
-          <MessageBubble
-            key={msg._id}
-            message={msg}
-            isSelf={isSelf}
-            isMobile={isMobile}
-            navigate={navigate}
-            selectedPersona={selectedPersona}
-            onTranslate={handleTranslate}
-            translatingMsgId={translatingMsgId}
-            onLongPress={handleMessageLongPress}
-          />
+          <React.Fragment key={msg._id}>
+            {/* ✅ 时间分隔线 */}
+            {showDivider && (
+              <div className="flex justify-center my-4">
+                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                  {formatDividerTime(new Date(msg.createdAt))}
+                </span>
+              </div>
+            )}
+            
+            {(() => {
+              if (msg.isRecalled) {
+                return (
+                  <div className="flex justify-center">
+                    <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full italic">
+                      {msg.content}
+                    </span>
+                  </div>
+                );
+              }
+              if (msg.userId?._id === 'system') {
+                return (
+                  <div className="flex justify-center">
+                    <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">{msg.content}</span>
+                  </div>
+                );
+              }
+              if (msg.isAction) {
+                return (
+                  <div className="flex justify-center">
+                    <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
+                      * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
+                    </span>
+                  </div>
+                );
+              }
+              
+              const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
+              
+              return (
+                <MessageBubble
+                  message={msg}
+                  isSelf={isSelf}
+                  isMobile={isMobile}
+                  navigate={navigate}
+                  selectedPersona={selectedPersona}
+                  onTranslate={handleTranslate}
+                  translatingMsgId={translatingMsgId}
+                  onLongPress={handleMessageLongPress}
+                />
+              );
+            })()}
+          </React.Fragment>
         );
       })}
       <div ref={messagesEndRef} />
@@ -648,7 +736,7 @@ const ChatHome = () => {
   const handleLeaveRoom = async () => {
     if (!selectedRoom) return;
     toast.custom((t) => (
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4">
+      <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 border border-gray-100 dark:border-gray-700 ${t.visible ? 'animate-in fade-in slide-in-from-bottom-2' : 'animate-out fade-out slide-out-to-bottom-2'}`}>
         <p className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">退出群聊</p>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">确定要退出「{selectedRoom.name}」吗？</p>
         <div className="flex gap-3">
@@ -759,7 +847,7 @@ const ChatHome = () => {
                       </span>
                     </div>
                     
-                    {/* ✅ 显示最后一条消息（替代群主信息） */}
+                    {/* 显示最后一条消息 */}
                     {room.lastMessage ? (
                       <div className="mt-0.5">
                         {room.lastMessage.isAction ? (
@@ -781,7 +869,7 @@ const ChatHome = () => {
                       <p className="text-xs text-gray-400 mt-0.5">暂无消息</p>
                     )}
                     
-                    {/* 可选：保留群主信息（缩小显示） */}
+                    {/* 群主信息（缩小显示） */}
                     <p className="text-[10px] text-gray-400 mt-0.5">
                       群主: {room.creatorName || '?'}
                     </p>
@@ -836,7 +924,7 @@ const ChatHome = () => {
           />
         </div>
 
-        {/* ✅ 发言身份区域 - 快捷切换角色（唯一显示位置） */}
+        {/* 发言身份区域 - 快捷切换角色 */}
         {selectedRoom && selectedPersona && (
           <div className="relative px-4 pb-1" ref={personaSwitchPanelRef}>
             <button
@@ -954,7 +1042,43 @@ const ChatHome = () => {
 
   return (
     <div className="h-full w-full bg-inherit">
-      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { background: 'transparent', boxShadow: 'none', padding: 0 } }} />
+      {/* ✅ Toast 深色模式适配 */}
+      <Toaster 
+        position="top-right" 
+        toastOptions={{ 
+          duration: 3000,
+          className: '!bg-gray-800 !text-white dark:!bg-gray-800 dark:!text-white !rounded-xl !shadow-lg',
+          style: {
+            background: '#1f2937',
+            color: '#ffffff',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+          },
+          success: {
+            className: '!bg-green-600 !text-white',
+            style: {
+              background: '#10b981',
+              color: '#ffffff',
+            },
+          },
+          error: {
+            className: '!bg-red-600 !text-white',
+            style: {
+              background: '#ef4444',
+              color: '#ffffff',
+            },
+          },
+          loading: {
+            className: '!bg-blue-600 !text-white',
+            style: {
+              background: '#3b82f6',
+              color: '#ffffff',
+            },
+          },
+        }} 
+      />
       {isDesktop && (
         <DesktopLayout>
           <div className="h-full flex">

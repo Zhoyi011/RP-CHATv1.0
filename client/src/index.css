@@ -657,3 +657,52 @@ html.dark .bubble-tail-left::before {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* 全局 Toast 样式 - 适配深色模式 */
+:root {
+  --toast-bg-light: #ffffff;
+  --toast-bg-dark: #1f2937;
+  --toast-text-light: #111827;
+  --toast-text-dark: #f9fafb;
+}
+
+/* 深色模式下的 Toast */
+.dark .goober,
+[data-theme='dark'] .goober {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+  border: 1px solid #374151 !important;
+}
+
+/* 成功提示 */
+.goober-toast-success {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 错误提示 */
+.goober-toast-error {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 加载提示 */
+.goober-toast-loading {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 普通提示 */
+.goober-toast-blank {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+  border-radius: 12px !important;
+  border: 1px solid #374151 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
