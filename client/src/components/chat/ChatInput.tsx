@@ -21,7 +21,7 @@ interface ChatInputProps {
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   disabled = false, 
-  placeholder = "输入消息... 使用 /me 进行动作扮演",
+  placeholder = "输入消息... ",
   roomId,
   selectedPersona,
   roomPersonas = [],

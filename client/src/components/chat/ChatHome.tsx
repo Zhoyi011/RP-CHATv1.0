@@ -113,7 +113,6 @@ const MessageBubble: React.FC<{
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  // 检查回复消息是否可见
   const isReplyHidden = message.replyTo && (message.replyTo.isRecalled || message.replyTo.isDeleted);
 
   return (
@@ -156,7 +155,6 @@ const MessageBubble: React.FC<{
                 : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
             }`}
           >
-            {/* 回复引用区域 */}
             {message.replyTo && (
               <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-1 mb-1">
@@ -183,7 +181,6 @@ const MessageBubble: React.FC<{
             </div>
           </div>
           
-          {/* 回复按钮 */}
           <button
             onClick={() => onReply(message)}
             className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 flex-shrink-0"
@@ -233,7 +230,9 @@ const MessageList: React.FC<{
   navigate: (path: string) => void;
   onMessagesChange?: (newMessages: Message[]) => void;
   onReply: (message: Message) => void;
-}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange, onReply }) => {
+  onRecall: (message: Message) => void;
+  onDeleteSelf: (message: Message) => void;
+}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange, onReply, onRecall, onDeleteSelf }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [translatingMsgId, setTranslatingMsgId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -256,40 +255,6 @@ const MessageList: React.FC<{
     }
   }, []);
 
-  const handleDeleteSelf = useCallback(async (message: Message) => {
-    if (!confirm('删除后仅你自己看不到这条消息，其他人仍可见。确定吗？')) return;
-    
-    try {
-      await roomApi.deleteMessage(message._id);
-      toast.success('消息已删除（仅自己不可见）');
-      // 从列表中移除该消息
-      if (onMessagesChange) {
-        onMessagesChange(messages.filter(m => m._id !== message._id));
-      }
-    } catch (error: any) {
-      toast.error(error.message || '删除失败');
-    }
-  }, [messages, onMessagesChange]);
-
-  const handleRecall = useCallback(async (message: Message) => {
-    const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
-    if (diffMinutes > 5) {
-      toast.error('只能撤回5分钟内的消息');
-      return;
-    }
-    
-    try {
-      await roomApi.recallMessage(message._id);
-      toast.success('消息已撤回');
-      // 更新本地消息状态
-      const updatedMessage = { ...message, isRecalled: true };
-      const newMessages = messages.map(m => m._id === message._id ? updatedMessage : m);
-      if (onMessagesChange) onMessagesChange(newMessages);
-    } catch (error: any) {
-      toast.error(error.message || '撤回失败');
-    }
-  }, [messages, onMessagesChange]);
-
   const handleMessageLongPress = useCallback((message: Message, position: { x: number; y: number }) => {
     setContextMenu({ visible: true, x: position.x, y: position.y, message });
   }, []);
@@ -305,15 +270,15 @@ const MessageList: React.FC<{
     ];
     
     if (canRecall) {
-      items.push({ key: 'recall', label: '撤回消息', onClick: () => handleRecall(message) });
+      items.push({ key: 'recall', label: '撤回消息', onClick: () => onRecall(message) });
     }
     
     if (canDelete) {
-      items.push({ key: 'delete', label: '删除（仅自己）', danger: true, onClick: () => handleDeleteSelf(message) });
+      items.push({ key: 'delete', label: '删除（仅自己）', danger: true, onClick: () => onDeleteSelf(message) });
     }
     
     return items;
-  }, [selectedPersona, onReply, handleShare, handleRecall, handleDeleteSelf]);
+  }, [selectedPersona, onReply, handleShare, onRecall, onDeleteSelf]);
 
   const handleTranslate = async (content: string, msgId: string) => {
     if (translatingMsgId === msgId) return;
@@ -349,7 +314,6 @@ const MessageList: React.FC<{
             )}
             
             {(() => {
-              // 已撤回的消息
               if (msg.isRecalled) {
                 return (
                   <div className="flex justify-center my-1">
@@ -360,7 +324,6 @@ const MessageList: React.FC<{
                 );
               }
               
-              // 系统消息
               if (msg.userId?._id === 'system') {
                 return (
                   <div className="flex justify-center my-1">
@@ -369,7 +332,6 @@ const MessageList: React.FC<{
                 );
               }
               
-              // 动作消息
               if (msg.isAction) {
                 return (
                   <div className="flex justify-center my-1">
@@ -441,16 +403,15 @@ const ChatHome = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   
-  // ========== 回复功能状态 ==========
+  // 回复功能状态
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   
-  // ========== 快捷切换角色相关状态 ==========
+  // 快捷切换角色相关状态
   const [showPersonaQuickSwitch, setShowPersonaQuickSwitch] = useState(false);
   const [personaSearchTerm, setPersonaSearchTerm] = useState('');
   const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
   const personaSwitchPanelRef = useRef<HTMLDivElement>(null);
 
-  // 加载所有可用角色
   const loadAvailablePersonas = useCallback(async () => {
     if (!selectedRoom) return;
     try {
@@ -553,6 +514,58 @@ const ChatHome = () => {
       return () => clearInterval(interval);
     }
   }, [selectedRoom, isRoomAdmin, isRoomOwner, fetchPendingCount]);
+
+  // ========== 撤回消息 ==========
+  const handleRecall = useCallback(async (message: Message) => {
+    const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
+    if (diffMinutes > 5) {
+      toast.error('只能撤回5分钟内的消息');
+      return;
+    }
+    
+    try {
+      await roomApi.recallMessage(message._id);
+      toast.success('消息已撤回');
+      
+      // 立即更新本地状态
+      setMessages(prev => prev.map(msg => 
+        msg._id === message._id 
+          ? { 
+              ...msg, 
+              content: `${msg.personaId?.displayName || msg.personaId?.name || '用户'} 撤回了一条消息`, 
+              isRecalled: true 
+            }
+          : msg
+      ));
+    } catch (error: any) {
+      toast.error(error.message || '撤回失败');
+    }
+  }, []);
+
+  // ========== 删除消息（软删除）==========
+  const handleDeleteSelf = useCallback(async (message: Message) => {
+    if (!confirm('删除后仅你自己看不到这条消息，其他人仍可见。确定吗？')) return;
+    
+    try {
+      await roomApi.deleteMessage(message._id);
+      toast.success('消息已删除（仅自己不可见）');
+      
+      // 立即从消息列表中移除
+      setMessages(prev => prev.filter(m => m._id !== message._id));
+    } catch (error: any) {
+      toast.error(error.message || '删除失败');
+    }
+  }, []);
+
+  // ========== 回复消息 ==========
+  const handleReply = useCallback((message: Message) => {
+    setReplyToMessage(message);
+    toast.success(`正在回复 ${message.personaId?.displayName || message.personaId?.name}`, { icon: '💬', duration: 2000 });
+  }, []);
+
+  const handleCancelReply = useCallback(() => {
+    setReplyToMessage(null);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
@@ -657,8 +670,8 @@ const ChatHome = () => {
     };
 
     const handleMessageDeleted = (data: { messageId: string }) => {
-      // 软删除：从消息列表中移除该消息（仅当前用户）
-      setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+      // 其他用户删除消息时，当前用户不需要做任何操作（软删除只影响删除者本人）
+      console.log('其他用户删除了消息:', data.messageId);
     };
 
     socketService.onNewMessage(handleNewMessage);
@@ -697,7 +710,7 @@ const ChatHome = () => {
     setSelectedRoom(room);
     setSelectedUser(null);
     setShowUserList(false);
-    setReplyToMessage(null); // 清空回复状态
+    setReplyToMessage(null);
     if (isMobile) setShowChatWindow(true);
   }, [selectedPersona, isMobile]);
 
@@ -733,14 +746,13 @@ const ChatHome = () => {
     } catch {}
   }, []);
 
-  // ========== 发送消息（支持回复）==========
+  // 发送消息（支持回复）
   const handleSendMessage = useCallback((content: string, isAction = false, personaId?: string) => {
     if (!selectedRoom || !user) { toast.error('请先选择聊天室'); return; }
     if (!content.trim()) return;
     const pid = personaId || selectedPersona?._id;
     if (!pid) { toast.error('请选择发言角色'); return; }
     
-    // 通过 Socket 发送消息（支持回复）
     socketService.emit('send-message', {
       roomId: selectedRoom._id,
       userId: user.uid,
@@ -750,20 +762,8 @@ const ChatHome = () => {
       replyToId: replyToMessage?._id
     });
     
-    // 清空回复状态
     setReplyToMessage(null);
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
-
-  // ========== 回复消息处理 ==========
-  const handleReply = useCallback((message: Message) => {
-    setReplyToMessage(message);
-    // 聚焦输入框（通过 ref 或其他方式）
-    toast.success(`正在回复 ${message.personaId?.displayName || message.personaId?.name}`, { icon: '💬', duration: 2000 });
-  }, []);
-
-  const handleCancelReply = useCallback(() => {
-    setReplyToMessage(null);
-  }, []);
 
   const handleBackToList = useCallback(() => { setShowChatWindow(false); setSelectedUser(null); setReplyToMessage(null); }, []);
 
@@ -947,7 +947,6 @@ const ChatHome = () => {
           </div>
         </div>
 
-        {/* 消息列表区域 */}
         <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-inherit">
           <MessageList 
             messages={messages} 
@@ -957,10 +956,11 @@ const ChatHome = () => {
             navigate={navigate}
             onMessagesChange={handleMessagesChange}
             onReply={handleReply}
+            onRecall={handleRecall}
+            onDeleteSelf={handleDeleteSelf}
           />
         </div>
 
-        {/* 发言身份区域 */}
         {selectedRoom && selectedPersona && (
           <div className="relative px-4 pb-1" ref={personaSwitchPanelRef}>
             <button
@@ -1061,7 +1061,6 @@ const ChatHome = () => {
           </div>
         )}
 
-        {/* 回复预览栏 */}
         {replyToMessage && (
           <div className="px-4">
             <ReplyPreviewBar
@@ -1084,7 +1083,7 @@ const ChatHome = () => {
           roomPersonas={roomPersonas}
           onSwitchPersona={handleSwitchRoomPersona}
           onLoadRoomPersonas={loadRoomPersonas}
-          placeholder="输入消息... 使用 /me 进行动作扮演，点击消息气泡上的回复按钮可引用回复"
+          placeholder="输入消息... "
         />
       </div>
     );
