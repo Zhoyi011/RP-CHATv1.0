@@ -16,7 +16,7 @@ import ChatInput from './ChatInput';
 import LinkPreviewContainer from './LinkPreviewContainer';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
-import { roomApi, personaApi, authApi, type Room, type Persona, type Message, type User } from '../../services/api';
+import { roomApi, personaApi, authApi, type Room, type Persona, type Message, type User, type ReplyToInfo } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
 import { parseMarkdown } from '../../utils/renderMarkdown';
@@ -28,34 +28,54 @@ console.log('🔧 [ChatHome] 组件模块加载');
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 // ========== 时间分隔线辅助函数 ==========
-// 检查是否需要显示时间分隔线（默认30分钟间隔）
 const shouldShowTimeDivider = (prevMsg: Message | null, currentMsg: Message): boolean => {
-  if (!prevMsg) return true; // 第一条消息显示时间
-  
+  if (!prevMsg) return true;
   const prevTime = new Date(prevMsg.createdAt).getTime();
   const currentTime = new Date(currentMsg.createdAt).getTime();
   const diffMinutes = (currentTime - prevTime) / 1000 / 60;
-  
-  // 间隔超过30分钟就显示时间分隔线
   return diffMinutes > 30;
 };
 
-// 格式化时间分隔线显示
 const formatDividerTime = (date: Date): string => {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   
   if (msgDate.getTime() === today.getTime()) {
-    // 今天：显示 "今天 HH:MM"
     return `今天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   } else if (msgDate.getTime() === today.getTime() - 86400000) {
-    // 昨天：显示 "昨天 HH:MM"
     return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   } else {
-    // 其他：显示 "YYYY/MM/DD HH:MM"
     return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   }
+};
+
+// ========== 回复预览组件 ==========
+const ReplyPreviewBar: React.FC<{
+  replyTo: ReplyToInfo;
+  onCancel: () => void;
+}> = ({ replyTo, onCancel }) => {
+  const isHidden = replyTo.isRecalled || replyTo.isDeleted;
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-t-lg border-l-4 border-blue-500 mb-2">
+      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+      </svg>
+      <div className="flex-1 min-w-0">
+        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+          回复消息
+        </span>
+        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+          {isHidden ? '[消息已不可见]' : replyTo.content}
+        </p>
+      </div>
+      <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
 };
 
 // ========== 消息气泡组件 ==========
@@ -68,9 +88,8 @@ const MessageBubble: React.FC<{
   onTranslate: (content: string, msgId: string) => void;
   translatingMsgId: string | null;
   onLongPress: (message: Message, position: { x: number; y: number }) => void;
-}> = ({ message, isSelf, isMobile, navigate, selectedPersona, onTranslate, translatingMsgId, onLongPress }) => {
-  console.log(`💬 [MessageBubble] 渲染消息: ${message._id}, isSelf=${isSelf}`);
-  
+  onReply: (message: Message) => void;
+}> = ({ message, isSelf, isMobile, navigate, selectedPersona, onTranslate, translatingMsgId, onLongPress, onReply }) => {
   const urls = extractUrls(message.content);
   
   const longPressProps = useLongPress({
@@ -78,36 +97,27 @@ const MessageBubble: React.FC<{
     enableMobile: true,
     enableContextMenu: true,
     onLongPress: (e, pos) => {
-      console.log(`👆 [MessageBubble] 长按/右键触发, 消息: ${message._id}`);
       if (pos) onLongPress(message, pos);
-    },
-    onClick: () => {
-      console.log(`🔘 [MessageBubble] 点击消息: ${message._id}`);
     },
   });
 
-  // 获取发送者显示名称（智能处理编号）
   const getSenderDisplayName = () => {
     let name = message.personaId?.displayName || message.personaId?.name || '?';
     const number = message.personaId?.sameNameNumber;
-    
-    // 检查名称中是否已经包含 #编号
     const hasNumberInName = /#\d+/.test(name);
-    
-    // 如果已经有编号，直接返回；否则才添加编号
-    if (hasNumberInName) {
-      return name;
-    }
+    if (hasNumberInName) return name;
     return number ? `${name} #${number}` : name;
   };
   
-  // 格式化消息内时间（只显示时分）
   const formatBubbleTime = (date: Date): string => {
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
+  // 检查回复消息是否可见
+  const isReplyHidden = message.replyTo && (message.replyTo.isRecalled || message.replyTo.isDeleted);
+
   return (
-    <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}>
+    <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group`}>
       {!isSelf && (
         <div 
           onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
@@ -118,7 +128,6 @@ const MessageBubble: React.FC<{
       )}
       
       <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
-        {/* 角色名显示 - 非自己的消息 */}
         {!isSelf && (
           <div 
             onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
@@ -130,7 +139,6 @@ const MessageBubble: React.FC<{
           </div>
         )}
         
-        {/* 角色名显示 - 自己的消息 */}
         {isSelf && (
           <div className="flex justify-end mb-1 mr-1">
             <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
@@ -148,16 +156,43 @@ const MessageBubble: React.FC<{
                 : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
             }`}
           >
+            {/* 回复引用区域 */}
+            {message.replyTo && (
+              <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-1 mb-1">
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                    回复
+                  </span>
+                </div>
+                <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                  {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
+                </p>
+              </div>
+            )}
+            
             <div className="break-words whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} />
             {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
             
-            {/* ✅ 气泡内时间戳 - 右下角/左下角 */}
             <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
               <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
                 {formatBubbleTime(new Date(message.createdAt))}
               </span>
             </div>
           </div>
+          
+          {/* 回复按钮 */}
+          <button
+            onClick={() => onReply(message)}
+            className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 flex-shrink-0"
+            title="回复"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -197,9 +232,8 @@ const MessageList: React.FC<{
   isMobile: boolean;
   navigate: (path: string) => void;
   onMessagesChange?: (newMessages: Message[]) => void;
-}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange }) => {
-  console.log(`📋 [MessageList] 初始化，消息数量: ${messages.length}`);
-  
+  onReply: (message: Message) => void;
+}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange, onReply }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [translatingMsgId, setTranslatingMsgId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -213,102 +247,76 @@ const MessageList: React.FC<{
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleReply = useCallback((message: Message) => {
-    console.log(`💬 [MessageList] 回复消息: ${message._id}`);
-    toast.success(`回复功能开发中...`, { icon: '💬' });
-  }, []);
-
   const handleShare = useCallback(async (message: Message) => {
-    console.log(`📤 [MessageList] 分享消息: ${message._id}`);
     try {
       await navigator.clipboard.writeText(message.content);
       toast.success('消息已复制到剪贴板');
     } catch (error) {
-      console.error(`❌ [MessageList] 复制失败:`, error);
       toast.error('复制失败');
     }
   }, []);
 
-  const handleDelete = useCallback(async (message: Message) => {
-    console.log(`🗑️ [MessageList] 删除消息: ${message._id}`);
+  const handleDeleteSelf = useCallback(async (message: Message) => {
+    if (!confirm('删除后仅你自己看不到这条消息，其他人仍可见。确定吗？')) return;
+    
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/room/message/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ messageId: message._id })
-      });
-      if (response.ok) {
-        console.log(`✅ [MessageList] 消息删除成功`);
-        toast.success('消息已删除');
-        if (onMessagesChange) onMessagesChange(messages.filter(m => m._id !== message._id));
-      } else {
-        const data = await response.json();
-        console.error(`❌ [MessageList] 删除失败:`, data.error);
-        toast.error(data.error || '删除失败');
+      await roomApi.deleteMessage(message._id);
+      toast.success('消息已删除（仅自己不可见）');
+      // 从列表中移除该消息
+      if (onMessagesChange) {
+        onMessagesChange(messages.filter(m => m._id !== message._id));
       }
-    } catch (error) {
-      console.error(`❌ [MessageList] 删除异常:`, error);
-      toast.error('删除失败');
+    } catch (error: any) {
+      toast.error(error.message || '删除失败');
     }
   }, [messages, onMessagesChange]);
 
   const handleRecall = useCallback(async (message: Message) => {
-    console.log(`⏪ [MessageList] 撤回消息: ${message._id}`);
     const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
     if (diffMinutes > 5) {
-      console.log(`❌ [MessageList] 超过撤回时间限制 (${diffMinutes.toFixed(1)}分钟)`);
       toast.error('只能撤回5分钟内的消息');
       return;
     }
+    
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/room/message/recall`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ messageId: message._id })
-      });
-      if (response.ok) {
-        console.log(`✅ [MessageList] 消息撤回成功`);
-        toast.success('消息已撤回');
-        message.content = '该消息已被撤回';
-        message.isRecalled = true;
-        if (onMessagesChange) onMessagesChange([...messages]);
-      } else {
-        const data = await response.json();
-        console.error(`❌ [MessageList] 撤回失败:`, data.error);
-        toast.error(data.error || '撤回失败');
-      }
-    } catch (error) {
-      console.error(`❌ [MessageList] 撤回异常:`, error);
-      toast.error('撤回失败');
+      await roomApi.recallMessage(message._id);
+      toast.success('消息已撤回');
+      // 更新本地消息状态
+      const updatedMessage = { ...message, isRecalled: true };
+      const newMessages = messages.map(m => m._id === message._id ? updatedMessage : m);
+      if (onMessagesChange) onMessagesChange(newMessages);
+    } catch (error: any) {
+      toast.error(error.message || '撤回失败');
     }
   }, [messages, onMessagesChange]);
 
   const handleMessageLongPress = useCallback((message: Message, position: { x: number; y: number }) => {
-    console.log(`👆 [MessageList] 长按/右键消息: ${message._id}, 位置: (${position.x}, ${position.y})`);
     setContextMenu({ visible: true, x: position.x, y: position.y, message });
   }, []);
 
   const getMenuItems = useCallback((message: Message): MenuItem[] => {
     const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
-    console.log(`📋 [MessageList] 生成菜单项, isSelf=${isSelf}`);
+    const canRecall = isSelf && !message.isRecalled && (Date.now() - new Date(message.createdAt).getTime()) <= 5 * 60 * 1000;
+    const canDelete = isSelf && !message.isDeleted;
+    
     const items: MenuItem[] = [
-      { key: 'reply', label: '回复', onClick: () => handleReply(message) },
+      { key: 'reply', label: '回复', onClick: () => onReply(message) },
       { key: 'share', label: '分享', onClick: () => handleShare(message) },
     ];
-    if (isSelf) {
-      items.push({ key: 'delete', label: '删除', danger: true, onClick: () => handleDelete(message) });
-      const canRecall = Date.now() - new Date(message.createdAt).getTime() <= 5 * 60 * 1000;
-      if (canRecall) items.push({ key: 'recall', label: '撤回', onClick: () => handleRecall(message) });
+    
+    if (canRecall) {
+      items.push({ key: 'recall', label: '撤回消息', onClick: () => handleRecall(message) });
     }
-    console.log(`✅ [MessageList] 生成 ${items.length} 个菜单项`);
+    
+    if (canDelete) {
+      items.push({ key: 'delete', label: '删除（仅自己）', danger: true, onClick: () => handleDeleteSelf(message) });
+    }
+    
     return items;
-  }, [selectedPersona, handleReply, handleShare, handleDelete, handleRecall]);
+  }, [selectedPersona, onReply, handleShare, handleRecall, handleDeleteSelf]);
 
   const handleTranslate = async (content: string, msgId: string) => {
     if (translatingMsgId === msgId) return;
-    console.log(`🌐 [MessageList] 翻译消息: ${msgId}`);
     setTranslatingMsgId(msgId);
     try {
       const translated = await smartConvert(content);
@@ -332,7 +340,6 @@ const MessageList: React.FC<{
         
         return (
           <React.Fragment key={msg._id}>
-            {/* ✅ 时间分隔线 */}
             {showDivider && (
               <div className="flex justify-center my-4">
                 <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
@@ -342,25 +349,30 @@ const MessageList: React.FC<{
             )}
             
             {(() => {
+              // 已撤回的消息
               if (msg.isRecalled) {
                 return (
-                  <div className="flex justify-center">
+                  <div className="flex justify-center my-1">
                     <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full italic">
                       {msg.content}
                     </span>
                   </div>
                 );
               }
+              
+              // 系统消息
               if (msg.userId?._id === 'system') {
                 return (
-                  <div className="flex justify-center">
+                  <div className="flex justify-center my-1">
                     <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">{msg.content}</span>
                   </div>
                 );
               }
+              
+              // 动作消息
               if (msg.isAction) {
                 return (
-                  <div className="flex justify-center">
+                  <div className="flex justify-center my-1">
                     <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
                       * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
                     </span>
@@ -380,6 +392,7 @@ const MessageList: React.FC<{
                   onTranslate={handleTranslate}
                   translatingMsgId={translatingMsgId}
                   onLongPress={handleMessageLongPress}
+                  onReply={onReply}
                 />
               );
             })()}
@@ -428,14 +441,14 @@ const ChatHome = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   
+  // ========== 回复功能状态 ==========
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+  
   // ========== 快捷切换角色相关状态 ==========
   const [showPersonaQuickSwitch, setShowPersonaQuickSwitch] = useState(false);
   const [personaSearchTerm, setPersonaSearchTerm] = useState('');
   const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
   const personaSwitchPanelRef = useRef<HTMLDivElement>(null);
-
-  console.log(`📊 [ChatHome] 状态: authChecked=${authChecked}, loading=${loading}, selectedRoom=${selectedRoom?._id}`);
-  console.log(`📱 [ChatHome] 响应式: 桌面=${isDesktop}, 平板=${isTablet}, 手机=${isMobile}`);
 
   // 加载所有可用角色
   const loadAvailablePersonas = useCallback(async () => {
@@ -449,7 +462,6 @@ const ChatHome = () => {
         const data = await res.json();
         const available = data.filter((p: Persona) => p.status === 'approved');
         setAvailablePersonas(available);
-        console.log(`📋 [ChatHome] 可用角色数量: ${available.length}`);
       } else {
         setAvailablePersonas([]);
       }
@@ -459,7 +471,6 @@ const ChatHome = () => {
     }
   }, [selectedRoom]);
 
-  // 点击外部关闭快捷切换面板
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (personaSwitchPanelRef.current && !personaSwitchPanelRef.current.contains(e.target as Node)) {
@@ -471,20 +482,16 @@ const ChatHome = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 当房间变化时重新加载可用角色
   useEffect(() => {
     if (selectedRoom) {
       loadAvailablePersonas();
     }
   }, [selectedRoom, loadAvailablePersonas]);
 
-  // 快捷切换角色
   const handleQuickSwitchPersona = useCallback(async (persona: Persona) => {
     if (!selectedRoom) return;
-    console.log(`🔄 [ChatHome] 快捷切换角色: ${persona.displayName || persona.name}`);
     
     if (selectedPersona?._id === persona._id) {
-      console.log(`⚠️ [ChatHome] 已经是当前角色，跳过切换`);
       setShowPersonaQuickSwitch(false);
       return;
     }
@@ -505,20 +512,14 @@ const ChatHome = () => {
         socketService.switchPersona(user.uid, persona._id);
       }
       
-      toast.success(`已切换至 ${persona.displayName || persona.name}`, {
-        icon: '🎭',
-        duration: 2000
-      });
-      
+      toast.success(`已切换至 ${persona.displayName || persona.name}`, { icon: '🎭', duration: 2000 });
       setShowPersonaQuickSwitch(false);
       setPersonaSearchTerm('');
     } catch (err: any) {
-      console.error(`❌ [ChatHome] 切换失败:`, err);
       toast.error(err.message || '切换失败');
     }
   }, [selectedRoom, selectedPersona, user]);
 
-  // 快捷键切换角色 Hook
   const { personaCount } = useQuickSwitchPersona({
     enabled: selectedRoom !== null && availablePersonas.length > 1,
     personas: availablePersonas,
@@ -526,16 +527,12 @@ const ChatHome = () => {
     onSwitch: handleQuickSwitchPersona,
     shortcutKey: 'Tab'
   });
-  
-  console.log(`⌨️ [ChatHome] 快捷键可用角色数: ${personaCount}`);
 
-  // 过滤后的角色列表
   const filteredPersonas = availablePersonas.filter(p =>
     (p.displayName || p.name).toLowerCase().includes(personaSearchTerm.toLowerCase())
   );
 
   const handleMessagesChange = useCallback((newMessages: Message[]) => {
-    console.log(`🔄 [ChatHome] 消息列表更新，数量: ${newMessages.length}`);
     setMessages(newMessages);
   }, []);
 
@@ -620,6 +617,7 @@ const ChatHome = () => {
 
   useEffect(() => { if (selectedRoom) loadRoomPersonas(); }, [selectedRoom]);
 
+  // Socket 事件监听
   useEffect(() => {
     if (!authChecked || !user) return;
     const token = localStorage.getItem('token');
@@ -650,23 +648,29 @@ const ChatHome = () => {
       }
     };
 
-    const handleMessageRecalled = (data: { messageId: string; content: string }) => {
-      console.log(`🔔 [ChatHome] 消息被撤回: ${data.messageId}`);
+    const handleMessageRecalled = (data: { messageId: string; recalledByName: string }) => {
       setMessages(prev => prev.map(msg => 
         msg._id === data.messageId 
-          ? { ...msg, content: data.content, isRecalled: true }
+          ? { ...msg, content: `${msg.personaId?.displayName || msg.personaId?.name || '用户'} 撤回了一条消息`, isRecalled: true }
           : msg
       ));
     };
 
+    const handleMessageDeleted = (data: { messageId: string }) => {
+      // 软删除：从消息列表中移除该消息（仅当前用户）
+      setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+    };
+
     socketService.onNewMessage(handleNewMessage);
     socketService.on('message-recalled', handleMessageRecalled);
+    socketService.on('message-deleted', handleMessageDeleted);
     socketService.onRoomOnlineCount((data) => {
       setRooms(prev => prev.map(room => room._id === data.roomId ? { ...room, onlineCount: data.count } : room));
     });
 
     return () => {
       socketService.off('message-recalled', handleMessageRecalled);
+      socketService.off('message-deleted', handleMessageDeleted);
       socketService.removeAllListeners();
       socketService.disconnect();
     };
@@ -678,7 +682,7 @@ const ChatHome = () => {
       try {
         const data = await roomApi.getMessages(selectedRoom._id);
         if (Array.isArray(data)) {
-          setMessages(data.map(msg => ({ ...msg, userId: { ...msg.userId, firebaseUid: msg.userId?.firebaseUid || msg.userId?._id } })));
+          setMessages(data);
         }
         socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
       } catch (err) { console.error('加载消息失败:', err); }
@@ -690,12 +694,18 @@ const ChatHome = () => {
   const handleSelectRoom = useCallback(async (room: Room) => {
     if (!selectedPersona) { toast.error('请先选择一个角色'); return; }
     try { await roomApi.markRead(room._id); setRooms(prev => prev.map(r => r._id === room._id ? { ...r, unreadCount: 0 } : r)); } catch {}
-    setSelectedRoom(room); setSelectedUser(null); setShowUserList(false);
+    setSelectedRoom(room);
+    setSelectedUser(null);
+    setShowUserList(false);
+    setReplyToMessage(null); // 清空回复状态
     if (isMobile) setShowChatWindow(true);
   }, [selectedPersona, isMobile]);
 
   const handleSelectUser = useCallback((targetUser: User) => {
-    setSelectedUser(targetUser); setSelectedRoom(null); setShowUserList(false);
+    setSelectedUser(targetUser);
+    setSelectedRoom(null);
+    setShowUserList(false);
+    setReplyToMessage(null);
     if (isMobile) setShowChatWindow(true);
   }, [isMobile]);
 
@@ -723,15 +733,39 @@ const ChatHome = () => {
     } catch {}
   }, []);
 
+  // ========== 发送消息（支持回复）==========
   const handleSendMessage = useCallback((content: string, isAction = false, personaId?: string) => {
     if (!selectedRoom || !user) { toast.error('请先选择聊天室'); return; }
     if (!content.trim()) return;
     const pid = personaId || selectedPersona?._id;
     if (!pid) { toast.error('请选择发言角色'); return; }
-    socketService.sendMessage(selectedRoom._id, user.uid, pid, content, isAction);
-  }, [selectedRoom, selectedPersona, user]);
+    
+    // 通过 Socket 发送消息（支持回复）
+    socketService.emit('send-message', {
+      roomId: selectedRoom._id,
+      userId: user.uid,
+      personaId: pid,
+      content: isAction ? `/me ${content}` : content,
+      isAction,
+      replyToId: replyToMessage?._id
+    });
+    
+    // 清空回复状态
+    setReplyToMessage(null);
+  }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
-  const handleBackToList = useCallback(() => { setShowChatWindow(false); setSelectedUser(null); }, []);
+  // ========== 回复消息处理 ==========
+  const handleReply = useCallback((message: Message) => {
+    setReplyToMessage(message);
+    // 聚焦输入框（通过 ref 或其他方式）
+    toast.success(`正在回复 ${message.personaId?.displayName || message.personaId?.name}`, { icon: '💬', duration: 2000 });
+  }, []);
+
+  const handleCancelReply = useCallback(() => {
+    setReplyToMessage(null);
+  }, []);
+
+  const handleBackToList = useCallback(() => { setShowChatWindow(false); setSelectedUser(null); setReplyToMessage(null); }, []);
 
   const handleLeaveRoom = async () => {
     if (!selectedRoom) return;
@@ -753,7 +787,10 @@ const ChatHome = () => {
                 toast.success(data.message || '已退出');
                 const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, { headers: { 'Authorization': `Bearer ${token}` } });
                 const roomsData = await roomsRes.json();
-                setRooms(roomsData.rooms || []); setSelectedRoom(null); setMessages([]);
+                setRooms(roomsData.rooms || []);
+                setSelectedRoom(null);
+                setMessages([]);
+                setReplyToMessage(null);
               } else toast.error(data.error || '退出失败');
             } catch { toast.error('退出失败'); }
           }} className="flex-1 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition shadow-md">确定退出</button>
@@ -847,7 +884,6 @@ const ChatHome = () => {
                       </span>
                     </div>
                     
-                    {/* 显示最后一条消息 */}
                     {room.lastMessage ? (
                       <div className="mt-0.5">
                         {room.lastMessage.isAction ? (
@@ -869,7 +905,6 @@ const ChatHome = () => {
                       <p className="text-xs text-gray-400 mt-0.5">暂无消息</p>
                     )}
                     
-                    {/* 群主信息（缩小显示） */}
                     <p className="text-[10px] text-gray-400 mt-0.5">
                       群主: {room.creatorName || '?'}
                     </p>
@@ -921,10 +956,11 @@ const ChatHome = () => {
             isMobile={isMobile} 
             navigate={navigate}
             onMessagesChange={handleMessagesChange}
+            onReply={handleReply}
           />
         </div>
 
-        {/* 发言身份区域 - 快捷切换角色 */}
+        {/* 发言身份区域 */}
         {selectedRoom && selectedPersona && (
           <div className="relative px-4 pb-1" ref={personaSwitchPanelRef}>
             <button
@@ -947,7 +983,6 @@ const ChatHome = () => {
               )}
             </button>
             
-            {/* 快捷切换面板 */}
             <AnimatePresence>
               {showPersonaQuickSwitch && (
                 <motion.div
@@ -1026,6 +1061,21 @@ const ChatHome = () => {
           </div>
         )}
 
+        {/* 回复预览栏 */}
+        {replyToMessage && (
+          <div className="px-4">
+            <ReplyPreviewBar
+              replyTo={{
+                _id: replyToMessage._id,
+                content: replyToMessage.content,
+                isRecalled: replyToMessage.isRecalled || false,
+                isDeleted: replyToMessage.isDeleted || false
+              }}
+              onCancel={handleCancelReply}
+            />
+          </div>
+        )}
+
         <ChatInput
           onSendMessage={handleSendMessage}
           disabled={!selectedRoom}
@@ -1034,7 +1084,7 @@ const ChatHome = () => {
           roomPersonas={roomPersonas}
           onSwitchPersona={handleSwitchRoomPersona}
           onLoadRoomPersonas={loadRoomPersonas}
-          placeholder="输入消息... 使用 /me 进行动作扮演"
+          placeholder="输入消息... 使用 /me 进行动作扮演，点击消息气泡上的回复按钮可引用回复"
         />
       </div>
     );
@@ -1042,7 +1092,6 @@ const ChatHome = () => {
 
   return (
     <div className="h-full w-full bg-inherit">
-      {/* ✅ Toast 深色模式适配 */}
       <Toaster 
         position="top-right" 
         toastOptions={{ 
@@ -1058,24 +1107,15 @@ const ChatHome = () => {
           },
           success: {
             className: '!bg-green-600 !text-white',
-            style: {
-              background: '#10b981',
-              color: '#ffffff',
-            },
+            style: { background: '#10b981', color: '#ffffff' },
           },
           error: {
             className: '!bg-red-600 !text-white',
-            style: {
-              background: '#ef4444',
-              color: '#ffffff',
-            },
+            style: { background: '#ef4444', color: '#ffffff' },
           },
           loading: {
             className: '!bg-blue-600 !text-white',
-            style: {
-              background: '#3b82f6',
-              color: '#ffffff',
-            },
+            style: { background: '#3b82f6', color: '#ffffff' },
           },
         }} 
       />

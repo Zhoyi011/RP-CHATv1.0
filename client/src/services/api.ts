@@ -77,7 +77,6 @@ export interface UserSettings {
   defaultTranslate: 'off' | 'simplified' | 'traditional';
 }
 
-// 找到 Room 接口（大约在文件开头部分）
 export interface Room {
   _id: string;
   name: string;
@@ -97,7 +96,6 @@ export interface Room {
   memberCount?: number;
   onlineCount?: number;
   inviteCode?: string;
-  // ✅ 添加 lastMessage 字段
   lastMessage?: {
     content: string;
     senderName: string;
@@ -107,6 +105,15 @@ export interface Room {
   };
 }
 
+// ========== 回复消息类型 ==========
+export interface ReplyToInfo {
+  _id: string;
+  content: string;
+  isRecalled: boolean;
+  isDeleted: boolean;
+}
+
+// ========== 消息类型（完整版）==========
 export interface Message {
   _id: string;
   content: string;
@@ -124,8 +131,9 @@ export interface Message {
     _id: string;
     firebaseUid?: string;
   };
-    isRecalled?: boolean;  // ✅ 添加这个字段
-    recalledAt?: string;
+  isRecalled?: boolean;
+  isDeleted?: boolean;
+  replyTo?: ReplyToInfo | null;
 }
 
 export interface Persona {
@@ -289,6 +297,17 @@ export const roomApi = {
   getMessages: (roomId: string) =>
     request<Message[]>(`/room/${roomId}/messages`),
     
+  // 获取消息（支持分页）
+  getMessagesWithLimit: (roomId: string, limit = 50, before?: string) =>
+    request<Message[]>(`/room/${roomId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
+    
+  // 发送消息（支持回复）
+  sendMessageWithReply: (roomId: string, content: string, personaId: string, replyToId?: string) =>
+    request<{ success: boolean; message: any }>(`/room/${roomId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, personaId, replyToId }),
+    }),
+    
   setActivePersona: (personaId: string) =>
     request<{ message: string; activePersona: any }>('/room/active-persona', {
       method: 'POST',
@@ -304,6 +323,20 @@ export const roomApi = {
   markRead: (roomId: string) =>
     request<{ message: string }>(`/room/${roomId}/mark-read`, {
       method: 'POST',
+    }),
+    
+  // 撤回消息
+  recallMessage: (messageId: string) =>
+    request<{ success: boolean }>('/room/message/recall', {
+      method: 'POST',
+      body: JSON.stringify({ messageId }),
+    }),
+    
+  // 删除消息（软删除，仅自己不可见）
+  deleteMessage: (messageId: string) =>
+    request<{ success: boolean }>('/room/message/delete', {
+      method: 'POST',
+      body: JSON.stringify({ messageId }),
     }),
 };
 

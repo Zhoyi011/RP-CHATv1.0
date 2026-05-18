@@ -25,10 +25,40 @@ const messageSchema = new mongoose.Schema({
     type: Boolean, 
     default: false
   },
+  // ========== 新增字段 ==========
+  replyTo: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Message',
+    default: null 
+  },
+  isRecalled: { 
+    type: Boolean, 
+    default: false 
+  },
+  recalledAt: { 
+    type: Date,
+    default: null 
+  },
+  isDeleted: { 
+    type: Boolean, 
+    default: false 
+  },
+  deletedBy: { 
+    type: String,
+    default: null 
+  },
+  deletedAt: { 
+    type: Date,
+    default: null 
+  },
   createdAt: { 
     type: Date, 
     default: Date.now 
   }
 });
+
+// 索引优化查询性能
+messageSchema.index({ roomId: 1, createdAt: -1 });
+messageSchema.index({ replyTo: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);

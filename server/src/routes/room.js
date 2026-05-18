@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Room = require('../models/Room');
 const Message = require('../models/Message');
 const Persona = require('../models/Persona');
@@ -8,6 +9,11 @@ const UserReadRecord = require('../models/UserReadRecord');
 const jwt = require('jsonwebtoken');
 
 console.log('🔧 [room.js] 加载路由模块');
+
+// 生成消息ID
+function generateMessageId() {
+  return new mongoose.Types.ObjectId().toString();
+}
 
 // ===== 中间件 =====
 const authMiddleware = (req, res, next) => {
@@ -24,14 +30,12 @@ const authMiddleware = (req, res, next) => {
 };
 
 // ===== 辅助函数 =====
-// 获取用户激活的 Persona
 async function getActivePersona(userId) {
   const ActivePersona = require('../models/ActivePersona');
   const active = await ActivePersona.findOne({ userId }).populate('personaId');
   return active?.personaId || null;
 }
 
-// ✅ 权限检查
 async function checkRoomPermission(userId, roomId) {
   const room = await Room.findById(roomId);
   if (!room) return { hasPermission: false, role: null, persona: null };
@@ -74,9 +78,9 @@ router.post('/create', authMiddleware, async (req, res) => {
     const room = new Room({
       name: name.trim(),
       description: description || '',
-      createdBy: persona._id,           // ✅ 群主 Persona ID
-      creatorUserId: req.userId,        // ✅ 群主用户 ID
-      creatorName: persona.displayName || persona.name  // ✅ 群主名称
+      createdBy: persona._id,
+      creatorUserId: req.userId,
+      creatorName: persona.displayName || persona.name
     });
     
     await room.save();
@@ -111,7 +115,7 @@ router.post('/create', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 我的房间列表（包含最后一条消息和群主信息）==========
+// ========== 我的房间列表 ==========
 router.get('/my-rooms', authMiddleware, async (req, res) => {
   try {
     const personas = await Persona.find({ userId: req.userId, status: 'approved' });
@@ -135,7 +139,6 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
     }
     
     const roomsWithStats = await Promise.all(uniqueRooms.map(async (room) => {
-      // 获取最后一条消息
       const lastMessage = await Message.findOne({ roomId: room._id })
         .sort({ createdAt: -1 })
         .populate('personaId', 'name displayName avatar sameNameNumber')
@@ -149,42 +152,16 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       });
       const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
       
-      // ✅ 获取群主名称 - 多种方式
       let creatorName = '?';
-      
-      // 方式1：使用房间存储的 creatorName
       if (room.creatorName) {
         creatorName = room.creatorName;
-      }
-      // 方式2：通过 room.createdBy (Persona ID)
-      else if (room.createdBy) {
+      } else if (room.createdBy) {
         const creatorPersona = await Persona.findById(room.createdBy);
         if (creatorPersona) {
           creatorName = creatorPersona.displayName || creatorPersona.name;
         }
       }
-      // 方式3：通过 PersonaRoom 查找 owner
-      if (creatorName === '?') {
-        const ownerPR = await PersonaRoom.findOne({ 
-          roomId: room._id, 
-          role: 'owner' 
-        }).populate('personaId');
-        if (ownerPR?.personaId) {
-          creatorName = ownerPR.personaId.displayName || ownerPR.personaId.name;
-        }
-      }
-      // 方式4：通过 creatorUserId 查找用户默认角色
-      if (creatorName === '?' && room.creatorUserId) {
-        const defaultPersona = await Persona.findOne({ 
-          userId: room.creatorUserId, 
-          status: 'approved' 
-        });
-        if (defaultPersona) {
-          creatorName = defaultPersona.displayName || defaultPersona.name;
-        }
-      }
       
-      // 格式化最后一条消息
       let formattedLastMessage = null;
       if (lastMessage) {
         formattedLastMessage = {
@@ -205,13 +182,12 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         unreadCount,
         memberCount,
         onlineCount: 0,
-        creatorName,                    // ✅ 群主名称
+        creatorName,
         createdAt: room.createdAt,
         lastMessage: formattedLastMessage
       };
     }));
     
-    // 按最后消息时间排序（最新的在前）
     roomsWithStats.sort((a, b) => {
       const timeA = a.lastMessage?.createdAt || a.createdAt;
       const timeB = b.lastMessage?.createdAt || b.createdAt;
@@ -310,7 +286,6 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
     const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
     const messageCount = await Message.countDocuments({ roomId: room._id });
     
-    // 获取群主名称
     let creatorName = '?';
     if (room.creatorName) {
       creatorName = room.creatorName;
@@ -333,33 +308,151 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 消息 ==========
+// ========== 获取消息（支持回复和软删除过滤）==========
 router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
-    const messages = await Message.find({ roomId: req.params.roomId })
-      .populate('personaId', 'name displayName avatar sameNameNumber')
-      .sort({ createdAt: -1 })
-      .limit(100);
+    const { roomId } = req.params;
+    const limit = parseInt(req.query.limit) || 100;
+    const before = req.query.before;
     
-    const safeMessages = messages.reverse().map(msg => ({
-      _id: msg._id,
-      content: msg.content,
-      isAction: msg.isAction,
-      createdAt: msg.createdAt,
-      roomId: msg.roomId,
-      personaId: msg.personaId ? {
-        _id: msg.personaId._id,
-        name: msg.personaId.name,
-        displayName: msg.personaId.displayName,
-        avatar: msg.personaId.avatar,
-        sameNameNumber: msg.personaId.sameNameNumber
-      } : null,
-      userId: msg.userId ? { _id: msg.userId._id, firebaseUid: msg.userId._id.toString() } : null
-    }));
+    let query = Message.find({ roomId })
+      .populate('personaId', 'name displayName avatar sameNameNumber')
+      .populate('replyTo', 'content isRecalled isDeleted')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+    
+    if (before) {
+      const beforeDate = new Date(before);
+      query = Message.find({ roomId, createdAt: { $lt: beforeDate } })
+        .populate('personaId', 'name displayName avatar sameNameNumber')
+        .populate('replyTo', 'content isRecalled isDeleted')
+        .sort({ createdAt: -1 })
+        .limit(limit);
+    }
+    
+    let messages = await query.exec();
+    messages = messages.reverse();
+    
+    // 过滤当前用户软删除的消息
+    const filteredMessages = messages.filter(msg => {
+      if (msg.isDeleted && msg.deletedBy === req.userId) {
+        return false;
+      }
+      return true;
+    });
+    
+    const safeMessages = filteredMessages.map(msg => {
+      let replyToData = null;
+      if (msg.replyTo) {
+        const replyIsHidden = msg.replyTo.isDeleted || msg.replyTo.isRecalled;
+        replyToData = {
+          _id: msg.replyTo._id,
+          content: replyIsHidden ? '[消息已不可见]' : msg.replyTo.content,
+          isRecalled: msg.replyTo.isRecalled || false,
+          isDeleted: msg.replyTo.isDeleted || false
+        };
+      }
+      
+      const persona = msg.personaId;
+      const senderName = persona ? (persona.displayName || persona.name) : '用户';
+      
+      return {
+        _id: msg._id,
+        content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
+        isAction: msg.isAction,
+        createdAt: msg.createdAt,
+        roomId: msg.roomId,
+        isRecalled: msg.isRecalled || false,
+        replyTo: replyToData,
+        personaId: persona ? {
+          _id: persona._id,
+          name: persona.name,
+          displayName: persona.displayName,
+          avatar: persona.avatar,
+          sameNameNumber: persona.sameNameNumber
+        } : null,
+        userId: { _id: req.userId }
+      };
+    });
     
     res.json(safeMessages);
   } catch (error) {
+    console.error('获取消息失败:', error);
     res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 发送消息（支持回复）==========
+router.post('/:roomId/messages', authMiddleware, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { content, personaId, replyToId } = req.body;
+    
+    const room = await Room.findById(roomId);
+    if (!room) return res.status(404).json({ error: '房间不存在' });
+    
+    const persona = await Persona.findOne({ _id: personaId, userId: req.userId, status: 'approved' });
+    if (!persona) return res.status(400).json({ error: '角色不存在' });
+    
+    let replyToMessage = null;
+    if (replyToId) {
+      replyToMessage = await Message.findById(replyToId);
+      if (!replyToMessage) {
+        return res.status(400).json({ error: '引用的消息不存在' });
+      }
+    }
+    
+    const message = new Message({
+      roomId,
+      userId: req.userId,
+      personaId: persona._id,
+      content,
+      isAction: content.startsWith('/me ') || content.startsWith('/action '),
+      replyTo: replyToId || null
+    });
+    
+    await message.save();
+    
+    // 填充回复消息信息
+    let populatedMessage = await Message.findById(message._id)
+      .populate('personaId', 'name displayName avatar sameNameNumber')
+      .populate('replyTo', 'content isRecalled isDeleted');
+    
+    let replyToData = null;
+    if (populatedMessage.replyTo) {
+      replyToData = {
+        _id: populatedMessage.replyTo._id,
+        content: populatedMessage.replyTo.content,
+        isRecalled: populatedMessage.replyTo.isRecalled || false,
+        isDeleted: populatedMessage.replyTo.isDeleted || false
+      };
+    }
+    
+    const io = req.app.get('io');
+    if (io) {
+      io.to(roomId).emit('new-message', {
+        _id: message._id,
+        content: message.content,
+        isAction: message.isAction,
+        createdAt: message.createdAt,
+        roomId: message.roomId,
+        replyTo: replyToData,
+        isRecalled: false,
+        personaId: {
+          _id: persona._id,
+          name: persona.name,
+          displayName: persona.displayName,
+          avatar: persona.avatar,
+          sameNameNumber: persona.sameNameNumber
+        },
+        userId: { _id: req.userId }
+      });
+    }
+    
+    res.status(201).json({ success: true, message: { _id: message._id, content: message.content } });
+  } catch (error) {
+    console.error('发送消息失败:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -515,7 +608,7 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 设置管理员（仅群主）==========
+// ========== 设置管理员 ==========
 router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
   try {
     const { personaId, isAdmin } = req.body;
@@ -628,7 +721,7 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取用户在群里可用的 Persona（已加入群的角色）==========
+// ========== 获取用户在群里可用的 Persona ==========
 router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -661,7 +754,7 @@ router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 直接添加角色到群聊（管理员/群主专用）==========
+// ========== 直接添加角色到群聊 ==========
 router.post('/:roomId/add-persona', authMiddleware, async (req, res) => {
   try {
     const { personaId } = req.body;
@@ -735,15 +828,27 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '只能撤回5分钟内的消息' });
     }
     
+    if (message.isRecalled) {
+      return res.status(400).json({ error: '消息已被撤回' });
+    }
+    
     message.isRecalled = true;
-    message.content = '该消息已被撤回';
+    message.recalledAt = new Date();
     await message.save();
+    
+    const persona = await Persona.findById(message.personaId);
+    const senderName = persona ? (persona.displayName || persona.name) : '用户';
     
     console.log(`✅ [API] 消息撤回成功`);
     
     const io = req.app.get('io');
     if (io) {
-      io.to(message.roomId).emit('message-recalled', { messageId, content: message.content });
+      io.to(message.roomId).emit('message-recalled', {
+        messageId: message._id,
+        recalledBy: req.userId,
+        recalledByName: senderName,
+        recalledAt: message.recalledAt
+      });
     }
     
     res.json({ success: true, message: '撤回成功' });
@@ -753,7 +858,7 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 删除消息 ==========
+// ========== 删除消息（软删除 - 仅自己不可见）==========
 router.post('/message/delete', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
   console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}`);
@@ -778,9 +883,25 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '只能删除自己的消息' });
     }
     
-    await Message.findByIdAndDelete(messageId);
+    if (message.isDeleted) {
+      return res.status(400).json({ error: '消息已被删除' });
+    }
     
-    console.log(`✅ [API] 消息删除成功`);
+    message.isDeleted = true;
+    message.deletedBy = req.userId;
+    message.deletedAt = new Date();
+    await message.save();
+    
+    console.log(`✅ [API] 消息删除成功（软删除）`);
+    
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${req.userId}`).emit('message-deleted', {
+        messageId: message._id,
+        deletedAt: message.deletedAt
+      });
+    }
+    
     res.json({ success: true, message: '删除成功' });
   } catch (error) {
     console.error('❌ [API] 删除失败:', error);

@@ -180,7 +180,8 @@ const io = require('socket.io')(server, {
 console.log('🎙️ [Socket] Socket.IO 服务已启动');
 
 // ===== 在线用户存储 =====
-const onlineUsers = new Map();
+const onlineUsers = new Map(); // socket.id -> { userId, roomId, personaId }
+const roomOnlineCount = new Map(); // roomId -> Set of userIds
 const voiceRooms = new Map();
 
 console.log('📊 [Storage] 在线用户和语音房存储已初始化');
@@ -229,20 +230,47 @@ io.on('connection', (socket) => {
   socket.on('join-room', async ({ roomId, userId, personaId }) => {
     console.log(`📡 [Socket] ${socket.id} 请求加入房间: ${roomId}, 用户: ${userId}, 角色: ${personaId}`);
     try {
+      // 离开之前的房间
+      const oldUserInfo = onlineUsers.get(socket.id);
+      if (oldUserInfo && oldUserInfo.roomId !== roomId) {
+        const oldRoomUsers = roomOnlineCount.get(oldUserInfo.roomId);
+        if (oldRoomUsers) {
+          oldRoomUsers.delete(userId);
+          if (oldRoomUsers.size === 0) {
+            roomOnlineCount.delete(oldUserInfo.roomId);
+          }
+          io.to(oldUserInfo.roomId).emit('room-online-count', { 
+            roomId: oldUserInfo.roomId, 
+            count: oldRoomUsers?.size || 0 
+          });
+        }
+        socket.leave(oldUserInfo.roomId);
+      }
+      
       socket.join(roomId);
       onlineUsers.set(socket.id, { userId, roomId, personaId, socketId: socket.id });
-      const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === roomId);
-      io.to(roomId).emit('room-online-count', { roomId, count: roomUsers.length });
-      console.log(`✅ [Socket] 用户 ${userId} 加入房间 ${roomId} 成功，当前在线: ${roomUsers.length}`);
+      
+      if (!roomOnlineCount.has(roomId)) {
+        roomOnlineCount.set(roomId, new Set());
+      }
+      roomOnlineCount.get(roomId).add(userId);
+      
+      io.to(roomId).emit('room-online-count', { 
+        roomId, 
+        count: roomOnlineCount.get(roomId).size 
+      });
+      
+      console.log(`✅ [Socket] 用户 ${userId} 加入房间 ${roomId} 成功，当前在线: ${roomOnlineCount.get(roomId).size}`);
     } catch (error) {
       console.error(`❌ [Socket] 加入房间失败:`, error);
       socket.emit('error', { message: '加入房间失败' });
     }
   });
 
+  // 发送消息（支持回复）
   socket.on('send-message', async (data) => {
-    const { roomId, userId, personaId, content, isAction } = data;
-    console.log(`📨 [Socket] 收到消息，房间: ${roomId}, 用户: ${userId}, 内容长度: ${content?.length}`);
+    const { roomId, userId, personaId, content, isAction, replyToId } = data;
+    console.log(`📨 [Socket] 收到消息，房间: ${roomId}, 用户: ${userId}, 回复: ${replyToId || '无'}, 内容长度: ${content?.length}`);
     
     try {
       if (!roomId || !userId || !personaId || !content) {
@@ -267,13 +295,25 @@ io.on('connection', (socket) => {
       const cleanContent = filterMessage(content);
       console.log(`✅ [Socket] 过滤后消息: ${cleanContent.substring(0, 50)}...`);
       
+      // 验证回复的消息是否存在
+      let replyToMessage = null;
+      if (replyToId) {
+        const Message = require('./models/Message');
+        replyToMessage = await Message.findById(replyToId);
+        if (!replyToMessage) {
+          console.log(`⚠️ [Socket] 引用的消息不存在: ${replyToId}`);
+          // 不阻止发送，只是回复引用无效
+        }
+      }
+      
       const Message = require('./models/Message');
       const message = new Message({
         roomId,
         userId: user._id,
         personaId,
         content: cleanContent,
-        isAction: isAction || false
+        isAction: isAction || false,
+        replyTo: replyToId || null
       });
       
       await message.save();
@@ -289,7 +329,24 @@ io.on('connection', (socket) => {
       console.log(`✅ [Socket] 找到角色: ${persona.name}`);
 
       // 更新 Persona 在群里的最后使用时间
-      await persona.markUsedInRoom(roomId);
+      try {
+        await persona.markUsedInRoom(roomId);
+      } catch (err) {
+        console.log(`⚠️ [Socket] 更新角色使用时间失败:`, err.message);
+      }
+      
+      // 处理回复数据
+      let replyToData = null;
+      if (replyToId && replyToMessage) {
+        const replyPersona = await Persona.findById(replyToMessage.personaId);
+        replyToData = {
+          _id: replyToMessage._id,
+          content: replyToMessage.content,
+          isRecalled: replyToMessage.isRecalled || false,
+          isDeleted: replyToMessage.isDeleted || false,
+          senderName: replyPersona ? (replyPersona.displayName || replyPersona.name) : '用户'
+        };
+      }
       
       const messageToSend = {
         _id: message._id,
@@ -297,6 +354,9 @@ io.on('connection', (socket) => {
         isAction: message.isAction,
         createdAt: message.createdAt,
         roomId: roomId,
+        replyTo: replyToData,
+        isRecalled: false,
+        isDeleted: false,
         personaId: { 
           _id: persona._id, 
           name: persona.name,
@@ -312,6 +372,117 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('❌ [Socket] 保存消息失败:', error);
       socket.emit('error', { message: '发送消息失败' });
+    }
+  });
+  
+  // 撤回消息事件处理
+  socket.on('recall-message', async (data) => {
+    const { messageId, userId, roomId } = data;
+    console.log(`⏪ [Socket] 撤回消息请求: ${messageId}, 用户: ${userId}`);
+    
+    try {
+      const Message = require('./models/Message');
+      const message = await Message.findById(messageId);
+      
+      if (!message) {
+        socket.emit('error', { message: '消息不存在' });
+        return;
+      }
+      
+      const Persona = require('./models/Persona');
+      const currentPersona = await Persona.findOne({ userId: userId, status: 'approved' });
+      
+      if (!currentPersona) {
+        socket.emit('error', { message: '请先选择一个角色' });
+        return;
+      }
+      
+      if (message.userId.toString() !== currentPersona._id.toString() && 
+          message.personaId?.toString() !== currentPersona._id.toString()) {
+        socket.emit('error', { message: '只能撤回自己的消息' });
+        return;
+      }
+      
+      const diffSeconds = (Date.now() - new Date(message.createdAt).getTime()) / 1000;
+      if (diffSeconds > 5 * 60) {
+        socket.emit('error', { message: '只能撤回5分钟内的消息' });
+        return;
+      }
+      
+      if (message.isRecalled) {
+        socket.emit('error', { message: '消息已被撤回' });
+        return;
+      }
+      
+      message.isRecalled = true;
+      message.recalledAt = new Date();
+      await message.save();
+      
+      const persona = await Persona.findById(message.personaId);
+      const senderName = persona ? (persona.displayName || persona.name) : '用户';
+      
+      io.in(roomId).emit('message-recalled', {
+        messageId: message._id,
+        recalledBy: userId,
+        recalledByName: senderName,
+        recalledAt: message.recalledAt
+      });
+      
+      console.log(`✅ [Socket] 消息撤回成功: ${messageId}`);
+    } catch (error) {
+      console.error('❌ [Socket] 撤回失败:', error);
+      socket.emit('error', { message: error.message || '撤回失败' });
+    }
+  });
+  
+  // 删除消息事件处理（软删除，仅自己不可见）
+  socket.on('delete-message', async (data) => {
+    const { messageId, userId, roomId } = data;
+    console.log(`🗑️ [Socket] 删除消息请求: ${messageId}, 用户: ${userId}`);
+    
+    try {
+      const Message = require('./models/Message');
+      const message = await Message.findById(messageId);
+      
+      if (!message) {
+        socket.emit('error', { message: '消息不存在' });
+        return;
+      }
+      
+      const Persona = require('./models/Persona');
+      const currentPersona = await Persona.findOne({ userId: userId, status: 'approved' });
+      
+      if (!currentPersona) {
+        socket.emit('error', { message: '请先选择一个角色' });
+        return;
+      }
+      
+      if (message.userId.toString() !== currentPersona._id.toString() && 
+          message.personaId?.toString() !== currentPersona._id.toString()) {
+        socket.emit('error', { message: '只能删除自己的消息' });
+        return;
+      }
+      
+      if (message.isDeleted) {
+        socket.emit('error', { message: '消息已被删除' });
+        return;
+      }
+      
+      message.isDeleted = true;
+      message.deletedBy = userId;
+      message.deletedAt = new Date();
+      await message.save();
+      
+      // 通知删除者本人消息已被删除
+      socket.emit('message-deleted', {
+        messageId: message._id,
+        deletedAt: message.deletedAt
+      });
+      
+      console.log(`✅ [Socket] 消息软删除成功: ${messageId}`);
+    } catch (error) {
+      console.error('❌ [Socket] 删除失败:', error);
+      socket.emit('error', { message: error.message || '删除失败' });
     }
   });
   
@@ -334,10 +505,21 @@ io.on('connection', (socket) => {
       console.log(`👋 [Socket] 用户 ${userInfo.userId} 离开房间 ${userInfo.roomId}`);
       socket.leave(userInfo.roomId);
       onlineUsers.delete(socket.id);
-      const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === userInfo.roomId);
-      io.to(userInfo.roomId).emit('room-online-count', { roomId: userInfo.roomId, count: roomUsers.length });
+      
+      const roomUsers = roomOnlineCount.get(userInfo.roomId);
+      if (roomUsers) {
+        roomUsers.delete(userInfo.userId);
+        if (roomUsers.size === 0) {
+          roomOnlineCount.delete(userInfo.roomId);
+        }
+        io.to(userInfo.roomId).emit('room-online-count', { 
+          roomId: userInfo.roomId, 
+          count: roomUsers?.size || 0 
+        });
+      }
+      
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
-      console.log(`✅ [Socket] 用户已离开，房间剩余: ${roomUsers.length}`);
+      console.log(`✅ [Socket] 用户已离开，房间剩余: ${roomUsers?.size || 0}`);
     }
   });
 
@@ -438,8 +620,19 @@ io.on('connection', (socket) => {
     if (userInfo) {
       console.log(`  👤 用户 ${userInfo.userId} 从房间 ${userInfo.roomId} 断开`);
       onlineUsers.delete(socket.id);
-      const roomUsers = Array.from(onlineUsers.values()).filter(u => u.roomId === userInfo.roomId);
-      io.to(userInfo.roomId).emit('room-online-count', { roomId: userInfo.roomId, count: roomUsers.length });
+      
+      const roomUsers = roomOnlineCount.get(userInfo.roomId);
+      if (roomUsers) {
+        roomUsers.delete(userInfo.userId);
+        if (roomUsers.size === 0) {
+          roomOnlineCount.delete(userInfo.roomId);
+        }
+        io.to(userInfo.roomId).emit('room-online-count', { 
+          roomId: userInfo.roomId, 
+          count: roomUsers?.size || 0 
+        });
+      }
+      
       socket.to(userInfo.roomId).emit('user-left', { userId: userInfo.userId });
     }
     
