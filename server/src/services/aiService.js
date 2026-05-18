@@ -4,7 +4,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function chatWithAI(personaName, personaDescription, userMessage, history = []) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     const chatHistory = history.map(msg => ({
       role: msg.role === 'user' ? 'user' : 'model',
