@@ -17,17 +17,30 @@ const authMiddleware = (req, res, next) => {
 // 和 AI 角色聊天
 router.post('/chat', authMiddleware, async (req, res) => {
   try {
-    const { personaId, message, history } = req.body;
+    const { personaId, message, history, userPersonaName } = req.body;
     if (!personaId || !message) return res.status(400).json({ error: '缺少参数' });
 
     const persona = await Persona.findById(personaId);
     if (!persona) return res.status(404).json({ error: '角色不存在' });
 
+    // ✅ 获取用户当前使用的角色名（可选，用于让 AI 知道在和谁说话）
+    let currentUserPersonaName = userPersonaName;
+    if (!currentUserPersonaName) {
+      const ActivePersona = require('../models/ActivePersona');
+      const active = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
+      if (active?.personaId) {
+        currentUserPersonaName = active.personaId.displayName || active.personaId.name;
+      } else {
+        currentUserPersonaName = '用户';
+      }
+    }
+
     const reply = await aiService.chatWithAI(
-      persona.name,
+      persona.displayName || persona.name,
       persona.description,
       message,
-      history || []
+      history || [],
+      currentUserPersonaName
     );
 
     res.json({ reply, persona: persona.displayName || persona.name });
