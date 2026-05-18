@@ -36,7 +36,8 @@ app.use(cors({
     'http://localhost:3000', 
     'https://rp-chat-v1-0.vercel.app',
     'https://rp-chatv1-0.onrender.com',
-    /\.vercel\.app$/
+    /\.vercel\.app$/,
+    /\.onrender\.com$/
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

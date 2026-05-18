@@ -20,6 +20,7 @@ async function request<T>(
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include', // 允许携带 cookie
   });
 
   const data = await response.json();

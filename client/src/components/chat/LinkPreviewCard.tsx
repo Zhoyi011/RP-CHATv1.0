@@ -123,19 +123,18 @@ const LinkPreviewCard: React.FC<Props> = ({ preview, isSelf, isCompact = false }
     );
   }
 
-  // 完整卡片模式
+  // 完整卡片模式（响应式宽度）
   return (
     <>
       <div
         onClick={handleClick}
-        className={`mt-2 rounded-xl overflow-hidden border cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.98] ${
+        className={`mt-2 rounded-xl overflow-hidden border cursor-pointer transition-all duration-200 hover:shadow-md active:scale-[0.98] w-full max-w-full sm:max-w-[340px] ${
           config.border
         } ${isSelf ? 'bg-white/5 border-white/20' : `${config.bg} border-gray-200`}`}
-        style={{ maxWidth: '340px' }}
       >
-        {/* 图片预览 */}
+        {/* 图片预览 - 响应式高度 */}
         {preview.image && !imageError && (
-          <div className="relative w-full h-44 overflow-hidden bg-gray-100">
+          <div className="relative w-full h-32 sm:h-44 overflow-hidden bg-gray-100">
             <img
               src={preview.image}
               alt=""
@@ -154,8 +153,8 @@ const LinkPreviewCard: React.FC<Props> = ({ preview, isSelf, isCompact = false }
           </div>
         )}
 
-        {/* 内容 */}
-        <div className="p-3.5">
+        {/* 内容 - 响应式内边距 */}
+        <div className="p-2.5 sm:p-3.5">
           {/* 站点信息行 */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -258,7 +257,6 @@ const SafetyConfirmModal: React.FC<{
           className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 红色头部 */}
           <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-8 text-center">
             <div className="w-20 h-20 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-4">
               <span className="text-5xl">⛔</span>
@@ -268,7 +266,6 @@ const SafetyConfirmModal: React.FC<{
           </div>
 
           <div className="p-6">
-            {/* 链接信息 */}
             <div className="bg-gray-50 rounded-xl p-4 mb-4">
               <p className="text-xs text-gray-500 mb-1">目标链接</p>
               <p className="text-sm font-mono text-gray-800 break-all">
@@ -282,7 +279,6 @@ const SafetyConfirmModal: React.FC<{
               )}
             </div>
 
-            {/* 警告列表 */}
             <div className="space-y-2 mb-6">
               {preview.warnings.map((warning, i) => (
                 <div key={i} className="flex items-start gap-2 p-3 bg-red-50 rounded-xl">
@@ -322,7 +318,6 @@ const SafetyConfirmModal: React.FC<{
           className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 橙色头部 */}
           <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-8 text-center">
             <div className="w-20 h-20 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-4">
               <span className="text-5xl">⚠️</span>
@@ -332,7 +327,6 @@ const SafetyConfirmModal: React.FC<{
           </div>
 
           <div className="p-6">
-            {/* 链接信息 */}
             <div className="bg-gray-50 rounded-xl p-4 mb-4">
               <p className="text-xs text-gray-500 mb-1">目标链接</p>
               <p className="text-sm font-mono text-gray-800 break-all">
@@ -346,7 +340,6 @@ const SafetyConfirmModal: React.FC<{
               )}
             </div>
 
-            {/* 警告列表 */}
             <div className="space-y-2 mb-4">
               {preview.warnings.map((warning, i) => (
                 <div key={i} className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl">
@@ -356,7 +349,6 @@ const SafetyConfirmModal: React.FC<{
               ))}
             </div>
 
-            {/* 免责声明 */}
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-6">
               <p className="text-xs text-red-600 leading-relaxed">
                 <strong>⚠️ 免责声明：</strong>如果你执意要继续访问该网页，请自行承担所有后果与责任。RP Chat 不对该网站的内容、安全性或隐私政策负责。
@@ -390,7 +382,6 @@ const SafetyConfirmModal: React.FC<{
         className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 绿色头部 */}
         <div className="bg-gradient-to-r from-green-400 to-emerald-500 px-6 py-8 text-center">
           <div className="w-20 h-20 mx-auto bg-white/20 rounded-full flex items-center justify-center mb-4">
             <span className="text-5xl">🔗</span>
@@ -400,7 +391,6 @@ const SafetyConfirmModal: React.FC<{
         </div>
 
         <div className="p-6">
-          {/* 链接信息 */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6">
             <p className="text-xs text-gray-500 mb-1">目标链接</p>
             <p className="text-sm font-mono text-gray-800 break-all">
@@ -413,7 +403,6 @@ const SafetyConfirmModal: React.FC<{
             )}
           </div>
 
-          {/* 安全徽章 */}
           <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl mb-6">
             <span className="text-lg">🛡️</span>
             <div>
