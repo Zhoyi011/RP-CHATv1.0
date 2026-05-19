@@ -35,6 +35,6 @@ export interface ClaimResult {
 
 export const diamondApi = {
   getBalance: () => request<{ diamonds: number }>('/diamond/balance'),
-  claimDaily: () => request<ClaimResult>('/diamond/daily'),
+  claimDaily: () => request<any>('/diamond/daily', { method: 'POST' }),
   getDailyInfo: () => request<DailyInfo>('/diamond/daily-info'),
 };
