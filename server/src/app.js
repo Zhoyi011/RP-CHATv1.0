@@ -106,6 +106,8 @@ const searchRoutes = require('./routes/search');
 const diamondRoutes = require('./routes/diamond');
 const translateRoutes = require('./routes/translate');
 const aiPersonaRoutes = require('./routes/aiPersona');
+const shopRoutes = require('./routes/shop');
+const postRoutes = require('./routes/post');
 
 console.log('  ✅ 基础路由加载完成');
 
@@ -139,6 +141,8 @@ if (linkPreviewRoutes) app.use('/api/link-preview', linkPreviewRoutes);
 app.use('/api/translate', translateRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/ai-persona', aiPersonaRoutes);
+app.use('/api/shop', shopRoutes);
+app.use('/api/post', postRoutes);
 console.log('  ✅ 所有路由注册完成');
 
 // ===== 404 处理 =====

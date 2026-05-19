@@ -144,6 +144,14 @@ const userSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  // 在 User Schema 中添加
+  dailyDiamondStreak: { type: Number, default: 0 },
+  lastDailyDiamond: { type: Date, default: null },
+  equippedItems: {
+    avatarFrame: { type: String, default: null },
+    ring: { type: String, default: null },
+    relationshipCard: { type: String, default: null }
   }
 });
 
