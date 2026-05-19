@@ -13,6 +13,8 @@ const authMiddleware = (req, res, next) => {
   } catch { res.status(401).json({ error: 'token无效' }); }
 };
 
+// ========== GET 接口 ==========
+
 // 获取钻石余额
 router.get('/balance', authMiddleware, async (req, res) => {
   try {
@@ -24,8 +26,8 @@ router.get('/balance', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取每日钻石信息（兼容前端调用）
-router.get('/daily-info', authMiddleware, async (req, res) => {
+// 获取每日钻石信息 (GET /daily)
+router.get('/daily', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: '用户不存在' });
@@ -67,7 +69,35 @@ router.get('/daily-status', authMiddleware, async (req, res) => {
   }
 });
 
-// 每日领取钻石
+// 获取每日信息（别名）
+router.get('/daily-info', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    
+    const today = new Date().toDateString();
+    const lastDailyDate = user.lastDailyDiamond ? new Date(user.lastDailyDiamond).toDateString() : null;
+    const canClaim = lastDailyDate !== today;
+    const streak = user.dailyDiamondStreak || 0;
+    
+    const baseReward = 50;
+    const streakBonus = Math.min(streak * 10, 100);
+    const reward = baseReward + streakBonus;
+    
+    res.json({ 
+      canClaim, 
+      streak, 
+      reward,
+      diamonds: user.diamonds || 0 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== POST 接口 ==========
+
+// 每日领取钻石 (POST /daily)
 router.post('/daily', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
