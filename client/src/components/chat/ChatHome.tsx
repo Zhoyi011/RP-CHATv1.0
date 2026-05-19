@@ -13,6 +13,7 @@ import CreateRoom from './CreateRoom';
 import PrivateChat from './PrivateChat';
 import UserList from '../user/UserList';
 import ChatInput from './ChatInput';
+import AIChatRoom from './AIChatRoom';
 import LinkPreviewContainer from './LinkPreviewContainer';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
@@ -20,7 +21,6 @@ import { roomApi, personaApi, authApi, type Room, type Persona, type Message, ty
 import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
 import { parseMarkdown } from '../../utils/renderMarkdown';
-import { formatMessageTime } from '../../utils/timeFormat';
 import { smartConvert } from '../../services/translateApi';
 
 console.log('🔧 [ChatHome] 组件模块加载');
@@ -62,9 +62,7 @@ const ReplyPreviewBar: React.FC<{
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
       </svg>
       <div className="flex-1 min-w-0">
-        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-          回复消息
-        </span>
+        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">回复消息</span>
         <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
           {isHidden ? '[消息已不可见]' : replyTo.content}
         </p>
@@ -161,9 +159,7 @@ const MessageBubble: React.FC<{
                   <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                    回复
-                  </span>
+                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
                 </div>
                 <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
                   {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
@@ -400,6 +396,7 @@ const ChatHome = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [showRoomMenu, setShowRoomMenu] = useState(false);
   const [showUserList, setShowUserList] = useState(tabParam === 'private');
+  const [showAIChat, setShowAIChat] = useState(tabParam === 'ai');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   
@@ -527,7 +524,6 @@ const ChatHome = () => {
       await roomApi.recallMessage(message._id);
       toast.success('消息已撤回');
       
-      // 立即更新本地状态
       setMessages(prev => prev.map(msg => 
         msg._id === message._id 
           ? { 
@@ -549,8 +545,6 @@ const ChatHome = () => {
     try {
       await roomApi.deleteMessage(message._id);
       toast.success('消息已删除（仅自己不可见）');
-      
-      // 立即从消息列表中移除
       setMessages(prev => prev.filter(m => m._id !== message._id));
     } catch (error: any) {
       toast.error(error.message || '删除失败');
@@ -670,7 +664,6 @@ const ChatHome = () => {
     };
 
     const handleMessageDeleted = (data: { messageId: string }) => {
-      // 其他用户删除消息时，当前用户不需要做任何操作（软删除只影响删除者本人）
       console.log('其他用户删除了消息:', data.messageId);
     };
 
@@ -710,6 +703,7 @@ const ChatHome = () => {
     setSelectedRoom(room);
     setSelectedUser(null);
     setShowUserList(false);
+    setShowAIChat(false);
     setReplyToMessage(null);
     if (isMobile) setShowChatWindow(true);
   }, [selectedPersona, isMobile]);
@@ -718,6 +712,7 @@ const ChatHome = () => {
     setSelectedUser(targetUser);
     setSelectedRoom(null);
     setShowUserList(false);
+    setShowAIChat(false);
     setReplyToMessage(null);
     if (isMobile) setShowChatWindow(true);
   }, [isMobile]);
@@ -765,7 +760,13 @@ const ChatHome = () => {
     setReplyToMessage(null);
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
-  const handleBackToList = useCallback(() => { setShowChatWindow(false); setSelectedUser(null); setReplyToMessage(null); }, []);
+  const handleBackToList = useCallback(() => { 
+    setShowChatWindow(false); 
+    setSelectedUser(null);
+    setSelectedRoom(null);
+    setShowAIChat(false);
+    setReplyToMessage(null);
+  }, []);
 
   const handleLeaveRoom = async () => {
     if (!selectedRoom) return;
@@ -819,11 +820,33 @@ const ChatHome = () => {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>创建新聊天室
         </button>
       </div>
+      
+      {/* Tab 切换：AI 对戏 / 群聊 / 私聊 */}
       <div className="flex border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
-        <button onClick={() => { setShowUserList(false); setSelectedUser(null); }} className={`flex-1 py-2.5 text-sm font-medium transition relative ${!showUserList ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>群聊{!showUserList && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />}</button>
-        <button onClick={() => { setShowUserList(true); setSelectedRoom(null); }} className={`flex-1 py-2.5 text-sm font-medium transition relative ${showUserList ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>私聊{showUserList && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />}</button>
+        <button 
+          onClick={() => { setShowAIChat(true); setShowUserList(false); setSelectedRoom(null); setSelectedUser(null); setShowChatWindow(isMobile); }} 
+          className={`flex-1 py-2.5 text-sm font-medium transition relative ${showAIChat ? 'text-purple-600 dark:text-purple-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+        >
+          🤖 AI 对戏
+          {showAIChat && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />}
+        </button>
+        <button 
+          onClick={() => { setShowAIChat(false); setShowUserList(false); setSelectedUser(null); setShowChatWindow(isMobile); }} 
+          className={`flex-1 py-2.5 text-sm font-medium transition relative ${!showUserList && !showAIChat ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+        >
+          群聊
+          {!showUserList && !showAIChat && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />}
+        </button>
+        <button 
+          onClick={() => { setShowUserList(true); setShowAIChat(false); setSelectedRoom(null); setShowChatWindow(isMobile); }} 
+          className={`flex-1 py-2.5 text-sm font-medium transition relative ${showUserList ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+        >
+          私聊
+          {showUserList && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />}
+        </button>
       </div>
-      {!showUserList && (
+      
+      {!showUserList && !showAIChat && (
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-gray-500 dark:text-gray-400">当前角色：{currentPersona && <span className="ml-1 text-blue-600 dark:text-blue-400 font-medium">{currentPersona.displayName || currentPersona.name}</span>}</span>
@@ -836,9 +859,11 @@ const ChatHome = () => {
           </div>
         </div>
       )}
+      
       <div className="flex-1 overflow-y-auto">
         {showCreateRoom && <CreateRoom onClose={() => setShowCreateRoom(false)} onSuccess={() => window.location.reload()} />}
         {showUserList ? <UserList onSelectUser={handleSelectUser} /> :
+          showAIChat ? null :
           loading ? <div className="flex justify-center items-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div> :
           rooms.length === 0 ? (
             <div className="text-center py-12 flex flex-col items-center gap-3 px-4">
@@ -870,18 +895,14 @@ const ChatHome = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline">
                       <div className="flex items-center gap-2 min-w-0">
-                        <h3 className="font-medium text-gray-800 dark:text-gray-200 truncate">
-                          {room.name}
-                        </h3>
+                        <h3 className="font-medium text-gray-800 dark:text-gray-200 truncate">{room.name}</h3>
                         {room.unreadCount > 0 ? (
                           <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0">
                             {room.unreadCount > 99 ? '99+' : room.unreadCount}
                           </span>
                         ) : null}
                       </div>
-                      <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
-                        {room.messageCount || 0} 条
-                      </span>
+                      <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{room.messageCount || 0} 条</span>
                     </div>
                     
                     {room.lastMessage ? (
@@ -892,12 +913,8 @@ const ChatHome = () => {
                           </p>
                         ) : (
                           <p className="text-xs text-gray-400 truncate">
-                            <span className="font-medium text-gray-500 dark:text-gray-400">
-                              {room.lastMessage.senderName}:
-                            </span>{' '}
-                            {room.lastMessage.content.length > 35 
-                              ? room.lastMessage.content.substring(0, 35) + '...' 
-                              : room.lastMessage.content}
+                            <span className="font-medium text-gray-500 dark:text-gray-400">{room.lastMessage.senderName}:</span>{' '}
+                            {room.lastMessage.content.length > 35 ? room.lastMessage.content.substring(0, 35) + '...' : room.lastMessage.content}
                           </p>
                         )}
                       </div>
@@ -905,9 +922,7 @@ const ChatHome = () => {
                       <p className="text-xs text-gray-400 mt-0.5">暂无消息</p>
                     )}
                     
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      群主: {room.creatorName || '?'}
-                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">群主: {room.creatorName || '?'}</p>
                   </div>
                 </div>
               </div>
@@ -919,7 +934,25 @@ const ChatHome = () => {
 
   const renderChatWindow = () => {
     if (isMobile && !showChatWindow) return null;
-    if (selectedUser) return <PrivateChat targetUser={selectedUser} onClose={handleBackToList} />;
+    
+    // AI 对戏
+    if (showAIChat) {
+      return <AIChatRoom onClose={isMobile ? handleBackToList : undefined} />;
+    }
+    
+    // 私聊
+    if (selectedUser) {
+      return <PrivateChat targetUser={selectedUser} onClose={handleBackToList} />;
+    }
+    
+    // 群聊
+    if (!selectedRoom) {
+      return (
+        <div className="h-full flex items-center justify-center text-gray-400">
+          选择一个聊天室开始聊天
+        </div>
+      );
+    }
     
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
@@ -977,9 +1010,7 @@ const ChatHome = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
               {availablePersonas.length > 1 && (
-                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
-                  Tab
-                </span>
+                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">Tab</span>
               )}
             </button>
             
@@ -989,34 +1020,25 @@ const ChatHome = () => {
                   initial={{ opacity: 0, y: -10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
                   className="absolute left-0 bottom-full mb-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden"
                 >
                   <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                      切换角色 ({availablePersonas.length})
-                    </span>
-                    <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
-                      Tab / Shift+Tab
-                    </span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">切换角色 ({availablePersonas.length})</span>
+                    <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">Tab / Shift+Tab</span>
                   </div>
-                  
                   <div className="px-3 pt-2 pb-1">
                     <input
                       type="text"
                       placeholder="搜索角色..."
                       value={personaSearchTerm}
                       onChange={(e) => setPersonaSearchTerm(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-gray-800 dark:text-gray-200"
+                      className="w-full px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
                       autoFocus
                     />
                   </div>
-                  
                   <div className="max-h-64 overflow-y-auto">
                     {filteredPersonas.length === 0 ? (
-                      <div className="px-3 py-4 text-center text-xs text-gray-400">
-                        暂无匹配角色
-                      </div>
+                      <div className="px-3 py-4 text-center text-xs text-gray-400">暂无匹配角色</div>
                     ) : (
                       filteredPersonas.map(persona => {
                         const isCurrent = selectedPersona?._id === persona._id;
@@ -1024,22 +1046,14 @@ const ChatHome = () => {
                           <button
                             key={persona._id}
                             onClick={() => handleQuickSwitchPersona(persona)}
-                            className={`
-                              w-full px-3 py-2 flex items-center gap-3 text-left transition-colors
-                              hover:bg-gray-50 dark:hover:bg-gray-700
-                              ${isCurrent ? 'bg-blue-50 dark:bg-blue-900/30' : ''}
-                            `}
+                            className={`w-full px-3 py-2 flex items-center gap-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 ${isCurrent ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
                           >
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                               {persona.name.charAt(0)}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                                {persona.displayName || persona.name}
-                              </p>
-                              <p className="text-[10px] text-gray-400">
-                                #{persona.sameNameNumber || '?'}
-                              </p>
+                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{persona.displayName || persona.name}</p>
+                              <p className="text-[10px] text-gray-400">#{persona.sameNameNumber || '?'}</p>
                             </div>
                             {isCurrent && (
                               <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1051,10 +1065,7 @@ const ChatHome = () => {
                       })
                     )}
                   </div>
-                  
-                  <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-700 text-[10px] text-gray-400">
-                    💡 点击切换角色
-                  </div>
+                  <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-700 text-[10px] text-gray-400">💡 点击切换角色</div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1083,7 +1094,7 @@ const ChatHome = () => {
           roomPersonas={roomPersonas}
           onSwitchPersona={handleSwitchRoomPersona}
           onLoadRoomPersonas={loadRoomPersonas}
-          placeholder="输入消息... "
+          placeholder="输入消息... 使用 /me 进行动作扮演，点击消息气泡上的回复按钮可引用回复"
         />
       </div>
     );
@@ -1096,26 +1107,10 @@ const ChatHome = () => {
         toastOptions={{ 
           duration: 3000,
           className: '!bg-gray-800 !text-white dark:!bg-gray-800 dark:!text-white !rounded-xl !shadow-lg',
-          style: {
-            background: '#1f2937',
-            color: '#ffffff',
-            borderRadius: '12px',
-            padding: '12px 16px',
-            fontSize: '14px',
-            fontWeight: '500',
-          },
-          success: {
-            className: '!bg-green-600 !text-white',
-            style: { background: '#10b981', color: '#ffffff' },
-          },
-          error: {
-            className: '!bg-red-600 !text-white',
-            style: { background: '#ef4444', color: '#ffffff' },
-          },
-          loading: {
-            className: '!bg-blue-600 !text-white',
-            style: { background: '#3b82f6', color: '#ffffff' },
-          },
+          style: { background: '#1f2937', color: '#ffffff', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: '500' },
+          success: { className: '!bg-green-600 !text-white', style: { background: '#10b981', color: '#ffffff' } },
+          error: { className: '!bg-red-600 !text-white', style: { background: '#ef4444', color: '#ffffff' } },
+          loading: { className: '!bg-blue-600 !text-white', style: { background: '#3b82f6', color: '#ffffff' } },
         }} 
       />
       {isDesktop && (
