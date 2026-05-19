@@ -24,6 +24,49 @@ router.get('/balance', authMiddleware, async (req, res) => {
   }
 });
 
+// 获取每日钻石信息（兼容前端调用）
+router.get('/daily-info', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    
+    const today = new Date().toDateString();
+    const lastDailyDate = user.lastDailyDiamond ? new Date(user.lastDailyDiamond).toDateString() : null;
+    const canClaim = lastDailyDate !== today;
+    const streak = user.dailyDiamondStreak || 0;
+    
+    const baseReward = 50;
+    const streakBonus = Math.min(streak * 10, 100);
+    const reward = baseReward + streakBonus;
+    
+    res.json({ 
+      canClaim, 
+      streak, 
+      reward,
+      diamonds: user.diamonds || 0 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 获取每日领取状态（别名）
+router.get('/daily-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    
+    const today = new Date().toDateString();
+    const lastDailyDate = user.lastDailyDiamond ? new Date(user.lastDailyDiamond).toDateString() : null;
+    const canClaim = lastDailyDate !== today;
+    const streak = user.dailyDiamondStreak || 0;
+    
+    res.json({ canClaim, streak, diamonds: user.diamonds || 0 });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 每日领取钻石
 router.post('/daily', authMiddleware, async (req, res) => {
   try {
@@ -37,7 +80,6 @@ router.post('/daily', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '今日已经领取过了' });
     }
     
-    // 计算连续天数
     let streak = user.dailyDiamondStreak || 0;
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -49,9 +91,8 @@ router.post('/daily', authMiddleware, async (req, res) => {
       streak = 1;
     }
     
-    // 奖励计算：基础 50 钻石 + 连续奖励
     const baseReward = 50;
-    const streakBonus = Math.min(streak * 10, 100); // 最高连续奖励 100
+    const streakBonus = Math.min(streak * 10, 100);
     const reward = baseReward + streakBonus;
     
     user.diamonds = (user.diamonds || 0) + reward;
@@ -66,23 +107,6 @@ router.post('/daily', authMiddleware, async (req, res) => {
       streak,
       message: `获得 ${reward} 钻石！连续领取 ${streak} 天`
     });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 获取每日领取状态
-router.get('/daily-status', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ error: '用户不存在' });
-    
-    const today = new Date().toDateString();
-    const lastDailyDate = user.lastDailyDiamond ? new Date(user.lastDailyDiamond).toDateString() : null;
-    const canClaim = lastDailyDate !== today;
-    const streak = user.dailyDiamondStreak || 0;
-    
-    res.json({ canClaim, streak, diamonds: user.diamonds || 0 });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
