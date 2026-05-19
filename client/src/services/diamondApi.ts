@@ -17,12 +17,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return data;
 }
 
-// ✅ 导出接口
+// 类型定义
 export interface DailyInfo {
   hasClaimed: boolean;
   currentStreak: number;
   nextReward: number;
-  rewards: number[];
+  rewards: number[];  // [5, 5, 8, 8, 10, 15, 20]
 }
 
 export interface ClaimResult {
@@ -33,8 +33,21 @@ export interface ClaimResult {
   reason?: string;
 }
 
+export interface BalanceResult {
+  diamonds: number;
+  coins: number;
+}
+
 export const diamondApi = {
-  getBalance: () => request<{ diamonds: number }>('/diamond/balance'),
-  claimDaily: () => request<any>('/diamond/daily', { method: 'POST' }),
+  // 获取余额
+  getBalance: () => request<BalanceResult>('/diamond/balance'),
+  
+  // 领取每日钻石
+  claimDaily: () => request<ClaimResult>('/diamond/daily', { method: 'POST' }),
+  
+  // 获取每日信息（用于显示签到面板）
   getDailyInfo: () => request<DailyInfo>('/diamond/daily-info'),
+  
+  // 获取每日状态（简单版）
+  getDailyStatus: () => request<{ canClaim: boolean; streak: number; diamonds: number }>('/diamond/daily-status'),
 };
