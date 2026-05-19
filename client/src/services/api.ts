@@ -278,11 +278,10 @@ export const personaApi = {
     request<{ posts: any[]; total: number; page: number; totalPages: number }>(
       `/persona/${personaId}/posts?page=${page}&limit=${limit}`
     ),
-    
   likePost: (personaId: string, postId: string) =>
-    request<{ message: string }>(`/persona/${personaId}/posts/${postId}/like`, {
-      method: 'POST',
-    }),
+  request<{ message: string; isLiked: boolean; likeCount: number }>(`/persona/${personaId}/posts/${postId}/like`, {
+    method: 'POST',
+  }),
 };
 
 // ========== 聊天室 API ==========
