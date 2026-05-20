@@ -8,6 +8,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const aiRoutes = require('./routes/ai');
+const path = require('path');
 
 console.log('📦 [app] 依赖模块加载完成');
 
