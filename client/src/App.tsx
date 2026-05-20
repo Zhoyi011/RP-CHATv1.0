@@ -7,7 +7,6 @@ import ChatHome from './components/chat/ChatHome';
 import PersonaManager from './components/persona/PersonaManager';
 import PersonaCreate from './components/persona/PersonaCreate';
 import PersonaDetail from './components/persona/PersonaDetail';
-import Profile from './components/profile/Profile';
 import Changelog from './components/common/Changelog';
 import SearchPage from './components/common/SearchPage';
 import JoinRoom from './components/chat/JoinRoom';
@@ -19,6 +18,8 @@ import GroupSettings from './components/chat/GroupSettings';
 import TermsOfService from './components/legal/TermsOfService';
 import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import Settings from './components/settings/Settings';
+import MobileFeed from './components/feed/MobileFeed';
+import MobileHome from './components/home/MobileHome';
 
 console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
 
@@ -36,7 +37,6 @@ const AppContent = () => {
           <Route path="/persona" element={<PersonaManager />} />
           <Route path="/persona/create" element={<PersonaCreate />} />
           <Route path="/persona/:personaId" element={<PersonaDetail />} />
-          <Route path="/profile" element={<Profile />} />
           <Route path="/changelog" element={<Changelog />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/join/:roomId" element={<JoinRoom />} />
@@ -48,6 +48,8 @@ const AppContent = () => {
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/feed" element={<MobileFeed />} />
+          <Route path="/home" element={<MobileHome />} />
           <Route path="*" element={<div className="p-8 text-center">404 - 页面不存在</div>} />
         </Routes>
       </BrowserRouter>

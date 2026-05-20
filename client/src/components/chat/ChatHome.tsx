@@ -15,6 +15,7 @@ import UserList from '../user/UserList';
 import ChatInput from './ChatInput';
 import AIChatRoom from './AIChatRoom';
 import LinkPreviewContainer from './LinkPreviewContainer';
+import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
 import { roomApi, personaApi, authApi, type Room, type Persona, type Message, type User, type ReplyToInfo } from '../../services/api';
@@ -409,6 +410,37 @@ const ChatHome = () => {
   const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
   const personaSwitchPanelRef = useRef<HTMLDivElement>(null);
 
+  // 保存最后使用的角色
+  const saveLastUsedPersona = useCallback((personaId: string) => {
+    localStorage.setItem('lastUsedPersonaId', personaId);
+  }, []);
+
+  // 加载上次使用的角色
+  const loadLastUsedPersona = useCallback(async (personasList: Persona[]) => {
+    const lastUsedId = localStorage.getItem('lastUsedPersonaId');
+    if (lastUsedId) {
+      const lastUsed = personasList.find(p => p._id === lastUsedId);
+      if (lastUsed) {
+        try {
+          await roomApi.setActivePersona(lastUsed._id);
+          setSelectedPersona(lastUsed);
+          return;
+        } catch (e) {
+          console.error('激活上次角色失败:', e);
+        }
+      }
+    }
+    // 没有上次使用的，用第一个角色
+    if (personasList.length > 0 && !selectedPersona) {
+      try {
+        await roomApi.setActivePersona(personasList[0]._id);
+        setSelectedPersona(personasList[0]);
+      } catch (e) {
+        console.error('激活默认角色失败:', e);
+      }
+    }
+  }, [selectedPersona]);
+
   const loadAvailablePersonas = useCallback(async () => {
     if (!selectedRoom) return;
     try {
@@ -457,6 +489,7 @@ const ChatHome = () => {
     try {
       await roomApi.setActivePersona(persona._id);
       setSelectedPersona(persona);
+      saveLastUsedPersona(persona._id);
       
       const token = localStorage.getItem('token');
       const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, {
@@ -476,7 +509,7 @@ const ChatHome = () => {
     } catch (err: any) {
       toast.error(err.message || '切换失败');
     }
-  }, [selectedRoom, selectedPersona, user]);
+  }, [selectedRoom, selectedPersona, user, saveLastUsedPersona]);
 
   const { personaCount } = useQuickSwitchPersona({
     enabled: selectedRoom !== null && availablePersonas.length > 1,
@@ -586,12 +619,19 @@ const ChatHome = () => {
         if (roomsRes.currentPersona) setCurrentPersona(roomsRes.currentPersona);
         const approved = personasData.filter((p: Persona) => p.status === 'approved');
         setPersonas(approved);
-        if (activePersonaRes.activePersona) setSelectedPersona(activePersonaRes.activePersona.personaId);
-        else if (approved.length > 0) setSelectedPersona(approved[0]);
+        
+        // 加载上次使用的角色
+        if (approved.length > 0) {
+          await loadLastUsedPersona(approved);
+        }
+        
+        if (activePersonaRes.activePersona && !selectedPersona) {
+          setSelectedPersona(activePersonaRes.activePersona.personaId);
+        }
       } catch (err: any) { setError(err.message || '加载失败'); } finally { setLoading(false); }
     };
     loadData();
-  }, [authChecked, user]);
+  }, [authChecked, user, loadLastUsedPersona]);
 
   useEffect(() => {
     if (!selectedRoom || !selectedPersona) return;
@@ -721,6 +761,7 @@ const ChatHome = () => {
     try {
       await roomApi.setActivePersona(persona._id);
       setSelectedPersona(persona);
+      saveLastUsedPersona(persona._id);
       const token = localStorage.getItem('token');
       const roomsRes = await fetch(`${API_BASE}/room/my-rooms`, { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await roomsRes.json();
@@ -728,10 +769,11 @@ const ChatHome = () => {
       if (data.currentPersona) setCurrentPersona(data.currentPersona);
       if (selectedRoom && user) socketService.switchPersona(user.uid, persona._id);
     } catch (err: any) { toast.error(err.message || '切换失败'); }
-  }, [selectedRoom, user]);
+  }, [selectedRoom, user, saveLastUsedPersona]);
 
   const handleSwitchRoomPersona = useCallback(async (persona: Persona) => {
     setSelectedPersona(persona);
+    saveLastUsedPersona(persona._id);
     try {
       const token = localStorage.getItem('token');
       await fetch(`${API_BASE}/room/active-persona`, {
@@ -739,7 +781,7 @@ const ChatHome = () => {
         body: JSON.stringify({ personaId: persona._id })
       });
     } catch {}
-  }, []);
+  }, [saveLastUsedPersona]);
 
   // 发送消息（支持回复）
   const handleSendMessage = useCallback((content: string, isAction = false, personaId?: string) => {
@@ -846,20 +888,9 @@ const ChatHome = () => {
         </button>
       </div>
       
-      {!showUserList && !showAIChat && (
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex-shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400">当前角色：{currentPersona && <span className="ml-1 text-blue-600 dark:text-blue-400 font-medium">{currentPersona.displayName || currentPersona.name}</span>}</span>
-            <button onClick={() => navigate('/persona')} className="text-xs text-blue-500 hover:text-blue-600 transition">管理角色</button>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {personas.map(persona => (
-              <button key={persona._id} onClick={() => handleSelectPersona(persona)} className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition flex-shrink-0 ${selectedPersona?._id === persona._id ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'}`}>{persona.displayName || persona.name}</button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 已删除「当前角色：XXX」那一行 */}
       
+      {/* 聊天列表 */}
       <div className="flex-1 overflow-y-auto">
         {showCreateRoom && <CreateRoom onClose={() => setShowCreateRoom(false)} onSuccess={() => window.location.reload()} />}
         {showUserList ? <UserList onSelectUser={handleSelectUser} /> :
@@ -930,49 +961,47 @@ const ChatHome = () => {
           )}
       </div>
 
-      {/* ✅ 左下角 - 当前角色信息（替换原来的用户信息） */}
+      {/* 左下角 - 当前角色信息 */}
       <div className="border-t border-gray-100 dark:border-gray-800 p-3 flex-shrink-0 bg-white dark:bg-gray-900">
-        <div 
-          className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl p-2 transition -m-2"
-          onClick={() => {
-            if (selectedPersona) {
-              navigate(`/persona/${selectedPersona._id}`);
-            } else {
-              navigate('/persona');
-            }
-          }}
-        >
-          {/* 角色头像 */}
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md">
-              {selectedPersona?.name?.charAt(0).toUpperCase() || '?'}
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-          </div>
-          
-          {/* 角色信息 */}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-              {selectedPersona?.displayName || selectedPersona?.name || '未选择角色'}
-            </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
-              点击查看角色主页
-            </p>
-          </div>
-          
-          {/* 切换角色按钮 */}
+        <div className="relative" ref={personaSwitchPanelRef}>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowPersonaQuickSwitch(!showPersonaQuickSwitch);
-            }}
-            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-            title="切换角色"
+            onClick={() => setShowPersonaQuickSwitch(!showPersonaQuickSwitch)}
+            className="w-full flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl p-2 transition -m-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            {/* 角色头像 */}
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md">
+                {selectedPersona?.name?.charAt(0).toUpperCase() || '?'}
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+            </div>
+            
+            {/* 角色信息 */}
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                {selectedPersona?.displayName || selectedPersona?.name || '未选择角色'}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                点击切换角色
+              </p>
+            </div>
+            
+            {/* 切换箭头 */}
+            <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPersonaQuickSwitch ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
+
+          {/* 切换面板 */}
+          {showPersonaQuickSwitch && (
+            <PersonaSwitchPanel
+              personas={personas}
+              currentPersona={selectedPersona}
+              onSelect={handleSelectPersona}
+              onClose={() => setShowPersonaQuickSwitch(false)}
+              position="top"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1039,84 +1068,6 @@ const ChatHome = () => {
             onDeleteSelf={handleDeleteSelf}
           />
         </div>
-
-        {selectedRoom && selectedPersona && (
-          <div className="relative px-4 pb-1" ref={personaSwitchPanelRef}>
-            <button
-              onClick={() => setShowPersonaQuickSwitch(!showPersonaQuickSwitch)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-            >
-              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-[10px] font-bold">
-                {selectedPersona.name.charAt(0)}
-              </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                发言: <span className="text-blue-600 dark:text-blue-400 font-medium">{currentDisplayName}</span>
-              </span>
-              <svg className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${showPersonaQuickSwitch ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-              {availablePersonas.length > 1 && (
-                <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">Tab</span>
-              )}
-            </button>
-            
-            <AnimatePresence>
-              {showPersonaQuickSwitch && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  className="absolute left-0 bottom-full mb-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden"
-                >
-                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">切换角色 ({availablePersonas.length})</span>
-                    <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">Tab / Shift+Tab</span>
-                  </div>
-                  <div className="px-3 pt-2 pb-1">
-                    <input
-                      type="text"
-                      placeholder="搜索角色..."
-                      value={personaSearchTerm}
-                      onChange={(e) => setPersonaSearchTerm(e.target.value)}
-                      className="w-full px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 rounded-lg outline-none focus:ring-1 focus:ring-blue-500"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {filteredPersonas.length === 0 ? (
-                      <div className="px-3 py-4 text-center text-xs text-gray-400">暂无匹配角色</div>
-                    ) : (
-                      filteredPersonas.map(persona => {
-                        const isCurrent = selectedPersona?._id === persona._id;
-                        return (
-                          <button
-                            key={persona._id}
-                            onClick={() => handleQuickSwitchPersona(persona)}
-                            className={`w-full px-3 py-2 flex items-center gap-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 ${isCurrent ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
-                          >
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                              {persona.name.charAt(0)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{persona.displayName || persona.name}</p>
-                              <p className="text-[10px] text-gray-400">#{persona.sameNameNumber || '?'}</p>
-                            </div>
-                            {isCurrent && (
-                              <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                  <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-700 text-[10px] text-gray-400">💡 点击切换角色</div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
 
         {replyToMessage && (
           <div className="px-4">

@@ -234,4 +234,22 @@ router.post('/equip-item', authMiddleware, async (req, res) => {
   }
 });
 
+// 更新用户资料（包含生日、星座）
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { displayName, birthday, zodiac } = req.body;
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    
+    if (displayName !== undefined) user.displayName = displayName;
+    if (birthday !== undefined) user.birthday = birthday ? new Date(birthday) : null;
+    if (zodiac !== undefined) user.zodiac = zodiac;
+    
+    await user.save();
+    res.json({ message: '更新成功', user });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

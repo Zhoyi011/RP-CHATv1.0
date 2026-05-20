@@ -14,9 +14,17 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
+interface CurrentPersona {
+  _id: string;
+  name: string;
+  displayName?: string;
+  avatar?: string;
+}
+
 const TabletLayout: React.FC<Props> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userData, setUserData] = useState<User | null>(null);
+  const [currentPersona, setCurrentPersona] = useState<CurrentPersona | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -53,6 +61,7 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
     },
   ];
 
+  // 加载用户数据
   useEffect(() => {
     const loadUserData = async () => {
       if (!user) return;
@@ -66,20 +75,47 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
+  // 获取当前激活的角色
+  useEffect(() => {
+    const fetchCurrentPersona = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.activePersona) {
+          setCurrentPersona(data.activePersona);
+        }
+      } catch (error) {
+        console.error('获取当前角色失败:', error);
+      }
+    };
+    fetchCurrentPersona();
+  }, []);
+
+  // 获取未读消息数
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
+      const token = localStorage.getItem('token');
+      if (!token) return;
       try {
         const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/unread-total', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await response.json();
-        setUnreadCount(data.total || 0);
+        if (response.ok) {
+          const data = await response.json();
+          setUnreadCount(data.total || 0);
+        }
       } catch (error) {
         console.error('获取未读消息失败:', error);
       }
     };
     fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
   }, [user]);
 
   useEffect(() => {
@@ -148,11 +184,9 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="transition-all duration-200 hover:scale-110 active:scale-90"
             >
-              <img
-                src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=36`}
-                alt="avatar"
-                className="w-9 h-9 rounded-full object-cover ring-2 ring-gray-200"
-              />
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
+              </div>
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md animate-pulse">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -187,20 +221,17 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
             </div>
           </div>
 
-          {/* 用户信息 */}
+          {/* 当前角色信息 */}
           <div className="p-4 mx-4 my-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
             <div className="flex items-center gap-3">
-              <img
-                src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=48`}
-                alt="avatar"
-                className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-300"
-              />
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-800 truncate">{userData?.username || '用户'}</p>
-                <div className="flex items-center gap-1">
-                  <DiamondBalance size="sm" />
-                  <span className="text-xs text-gray-500">钻石</span>
-                </div>
+                <p className="font-semibold text-gray-800 truncate">
+                  {currentPersona?.displayName || currentPersona?.name || '未选择角色'}
+                </p>
+                <p className="text-xs text-gray-500">当前使用的角色</p>
               </div>
             </div>
           </div>
@@ -234,8 +265,16 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
               onClick={() => handleNavigate('/profile')}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
             >
-              <span>👤</span>
-              <span>个人资料</span>
+              <span>🎭</span>
+              <span>角色主页</span>
+            </button>
+
+            <button
+              onClick={() => handleNavigate('/persona')}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <span>🔄</span>
+              <span>切换角色</span>
             </button>
 
             <button
@@ -243,7 +282,7 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
             >
               <span>⚙️</span>
-              <span>设置</span>
+              <span>账号设置</span>
             </button>
 
             <button

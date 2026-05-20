@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../firebase/config';
-import { authApi, type User } from '../../services/api';
+import { authApi, type User, type Persona } from '../../services/api';
+import { roomApi } from '../../services/api';
 import DiamondBalance from '../diamond/DiamondBalance';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
+import toast from 'react-hot-toast';
 
 interface Props {
   children: React.ReactNode;
@@ -15,12 +18,21 @@ interface TabItem {
   icon: React.ReactNode;
 }
 
+interface CurrentPersona {
+  _id: string;
+  name: string;
+  displayName?: string;
+  avatar?: string;
+}
+
 const MobileLayout: React.FC<Props> = ({ children }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [userData, setUserData] = useState<User | null>(null);
+  const [currentPersona, setCurrentPersona] = useState<CurrentPersona | null>(null);
+  const [personasList, setPersonasList] = useState<Persona[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showMenu, setShowMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [showSwitchPanel, setShowSwitchPanel] = useState(false);
+  const switchPanelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const user = auth.currentUser;
@@ -56,6 +68,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     },
   ];
 
+  // 加载用户数据
   useEffect(() => {
     const loadUserData = async () => {
       if (!user) return;
@@ -69,12 +82,84 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
+  // 获取当前激活的角色
+  useEffect(() => {
+    const fetchCurrentPersona = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.activePersona) {
+          setCurrentPersona(data.activePersona);
+        }
+      } catch (error) {
+        console.error('获取当前角色失败:', error);
+      }
+    };
+    fetchCurrentPersona();
+  }, []);
+
+  // 获取角色列表
+  useEffect(() => {
+    const fetchPersonas = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/persona/my', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPersonasList(data.filter((p: Persona) => p.status === 'approved'));
+        }
+      } catch (error) {
+        console.error('获取角色列表失败:', error);
+      }
+    };
+    fetchPersonas();
+  }, []);
+
+  // 切换角色
+  const handleSwitchPersona = async (persona: Persona) => {
+    try {
+      await roomApi.setActivePersona(persona._id);
+      setCurrentPersona({
+        _id: persona._id,
+        name: persona.name,
+        displayName: persona.displayName,
+        avatar: persona.avatar
+      });
+      localStorage.setItem('lastUsedPersonaId', persona._id);
+      toast.success(`已切换至 ${persona.displayName || persona.name}`);
+      window.location.reload();
+    } catch (error) {
+      toast.error('切换失败');
+    }
+  };
+
+  // 点击外部关闭面板
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (switchPanelRef.current && !switchPanelRef.current.contains(e.target as Node)) {
+        setShowSwitchPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 获取未读消息数
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
+      const token = localStorage.getItem('token');
+      if (!token) return;
       try {
         const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/unread-total', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
           const data = await response.json();
@@ -88,16 +173,6 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, [user]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   useEffect(() => {
     const currentTab = tabs.find(tab => location.pathname.startsWith(tab.path));
@@ -144,60 +219,32 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
             </svg>
           </button>
 
-          <div className="relative" ref={menuRef}>
+          {/* 当前角色头像 - 点击切换角色 */}
+          <div className="relative" ref={switchPanelRef}>
             <button
-              onClick={() => setShowMenu(!showMenu)}
+              onClick={() => setShowSwitchPanel(!showSwitchPanel)}
               className="relative focus:outline-none transition-all duration-200 active:scale-90"
             >
-              <img
-                src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=32`}
-                alt="avatar"
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-200"
-              />
-              <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full ring-1 ring-white"></div>
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
+              </div>
+              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-1 ring-white"></div>
             </button>
 
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in slide-in-from-top-2 fade-in duration-200 origin-top-right">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-800 truncate">{userData?.username || '用户'}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <DiamondBalance size="sm" />
-                    <span className="text-xs text-gray-400">钻石</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => { navigate('/profile'); setShowMenu(false); }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150 hover:pl-5"
-                >
-                  👤 个人资料
-                </button>
-                <button
-                  onClick={() => { navigate('/settings'); setShowMenu(false); }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150 hover:pl-5"
-                >
-                  ⚙️ 设置
-                </button>
-                <button
-                  onClick={() => { navigate('/changelog'); setShowMenu(false); }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-all duration-150 hover:pl-5"
-                >
-                  📋 更新日志
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-all duration-150 hover:pl-5"
-                >
-                  🚪 退出登录
-                </button>
-              </div>
+            {showSwitchPanel && (
+              <PersonaSwitchPanel
+                personas={personasList}
+                currentPersona={currentPersona}
+                onSelect={handleSwitchPersona}
+                onClose={() => setShowSwitchPanel(false)}
+                position="bottom"
+              />
             )}
           </div>
         </div>
       </div>
 
-      {/* 主内容区 - 避开顶部和底部栏 */}
+      {/* 主内容区 */}
       <div 
         className="absolute top-[61px] bottom-0 left-0 right-0 overflow-y-auto"
         style={{ 
@@ -208,7 +255,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
         {children}
       </div>
 
-      {/* 底部 Tab 栏 - fixed 定位 */}
+      {/* 底部 Tab 栏 */}
       <div 
         className={`fixed left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex justify-around py-2 safe-bottom shadow-lg z-30 transition-all duration-300 ${
           isKeyboardOpen ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'

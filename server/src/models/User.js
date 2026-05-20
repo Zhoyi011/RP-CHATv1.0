@@ -96,6 +96,9 @@ const userSchema = new mongoose.Schema({
     default: 'off'
   },
   
+  birthday: { type: Date, default: null },
+  zodiac: { type: String, default: '' },
+
   // ===== 装备 =====
   equippedItems: {
     avatarFrame: { type: String, default: '' },
@@ -145,9 +148,6 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  // 在 User Schema 中添加
-  dailyDiamondStreak: { type: Number, default: 0 },
-  lastDailyDiamond: { type: Date, default: null },
   equippedItems: {
     avatarFrame: { type: String, default: null },
     ring: { type: String, default: null },
@@ -331,8 +331,9 @@ userSchema.methods.toSafeObject = function() {
     equippedItems: this.equippedItems || {},
     lastLogin: this.lastLogin,
     createdAt: this.createdAt,
-    stats: this.stats || { totalMessages: 0, totalRooms: 0, totalPersonas: 0 }
+    stats: this.stats || { totalMessages: 0, totalRooms: 0, totalPersonas: 0 },
+    inventory: this.inventory || [],
+    achievements: this.achievements || []
   };
-};
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema)};

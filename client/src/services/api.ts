@@ -69,6 +69,8 @@ export interface User {
     totalRooms: number;
     totalPersonas: number;
   };
+  birthday?: string | null;
+  zodiac?: string;
 }
 
 export interface UserSettings {

@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../firebase/config';
-import { authApi, type User } from '../../services/api';
+import { authApi, type User, type Persona } from '../../services/api';
+import { roomApi } from '../../services/api';
 import DiamondBalance from '../diamond/DiamondBalance';
+import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
+import toast from 'react-hot-toast';
 
 interface Props {
   children: React.ReactNode;
@@ -14,13 +17,23 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
+interface CurrentPersona {
+  _id: string;
+  name: string;
+  displayName?: string;
+  avatar?: string;
+}
+
 const DesktopLayout: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [userData, setUserData] = useState<User | null>(null);
+  const [currentPersona, setCurrentPersona] = useState<CurrentPersona | null>(null);
+  const [personasList, setPersonasList] = useState<Persona[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showPersonaMenu, setShowPersonaMenu] = useState(false);
+  const personaMenuRef = useRef<HTMLDivElement>(null);
   const user = auth.currentUser;
 
   const navItems: NavItem[] = [
@@ -53,6 +66,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     },
   ];
 
+  // 加载用户数据
   useEffect(() => {
     const loadUserData = async () => {
       if (!user) return;
@@ -66,6 +80,83 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
+  // 获取当前激活的角色
+  useEffect(() => {
+    const fetchCurrentPersona = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.activePersona) {
+          setCurrentPersona(data.activePersona);
+        }
+      } catch (error) {
+        console.error('获取当前角色失败:', error);
+      }
+    };
+    fetchCurrentPersona();
+    
+    // 监听角色切换事件
+    const handleStorageChange = () => {
+      fetchCurrentPersona();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // 获取角色列表
+  useEffect(() => {
+    const fetchPersonas = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/persona/my', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPersonasList(data.filter((p: Persona) => p.status === 'approved'));
+        }
+      } catch (error) {
+        console.error('获取角色列表失败:', error);
+      }
+    };
+    fetchPersonas();
+  }, []);
+
+  // 切换角色
+  const handleSwitchPersona = async (persona: Persona) => {
+    try {
+      await roomApi.setActivePersona(persona._id);
+      setCurrentPersona({
+        _id: persona._id,
+        name: persona.name,
+        displayName: persona.displayName,
+        avatar: persona.avatar
+      });
+      localStorage.setItem('lastUsedPersonaId', persona._id);
+      toast.success(`已切换至 ${persona.displayName || persona.name}`);
+      window.location.reload();
+    } catch (error) {
+      toast.error('切换失败');
+    }
+  };
+
+  // 点击外部关闭面板
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (personaMenuRef.current && !personaMenuRef.current.contains(e.target as Node)) {
+        setShowPersonaMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // 获取未读消息数
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
@@ -106,8 +197,8 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 关闭菜单的透明层 */}
-      {showUserMenu && (
-        <div className="fixed inset-0 z-20" onClick={() => setShowUserMenu(false)} />
+      {showPersonaMenu && (
+        <div className="fixed inset-0 z-20" onClick={() => setShowPersonaMenu(false)} />
       )}
 
       <aside 
@@ -173,7 +264,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           ))}
         </nav>
 
-        {/* 底部区域 */}
+        {/* 底部区域 - 当前角色 */}
         <div className="border-t border-gray-100 p-3 space-y-2">
           {/* 更新日志 */}
           <button
@@ -187,83 +278,42 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
             {!collapsed && <span className="text-sm">更新日志</span>}
           </button>
 
-          {/* 用户区域 */}
-          <div className="relative">
+          {/* 当前角色区域 */}
+          <div className="relative" ref={personaMenuRef}>
             <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
+              onClick={() => setShowPersonaMenu(!showPersonaMenu)}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${collapsed ? 'justify-center' : ''}`}
             >
               <div className="relative">
-                <img
-                  src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=40`}
-                  alt="avatar"
-                  className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-200"
-                />
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                  {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
+                </div>
                 <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-1 ring-white"></div>
               </div>
               {!collapsed && (
                 <div className="flex-1 text-left min-w-0">
                   <p className="text-sm font-medium text-gray-700 truncate">
-                    {userData?.username || user?.email?.split('@')[0] || '用户'}
+                    {currentPersona?.displayName || currentPersona?.name || '未选择角色'}
                   </p>
-                  <div className="flex items-center gap-1">
-                    <DiamondBalance size="sm" />
-                  </div>
+                  <p className="text-xs text-gray-400 truncate">点击切换角色</p>
                 </div>
               )}
               {!collapsed && (
-                <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} 
+                <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPersonaMenu ? 'rotate-180' : ''}`} 
                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               )}
             </button>
 
-            {/* 用户下拉菜单 */}
-            {showUserMenu && !collapsed && (
-              <div className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in slide-in-from-bottom-2 fade-in duration-200 origin-bottom">
-                {/* 用户信息 */}
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-800">{userData?.username || '用户'}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <DiamondBalance size="sm" />
-                    <span className="text-xs text-gray-400">钻石</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => { navigate('/profile'); setShowUserMenu(false); }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
-                >
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  个人资料
-                </button>
-
-                <button
-                  onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
-                  className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
-                >
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  设置
-                </button>
-
-                <div className="border-t border-gray-100 my-1"></div>
-
-                <button
-                  onClick={handleLogout}
-                  className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  退出登录
-                </button>
-              </div>
+            {showPersonaMenu && !collapsed && (
+              <PersonaSwitchPanel
+                personas={personasList}
+                currentPersona={currentPersona}
+                onSelect={handleSwitchPersona}
+                onClose={() => setShowPersonaMenu(false)}
+                position="top"
+              />
             )}
           </div>
         </div>

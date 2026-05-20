@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { personaApi, type Persona } from '../../services/api';
+import { roomApi } from '../../services/api';
 import toast from 'react-hot-toast';
 import AvatarUpload from '../common/AvatarUpload';
 import PersonaGuardianList from './PersonaGuardianList';
@@ -10,6 +11,7 @@ import PersonaRelationships from './PersonaRelationships';
 import PersonaPosts from './PersonaPosts';
 import PersonaEquipments from './PersonaEquipments';
 import AIChat from '../chat/AIChat';
+import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com';
 
@@ -23,6 +25,9 @@ const PersonaDetail = () => {
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [showCardPreview, setShowCardPreview] = useState(false);
+  const [showSwitchPanel, setShowSwitchPanel] = useState(false);
+  const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
+  const switchPanelRef = useRef<HTMLDivElement>(null);
   
   // 编辑简介
   const [isEditingBio, setIsEditingBio] = useState(false);
@@ -31,7 +36,18 @@ const PersonaDetail = () => {
 
   useEffect(() => {
     if (personaId) loadPersona();
+    loadAvailablePersonas();
   }, [personaId]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (switchPanelRef.current && !switchPanelRef.current.contains(e.target as Node)) {
+        setShowSwitchPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadPersona = async () => {
     try {
@@ -48,6 +64,34 @@ const PersonaDetail = () => {
       navigate('/persona');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAvailablePersonas = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/api/persona/my`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailablePersonas(data.filter((p: Persona) => p.status === 'approved'));
+      }
+    } catch (error) {
+      console.error('加载角色列表失败:', error);
+    }
+  };
+
+  const handleQuickSwitch = async (selectedPersona: Persona) => {
+    try {
+      await roomApi.setActivePersona(selectedPersona._id);
+      localStorage.setItem('lastUsedPersonaId', selectedPersona._id);
+      toast.success(`已切换至 ${selectedPersona.displayName || selectedPersona.name}`);
+      // 跳转到新角色的主页
+      navigate(`/persona/${selectedPersona._id}`);
+      window.location.reload();
+    } catch (error) {
+      toast.error('切换失败');
     }
   };
 
@@ -175,6 +219,32 @@ const PersonaDetail = () => {
                 <h2 className="text-2xl font-bold">{persona.displayName || persona.name}</h2>
                 {persona.globalNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">#{persona.globalNumber}</span>}
                 {persona.sameNameNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">同名 #{persona.sameNameNumber}</span>}
+                
+                {/* 快捷切换按钮 */}
+                {isCurrentUserPersona && availablePersonas.length > 1 && (
+                  <div className="relative" ref={switchPanelRef}>
+                    <button
+                      onClick={() => setShowSwitchPanel(!showSwitchPanel)}
+                      className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded-full transition flex items-center gap-1"
+                      title="切换角色 (Tab)"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                      <span>切换</span>
+                    </button>
+                    
+                    {showSwitchPanel && (
+                      <PersonaSwitchPanel
+                        personas={availablePersonas}
+                        currentPersona={persona}
+                        onSelect={handleQuickSwitch}
+                        onClose={() => setShowSwitchPanel(false)}
+                        position="bottom"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-1 mt-2">
                 {persona.tags?.slice(0, 5).map((tag, i) => (

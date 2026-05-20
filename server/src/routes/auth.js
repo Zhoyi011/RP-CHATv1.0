@@ -182,11 +182,16 @@ router.post('/verify-invite', authMiddleware, async (req, res) => {
 // ========== 获取当前用户 ==========
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
+    const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
-    res.json(user.toSafeObject());
+    // ✅ 添加 birthday 和 zodiac
+    res.json({
+      ...user.toSafeObject(),
+      birthday: user.birthday ? user.birthday.toISOString().split('T')[0] : null,
+      zodiac: user.zodiac || ''
+    });
   } catch (error) {
     console.error('获取用户信息错误:', error);
     res.status(500).json({ error: '服务器错误' });
@@ -358,5 +363,6 @@ router.put('/admin/users/:userId/status', authMiddleware, adminMiddleware, async
     res.status(500).json({ error: '服务器错误' });
   }
 });
+
 
 module.exports = router;
