@@ -9,7 +9,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET || 'iXWuEwbA0IOJPFP6q4FLi6Bwg8M'
 });
 
-// 配置存储
+// ✅ 修正：CloudinaryStorage 的正确使用方式
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -26,7 +26,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 // 删除旧头像
@@ -35,10 +35,9 @@ const deleteOldAvatar = async (oldUrl) => {
   
   try {
     // 从 URL 中提取 public_id
-    // 例如: https://res.cloudinary.com/.../rp-chat/avatars/user-xxx.jpg
     const parts = oldUrl.split('/');
     const filename = parts.pop().split('.')[0];
-    const folder = parts.slice(-2).join('/'); // "rp-chat/avatars"
+    const folder = parts.slice(-2).join('/');
     const publicId = `${folder}/${filename}`;
     
     await cloudinary.uploader.destroy(publicId);
