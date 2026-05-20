@@ -108,7 +108,7 @@ const translateRoutes = require('./routes/translate');
 const aiPersonaRoutes = require('./routes/aiPersona');
 const shopRoutes = require('./routes/shop');
 const postRoutes = require('./routes/post');
-
+const uploadRoutes = require('./routes/upload');
 console.log('  ✅ 基础路由加载完成');
 
 let voiceRoutes;
@@ -143,8 +143,10 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/ai-persona', aiPersonaRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/post', postRoutes);
+app.use('/api/upload', uploadRoutes);
 console.log('  ✅ 所有路由注册完成');
 
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // ===== 404 处理 =====
 app.use((req, res) => {
   console.log(`⚠️ [404] 未找到接口: ${req.method} ${req.url}`);

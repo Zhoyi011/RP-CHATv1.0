@@ -5,6 +5,7 @@ import { authApi, type User } from '../../services/api';
 import { diamondApi } from '../../services/diamondApi';
 import { useResponsive } from '../../hooks/useResponsive';
 import DailyDiamond from '../diamond/DailyDiamond';
+import AvatarUpload from '../common/AvatarUpload';
 
 const Profile = () => {
   const [user, setUser] = useState<any>(null);
@@ -15,7 +16,8 @@ const Profile = () => {
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
-
+  const [showAvatarUpload, setShowAvatarUpload] = useState(false);
+  
   useEffect(() => {
     const currentUser = auth.currentUser;
     setUser(currentUser);

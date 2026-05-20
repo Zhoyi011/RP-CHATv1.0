@@ -1,172 +1,199 @@
 import React, { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 interface Props {
   currentAvatar?: string;
   onUpload: (url: string) => void;
   onClose: () => void;
+  title?: string;
+  type?: 'user' | 'persona';
+  personaId?: string;
 }
 
-const AvatarUpload: React.FC<Props> = ({ currentAvatar, onUpload, onClose }) => {
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
+
+const AvatarUpload: React.FC<Props> = ({ 
+  currentAvatar, 
+  onUpload, 
+  onClose, 
+  title = '更换头像',
+  type = 'user',
+  personaId 
+}) => {
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 压缩图片
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          // 最大尺寸 200x200
-          let width = img.width;
-          let height = img.height;
-          if (width > 200) {
-            height = (height * 200) / width;
-            width = 200;
-          }
-          if (height > 200) {
-            width = (width * 200) / height;
-            height = 200;
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          // 压缩为 JPEG，质量 0.8
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          resolve(compressedDataUrl);
-        };
-        img.onerror = reject;
-      };
-      reader.onerror = reject;
-    });
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 检查文件类型
     if (!file.type.startsWith('image/')) {
       toast.error('请选择图片文件');
       return;
     }
 
-    // 检查文件大小（最大 5MB）
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('图片不能超过 5MB');
+      toast.error('图片大小不能超过 5MB');
       return;
     }
 
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    uploadFile(file);
+  };
+
+  const uploadFile = async (file: File) => {
     setUploading(true);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
     try {
-      // 压缩图片
-      const compressedDataUrl = await compressImage(file);
-      setPreviewUrl(compressedDataUrl);
-      
-      // 上传到 ImgBB
-      const formData = new FormData();
-      formData.append('image', compressedDataUrl.split(',')[1]);
-      
-      // 使用 ImgBB API（免费，需要注册获取 API Key）
-      const response = await fetch('https://api.imgbb.com/1/upload?key=你的IMGbb_API_KEY', {
+      const token = localStorage.getItem('token');
+      let url = `${API_BASE}/upload/${type}`;
+      if (type === 'persona' && personaId) {
+        url = `${API_BASE}/upload/persona/${personaId}`;
+      }
+
+      const response = await fetch(url, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       });
-      
+
       const data = await response.json();
-      if (data.success) {
-        onUpload(data.data.url);
+      if (response.ok) {
         toast.success('头像上传成功');
+        onUpload(data.avatar);
+        onClose();
       } else {
-        throw new Error('上传失败');
+        toast.error(data.error || '上传失败');
       }
     } catch (error) {
       console.error('上传失败:', error);
-      toast.error('上传失败，请重试');
+      toast.error('上传失败');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleCrop = () => {
-    if (previewUrl) {
-      onUpload(previewUrl);
+  const handleDelete = async () => {
+    if (!confirm('确定要删除头像吗？将恢复默认头像。')) return;
+    
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('token');
+      let url = `${API_BASE}/upload/${type}`;
+      if (type === 'persona' && personaId) {
+        url = `${API_BASE}/upload/persona/${personaId}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('已恢复默认头像');
+        onUpload('');
+        onClose();
+      } else {
+        toast.error(data.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('删除失败:', error);
+      toast.error('删除失败');
+    } finally {
+      setDeleting(false);
     }
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h3 className="text-lg font-semibold">上传头像</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            ✕
-          </button>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-gradient-to-r from-blue-500 to-cyan-600 px-6 py-4">
+          <h2 className="text-xl font-bold text-white">{title}</h2>
+          <p className="text-blue-100 text-sm">支持 JPG、PNG、GIF，最大 5MB</p>
         </div>
 
         <div className="p-6">
-          {/* 预览区域 */}
           <div className="flex justify-center mb-6">
             <div className="relative">
-              <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-gray-200">
+              <div className="w-32 h-32 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 shadow-lg">
                 <img
-                  src={previewUrl || currentAvatar || 'https://ui-avatars.com/api/?background=10b981&color=fff&size=128'}
-                  alt="预览"
+                  src={preview || currentAvatar || `https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff&size=128`}
+                  alt="头像预览"
                   className="w-full h-full object-cover"
                 />
               </div>
               {uploading && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
-                  <div className="text-white text-sm">上传中...</div>
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 按钮区域 */}
           <div className="space-y-3">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2.5 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md"
             >
-              选择图片
+              {uploading ? '上传中...' : '选择图片'}
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
             
-            {previewUrl && (
+            {(currentAvatar || preview) && (
               <button
-                onClick={handleCrop}
-                disabled={uploading}
-                className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="w-full border border-red-300 text-red-500 py-2.5 rounded-xl font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50"
               >
-                确认使用
+                {deleting ? '删除中...' : '删除头像'}
               </button>
             )}
+            
+            <button
+              onClick={onClose}
+              className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+            >
+              取消
+            </button>
           </div>
 
-          <p className="text-xs text-gray-400 text-center mt-4">
-            支持 JPG、PNG 格式，建议使用 1:1 比例图片
-          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
