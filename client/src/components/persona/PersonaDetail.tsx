@@ -11,6 +11,8 @@ import PersonaPosts from './PersonaPosts';
 import PersonaEquipments from './PersonaEquipments';
 import AIChat from '../chat/AIChat';
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com';
+
 const PersonaDetail = () => {
   const { personaId } = useParams<{ personaId: string }>();
   const navigate = useNavigate();
@@ -21,6 +23,11 @@ const PersonaDetail = () => {
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [showCardPreview, setShowCardPreview] = useState(false);
+  
+  // 编辑简介
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [editBio, setEditBio] = useState('');
+  const [savingBio, setSavingBio] = useState(false);
 
   useEffect(() => {
     if (personaId) loadPersona();
@@ -49,6 +56,35 @@ const PersonaDetail = () => {
     toast.success('头像更新成功');
   };
 
+  const handleSaveBio = async () => {
+    if (!persona) return;
+    setSavingBio(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/persona/${persona._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ description: editBio })
+      });
+      
+      if (response.ok) {
+        setPersona(prev => prev ? { ...prev, description: editBio } : prev);
+        setIsEditingBio(false);
+        toast.success('简介已更新');
+      } else {
+        toast.error('保存失败');
+      }
+    } catch (error) {
+      console.error('保存简介失败:', error);
+      toast.error('保存失败');
+    } finally {
+      setSavingBio(false);
+    }
+  };
+
   const getAvatarColor = (name: string) => {
     const colors = [
       'from-blue-400 to-cyan-500',
@@ -75,8 +111,6 @@ const PersonaDetail = () => {
       </div>
     );
   }
-
-  const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -142,7 +176,6 @@ const PersonaDetail = () => {
                 {persona.globalNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">#{persona.globalNumber}</span>}
                 {persona.sameNameNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">同名 #{persona.sameNameNumber}</span>}
               </div>
-              <p className="text-sm opacity-90 mt-1 line-clamp-2">{persona.description}</p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {persona.tags?.slice(0, 5).map((tag, i) => (
                   <span key={i} className="text-xs bg-white/20 px-2 py-0.5 rounded-full">#{tag}</span>
@@ -178,15 +211,60 @@ const PersonaDetail = () => {
           <div className="space-y-4">
             <PersonaEquipments persona={persona} isOwner={isCurrentUserPersona} onUpdate={loadPersona} />
             
+            {/* 关于我 - 可编辑 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
-              <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-                <span>📖</span> 关于我
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
-                {persona.description || '这个角色还没有介绍...'}
-              </p>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                  <span>📖</span> 关于我
+                </h3>
+                {isCurrentUserPersona && !isEditingBio && (
+                  <button
+                    onClick={() => {
+                      setEditBio(persona.description || '');
+                      setIsEditingBio(true);
+                    }}
+                    className="text-sm text-blue-500 hover:text-blue-600 transition"
+                  >
+                    编辑简介
+                  </button>
+                )}
+              </div>
+              
+              {isEditingBio ? (
+                <div>
+                  <textarea
+                    value={editBio}
+                    onChange={(e) => setEditBio(e.target.value)}
+                    rows={4}
+                    className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white resize-none"
+                    placeholder="介绍一下这个角色..."
+                    maxLength={500}
+                  />
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={handleSaveBio}
+                      disabled={savingBio}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50"
+                    >
+                      {savingBio ? '保存中...' : '保存'}
+                    </button>
+                    <button
+                      onClick={() => setIsEditingBio(false)}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                    >
+                      取消
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">最多500个字符</p>
+                </div>
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
+                  {persona.description || '这个角色还没有介绍...'}
+                </p>
+              )}
             </div>
 
+            {/* 角色信息 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
                 <span>📊</span> 角色信息

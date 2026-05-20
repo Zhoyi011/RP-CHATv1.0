@@ -35,8 +35,8 @@ const AvatarUpload: React.FC<Props> = ({
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('图片大小不能超过 5MB');
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('图片大小不能超过 20MB');
       return;
     }
 
@@ -136,7 +136,7 @@ const AvatarUpload: React.FC<Props> = ({
       >
         <div className="bg-gradient-to-r from-blue-500 to-cyan-600 px-6 py-4">
           <h2 className="text-xl font-bold text-white">{title}</h2>
-          <p className="text-blue-100 text-sm">支持 JPG、PNG、GIF，最大 5MB</p>
+          <p className="text-blue-100 text-sm">支持 JPG、PNG、GIF，最大 20MB</p>
         </div>
 
         <div className="p-6">
