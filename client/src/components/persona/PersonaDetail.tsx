@@ -81,7 +81,7 @@ const PersonaDetail = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* 头部渐变区 */}
-      <div className={`bg-gradient-to-r from-blue-500 to-cyan-600 text-white`}>
+      <div className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white">
         <div className="px-4 py-3 flex items-center">
           <button onClick={() => navigate(-1)} className="mr-3 p-1 hover:bg-white/20 rounded-full transition">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,7 +115,10 @@ const PersonaDetail = () => {
         {/* 角色信息卡片 */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <div className="flex items-center gap-4">
-            <div className="relative cursor-pointer group" onClick={() => isCurrentUserPersona && setShowAvatarUpload(true)}>
+            <div 
+              className="relative cursor-pointer group" 
+              onClick={() => isCurrentUserPersona && setShowAvatarUpload(true)}
+            >
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg">
                 <img
                   src={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
@@ -127,6 +130,7 @@ const PersonaDetail = () => {
                 <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
               )}
@@ -172,7 +176,7 @@ const PersonaDetail = () => {
       <div className="p-4">
         {activeTab === 'info' && (
           <div className="space-y-4">
-            <PersonaEquipments persona={persona} isOwner={isCurrentUserPersona} />
+            <PersonaEquipments persona={persona} isOwner={isCurrentUserPersona} onUpdate={loadPersona} />
             
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
@@ -256,7 +260,14 @@ const PersonaDetail = () => {
       {/* 头像上传弹窗 */}
       <AnimatePresence>
         {showAvatarUpload && (
-          <AvatarUpload currentAvatar={persona.avatar} onUpload={handleAvatarUpload} onClose={() => setShowAvatarUpload(false)} />
+          <AvatarUpload
+            currentAvatar={persona.avatar}
+            onUpload={handleAvatarUpload}
+            onClose={() => setShowAvatarUpload(false)}
+            title={`更换 ${persona.name} 的头像`}
+            type="persona"
+            personaId={persona._id}
+          />
         )}
       </AnimatePresence>
 

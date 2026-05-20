@@ -1,452 +1,374 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
-import { authApi, type User } from '../../services/api';
-import { diamondApi } from '../../services/diamondApi';
-import { useResponsive } from '../../hooks/useResponsive';
-import DailyDiamond from '../diamond/DailyDiamond';
+import { authApi, type User, type UserSettings } from '../../services/api';
 import AvatarUpload from '../common/AvatarUpload';
+import toast from 'react-hot-toast';
 
-const Profile = () => {
-  const [user, setUser] = useState<any>(null);
-  const [userData, setUserData] = useState<User | null>(null);
-  const [diamonds, setDiamonds] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('profile');
-  const [refreshing, setRefreshing] = useState(false);
+const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { isMobile } = useResponsive();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
-  
+  const [isEditing, setIsEditing] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [settings, setSettings] = useState<UserSettings>({
+    theme: 'auto',
+    notifications: true,
+    soundEnabled: true,
+    defaultTranslate: 'off'
+  });
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
-    const currentUser = auth.currentUser;
-    setUser(currentUser);
     loadUserData();
-    loadDiamonds();
   }, []);
 
-  // 加载用户数据
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const data = await authApi.getCurrentUser();
-      setUserData(data);
-      console.log('📊 用户数据加载成功:', {
-        username: data.username,
-        diamonds: data.diamonds,
-        streak: data.dailyDiamondStreak
-      });
+      const [userData, settingsData] = await Promise.all([
+        authApi.getCurrentUser(),
+        authApi.getSettings()
+      ]);
+      setUser(userData);
+      setDisplayName(userData.displayName || userData.username);
+      setSettings(settingsData);
     } catch (error) {
       console.error('加载用户数据失败:', error);
+      toast.error('加载失败');
     } finally {
       setLoading(false);
     }
   };
 
-  // 加载钻石数量
-  const loadDiamonds = async () => {
+  const handleSaveProfile = async () => {
+    if (!displayName.trim()) {
+      toast.error('昵称不能为空');
+      return;
+    }
+
+    setSaving(true);
     try {
-      const data = await diamondApi.getBalance();
-      setDiamonds(data.diamonds);
+      // 更新用户资料
+      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api'}/user/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ displayName: displayName.trim() })
+      });
+
+      if (response.ok) {
+        toast.success('保存成功');
+        setIsEditing(false);
+        loadUserData();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || '保存失败');
+      }
     } catch (error) {
-      console.error('加载钻石失败:', error);
+      toast.error('保存失败');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // 刷新所有数据
-  const refreshAll = async () => {
-    setRefreshing(true);
-    await Promise.all([loadUserData(), loadDiamonds()]);
-    setRefreshing(false);
-  };
-
-  // 领取钻石成功后的回调
-  const handleDiamondClaim = () => {
-    loadDiamonds();
-    loadUserData();
-  };
-
-  const handleLogout = async () => {
+  const handleSaveSettings = async () => {
+    setSaving(true);
     try {
-      await auth.signOut();
-      localStorage.removeItem('token');
-      navigate('/');
+      await authApi.updateSettings(settings);
+      toast.success('设置已保存');
+      // 应用主题
+      if (settings.theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (settings.theme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
     } catch (error) {
-      console.error('登出失败:', error);
+      toast.error('保存设置失败');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const getAvatarFrameClass = () => {
-    switch (userData?.equippedItems?.avatarFrame) {
-      case 'gold':
-        return 'ring-4 ring-amber-400 ring-offset-2';
-      case 'silver':
-        return 'ring-4 ring-gray-300 ring-offset-2';
-      case 'rainbow':
-        return 'ring-4 ring-purple-400 ring-pink-400 ring-offset-2 animate-pulse';
-      default:
-        return '';
-    }
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '未知';
+    return new Date(dateStr).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-gray-400">加载中...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-gray-400 dark:text-gray-500">加载中...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-gray-400 dark:text-gray-500">用户不存在</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* 头部 */}
-      <div className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
+      <div className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white sticky top-0 z-10 shadow-md">
         <div className="px-4 py-3 flex items-center">
           <button
-            onClick={() => navigate('/chat')}
+            onClick={() => navigate(-1)}
             className="mr-3 p-1 hover:bg-white/20 rounded-full transition"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1">个人中心</h1>
-          <button
-            onClick={refreshAll}
-            disabled={refreshing}
-            className="p-1 hover:bg-white/20 rounded-full transition"
-            title="刷新"
-          >
-            <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+          <h1 className="text-xl font-bold flex-1">个人资料</h1>
         </div>
+      </div>
 
-        {/* 用户信息卡片 */}
-        <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className={`w-20 h-20 rounded-full overflow-hidden ${getAvatarFrameClass()}`}>
-                <img 
-                  src={userData?.avatar || `https://ui-avatars.com/api/?name=${user?.email?.charAt(0) || 'U'}&background=3b82f6&color=fff&size=80`}
-                  alt="avatar"
-                  className="w-full h-full object-cover"
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* 头像卡片 */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+          <div className="flex flex-col items-center">
+            <div 
+              className="relative group cursor-pointer"
+              onClick={() => setShowAvatarUpload(true)}
+            >
+              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white dark:border-gray-700 shadow-lg">
+                <img
+                  src={user.avatar || `https://ui-avatars.com/api/?name=${user.displayName || user.username}&background=3b82f6&color=fff&size=112`}
+                  alt="头像"
+                  className="w-full h-full object-cover group-hover:opacity-80 transition"
                 />
               </div>
-              {userData?.equippedItems?.ring && (
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center border-2 border-white shadow-md">
-                  💍
-                </div>
-              )}
+              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
             </div>
-
-            <div className="flex-1">
-              <h2 className="text-xl font-bold">{userData?.username || user?.email?.split('@')[0] || '用户'}</h2>
-              <p className="text-sm opacity-90">{user?.email}</p>
-              <p className="text-xs opacity-75 mt-1">UID: {user?.uid?.slice(0, 8)}</p>
-            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">点击更换头像</p>
           </div>
         </div>
 
-        {/* 快捷入口 - 手机版适配 */}
-        <div className="flex px-4 pb-4 gap-2 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
-              activeTab === 'profile' 
-                ? 'bg-white text-blue-600 shadow-md' 
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            我的资料
-          </button>
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
-              activeTab === 'inventory' 
-                ? 'bg-white text-blue-600 shadow-md' 
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            我的背包
-          </button>
-          <button
-            onClick={() => setActiveTab('achievements')}
-            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
-              activeTab === 'achievements' 
-                ? 'bg-white text-blue-600 shadow-md' 
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            成就
-          </button>
-          <button
-            onClick={() => setActiveTab('daily')}
-            className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
-              activeTab === 'daily' 
-                ? 'bg-white text-blue-600 shadow-md' 
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            💎 每日
-          </button>
-        </div>
-      </div>
-
-      {/* 内容区域 */}
-      <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
-        {/* 我的资料 */}
-        {activeTab === 'profile' && (
-          <>
-            {/* 钻石卡片 */}
-            <div className="bg-white rounded-2xl shadow p-5 mb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">我的钻石</p>
-                  <div className="flex items-center gap-2">
-                    <svg className="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-                    </svg>
-                    <p className="text-3xl font-bold text-blue-600">
-                      {diamonds.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
+        {/* 基本信息卡片 */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">基本信息</h2>
+            {!isEditing ? (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="text-sm text-blue-500 hover:text-blue-600 transition"
+              >
+                编辑
+              </button>
+            ) : (
+              <div className="flex gap-2">
                 <button
-                  onClick={() => setActiveTab('daily')}
-                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-cyan-600 transition shadow-md flex items-center gap-1"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setDisplayName(user.displayName || user.username);
+                  }}
+                  className="text-sm text-gray-500 hover:text-gray-600 transition"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  每日领取
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  className="text-sm text-blue-500 hover:text-blue-600 transition disabled:opacity-50"
+                >
+                  {saving ? '保存中...' : '保存'}
                 </button>
               </div>
-              <div className="flex gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
-                <span>连续登录可获得更多钻石</span>
-                <span className="text-blue-500 font-medium">最高20/天</span>
-              </div>
-            </div>
+            )}
+          </div>
 
-            {/* 当前装备 */}
-            <div className="bg-white rounded-2xl shadow p-5 mb-4">
-              <h3 className="font-medium text-gray-800 mb-3">当前装备</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
-                  <div className={`w-16 h-16 mx-auto rounded-xl flex items-center justify-center mb-1 ${
-                    userData?.equippedItems?.avatarFrame ? 'bg-purple-100' : 'bg-gray-100'
-                  }`}>
-                    <span className="text-2xl">🖼️</span>
-                  </div>
-                  <p className="text-xs text-gray-600">头像框</p>
-                  {userData?.equippedItems?.avatarFrame && (
-                    <p className="text-xs text-blue-500 font-medium">已装备</p>
-                  )}
-                </div>
-                <div className="text-center">
-                  <div className={`w-16 h-16 mx-auto rounded-xl flex items-center justify-center mb-1 ${
-                    userData?.equippedItems?.ring ? 'bg-pink-100' : 'bg-gray-100'
-                  }`}>
-                    <span className="text-2xl">💍</span>
-                  </div>
-                  <p className="text-xs text-gray-600">戒指</p>
-                  {userData?.equippedItems?.ring && (
-                    <p className="text-xs text-blue-500 font-medium">已佩戴</p>
-                  )}
-                </div>
-                <div className="text-center">
-                  <div className={`w-16 h-16 mx-auto rounded-xl flex items-center justify-center mb-1 ${
-                    userData?.equippedItems?.relationshipCard ? 'bg-blue-100' : 'bg-gray-100'
-                  }`}>
-                    <span className="text-2xl">💌</span>
-                  </div>
-                  <p className="text-xs text-gray-600">关系卡</p>
-                  {userData?.equippedItems?.relationshipCard && (
-                    <p className="text-xs text-blue-500 font-medium">已使用</p>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => navigate('/shop')}
-                className="w-full mt-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2.5 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-cyan-600 transition shadow-md"
-              >
-                前往商城
-              </button>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-gray-500 dark:text-gray-400">用户名</span>
+              <span className="text-gray-800 dark:text-gray-200">{user.username}</span>
             </div>
-
-            {/* 更新日志入口 */}
-            <div className="bg-white rounded-2xl shadow p-5 mb-4">
-              <button
-                onClick={() => navigate('/changelog')}
-                className="w-full flex items-center justify-between py-2 text-gray-600 hover:text-blue-600 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>更新日志</span>
-                </div>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+            <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-gray-500 dark:text-gray-400">昵称</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="px-2 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+              ) : (
+                <span className="text-gray-800 dark:text-gray-200">{user.displayName || user.username}</span>
+              )}
             </div>
-
-            {/* 统计数据 */}
-            <div className="bg-white rounded-2xl shadow p-5">
-              <h3 className="font-medium text-gray-800 mb-3">统计</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">加入天数</span>
-                  <span className="font-medium text-gray-700">
-                    {Math.floor((Date.now() - new Date(userData?.createdAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24))}天
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">连续登录</span>
-                  <span className="font-medium text-blue-600">{userData?.dailyDiamondStreak || 0}天</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">累计钻石</span>
-                  <span className="font-medium text-blue-600">{diamonds.toLocaleString()}</span>
-                </div>
-              </div>
+            <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-gray-500 dark:text-gray-400">邮箱</span>
+              <span className="text-gray-800 dark:text-gray-200">{user.email || '未绑定'}</span>
             </div>
-          </>
-        )}
+            <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-gray-500 dark:text-gray-400">角色权限</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                user.role === 'owner' ? 'bg-red-100 text-red-600' :
+                user.role === 'admin' ? 'bg-purple-100 text-purple-600' :
+                'bg-gray-100 text-gray-600'
+              }`}>
+                {user.role === 'owner' ? '超级管理员' : user.role === 'admin' ? '管理员' : '普通用户'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-gray-500 dark:text-gray-400">注册时间</span>
+              <span className="text-gray-800 dark:text-gray-200">{formatDate(user.createdAt)}</span>
+            </div>
+          </div>
+        </div>
 
-        {/* 我的背包 */}
-        {activeTab === 'inventory' && (
-          <div className="bg-white rounded-2xl shadow p-5">
-            <h3 className="font-medium text-gray-800 mb-4">我的背包</h3>
-            
-            <div className="space-y-4">
+        {/* 统计数据卡片 */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">统计数据</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{user.stats?.totalMessages || 0}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">发送消息</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{user.stats?.totalRooms || 0}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">加入群聊</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{user.stats?.totalPersonas || 0}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">拥有角色</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 资产卡片 */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">资产</h2>
+          <div className="flex gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">💎</span>
               <div>
-                <h4 className="text-sm text-gray-500 mb-2">头像框</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="p-2 bg-gray-50 rounded-xl text-center">
-                    <div className="w-12 h-12 mx-auto bg-amber-100 rounded-lg flex items-center justify-center mb-1">
-                      🥇
-                    </div>
-                    <p className="text-xs text-gray-600">金色边框</p>
-                    {userData?.equippedItems?.avatarFrame === 'gold' && (
-                      <p className="text-xs text-blue-500">已装备</p>
-                    )}
-                  </div>
-                  <div className="p-2 bg-gray-50 rounded-xl text-center opacity-50">
-                    <div className="w-12 h-12 mx-auto bg-gray-100 rounded-lg flex items-center justify-center mb-1">
-                      🥈
-                    </div>
-                    <p className="text-xs text-gray-600">银色边框</p>
-                    <p className="text-xs text-gray-400">未获得</p>
-                  </div>
-                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">钻石</p>
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{user.diamonds || 0}</p>
               </div>
-
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🪙</span>
               <div>
-                <h4 className="text-sm text-gray-500 mb-2">戒指</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="p-2 bg-gray-50 rounded-xl text-center">
-                    <div className="w-12 h-12 mx-auto bg-pink-100 rounded-lg flex items-center justify-center mb-1">
-                      💎
-                    </div>
-                    <p className="text-xs text-gray-600">钻石戒指</p>
-                    {userData?.equippedItems?.ring && (
-                      <p className="text-xs text-blue-500">已佩戴</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-sm text-gray-500 mb-2">关系卡</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="p-2 bg-gray-50 rounded-xl text-center">
-                    <div className="w-12 h-12 mx-auto bg-blue-100 rounded-lg flex items-center justify-center mb-1">
-                      💘
-                    </div>
-                    <p className="text-xs text-gray-600">灵魂伴侣</p>
-                    {userData?.equippedItems?.relationshipCard && (
-                      <p className="text-xs text-blue-500">已使用</p>
-                    )}
-                  </div>
-                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">金币</p>
+                <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{user.coins || 0}</p>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* 成就 */}
-        {activeTab === 'achievements' && (
-          <div className="bg-white rounded-2xl shadow p-5">
-            <h3 className="font-medium text-gray-800 mb-4">成就</h3>
-            
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  🗣️
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-sm text-gray-800">聊天达人</p>
-                  <p className="text-xs text-gray-400">累计发言100条</p>
-                </div>
-                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">已完成</span>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                  🎭
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-sm text-gray-800">角色收藏家</p>
-                  <p className="text-xs text-gray-400">拥有2个角色</p>
-                </div>
-                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">已完成</span>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  🔥
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-sm text-gray-800">连续登录</p>
-                  <p className="text-xs text-gray-400">连续登录7天</p>
-                </div>
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{userData?.dailyDiamondStreak || 0}/7</span>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl opacity-50">
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                  💎
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-sm text-gray-800">钻石收藏家</p>
-                  <p className="text-xs text-gray-400">累计获得1000钻石</p>
-                </div>
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
-                  {Math.min(100, Math.floor((diamonds / 1000) * 100))}%
-                </span>
-              </div>
+        {/* 设置卡片 */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700 dark:text-gray-300">深色模式</span>
+              <select
+                value={settings.theme}
+                onChange={(e) => setSettings({ ...settings, theme: e.target.value as 'light' | 'dark' | 'auto' })}
+                className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="auto">跟随系统</option>
+                <option value="light">浅色</option>
+                <option value="dark">深色</option>
+              </select>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700 dark:text-gray-300">消息通知</span>
+              <button
+                onClick={() => setSettings({ ...settings, notifications: !settings.notifications })}
+                className={`w-10 h-5 rounded-full transition ${settings.notifications ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.notifications ? 'translate-x-5' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700 dark:text-gray-300">音效</span>
+              <button
+                onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })}
+                className={`w-10 h-5 rounded-full transition ${settings.soundEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.soundEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-700 dark:text-gray-300">默认翻译</span>
+              <select
+                value={settings.defaultTranslate}
+                onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
+                className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="off">不翻译</option>
+                <option value="simplified">转为简体</option>
+                <option value="traditional">转为繁体</option>
+              </select>
             </div>
           </div>
-        )}
+          <button
+            onClick={handleSaveSettings}
+            disabled={saving}
+            className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md"
+          >
+            {saving ? '保存中...' : '保存设置'}
+          </button>
+        </div>
 
-        {/* 每日钻石 */}
-        {activeTab === 'daily' && (
-          <DailyDiamond onClaimSuccess={handleDiamondClaim} />
-        )}
-      </div>
-
-      {/* 底部按钮 */}
-      <div className={`${isMobile ? 'p-3' : 'p-4'} pb-8`}>
+        {/* 退出登录按钮 */}
         <button
-          onClick={handleLogout}
-          className="w-full py-3 text-red-600 bg-white rounded-xl shadow hover:bg-red-50 transition border border-red-100 font-medium"
+          onClick={async () => {
+            if (confirm('确定要退出登录吗？')) {
+              localStorage.removeItem('token');
+              await auth.signOut();
+              navigate('/');
+            }
+          }}
+          className="w-full bg-red-500 text-white py-3 rounded-xl font-medium hover:bg-red-600 transition shadow-md"
         >
           退出登录
         </button>
+
+        <div className="h-4" />
       </div>
+
+      {/* 头像上传弹窗 */}
+      <AnimatePresence>
+        {showAvatarUpload && (
+          <AvatarUpload
+            currentAvatar={user.avatar}
+            onUpload={(url) => {
+              setUser(prev => prev ? { ...prev, avatar: url } : prev);
+              toast.success('头像已更新');
+            }}
+            onClose={() => setShowAvatarUpload(false)}
+            title="更换头像"
+            type="user"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
