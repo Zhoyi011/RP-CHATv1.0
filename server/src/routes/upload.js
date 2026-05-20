@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Persona = require('../models/Persona');
-const { upload, deleteOldAvatar } = require('../services/uploadService');
+const { upload, uploadToCloudinary, deleteOldAvatar } = require('../services/uploadService');
 
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -34,7 +34,12 @@ router.post('/user', authMiddleware, upload.single('avatar'), async (req, res) =
       await deleteOldAvatar(user.avatar);
     }
     
-    user.avatar = req.file.path;
+    // 上传到 Cloudinary
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const publicId = `user-${req.userId}-${uniqueSuffix}`;
+    const result = await uploadToCloudinary(req.file.buffer, 'rp-chat/avatars', publicId);
+    
+    user.avatar = result.secure_url;
     await user.save();
     
     res.json({ 
@@ -88,7 +93,12 @@ router.post('/persona/:personaId', authMiddleware, upload.single('avatar'), asyn
       await deleteOldAvatar(persona.avatar);
     }
     
-    persona.avatar = req.file.path;
+    // 上传到 Cloudinary
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const publicId = `persona-${personaId}-${uniqueSuffix}`;
+    const result = await uploadToCloudinary(req.file.buffer, 'rp-chat/avatars', publicId);
+    
+    persona.avatar = result.secure_url;
     await persona.save();
     
     res.json({ 
