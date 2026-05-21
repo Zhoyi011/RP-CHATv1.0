@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../../firebase/config';
 import { authApi, type User, type Persona } from '../../services/api';
@@ -75,25 +75,33 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
+  // 刷新当前角色
+  const refreshCurrentPersona = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.activePersona) {
+        setCurrentPersona(data.activePersona.personaId);
+      }
+    } catch (error) {
+      console.error('刷新角色失败:', error);
+    }
+  }, []);
+
   // 获取当前激活的角色
   useEffect(() => {
-    const fetchCurrentPersona = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        if (data.activePersona) {
-          setCurrentPersona(data.activePersona.personaId);
-        }
-      } catch (error) {
-        console.error('获取当前角色失败:', error);
-      }
+    refreshCurrentPersona();
+    
+    const handleStorageChange = () => {
+      refreshCurrentPersona();
     };
-    fetchCurrentPersona();
-  }, []);
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [refreshCurrentPersona]);
 
   // 获取角色列表
   useEffect(() => {
@@ -115,17 +123,17 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     fetchPersonas();
   }, []);
 
-  // 切换角色
+  // 切换角色 - 不刷新页面
   const handleSwitchPersona = async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
       setCurrentPersona(persona);
       localStorage.setItem('lastUsedPersonaId', persona._id);
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
-      // 刷新页面以更新所有显示
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+      // 刷新页面数据但不重新加载
+      refreshCurrentPersona();
+      // 可选：触发自定义事件通知其他组件
+      window.dispatchEvent(new Event('personaSwitched'));
     } catch (error) {
       toast.error('切换失败');
     }
@@ -172,6 +180,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     try {
       await auth.signOut();
       localStorage.removeItem('token');
+      localStorage.removeItem('lastUsedPersonaId');
       navigate('/');
     } catch (error) {
       console.error('登出失败:', error);
@@ -254,7 +263,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           ))}
         </nav>
 
-        {/* 底部区域 - 只保留更新日志和角色切换 */}
+        {/* 底部区域 */}
         <div className="border-t border-gray-100 p-3 space-y-2">
           {/* 更新日志 */}
           <button
@@ -268,7 +277,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
             {!collapsed && <span className="text-sm">更新日志</span>}
           </button>
 
-          {/* 角色切换区域 - 只有这里 */}
+          {/* 角色切换区域 */}
           <div className="relative" ref={personaMenuRef}>
             <button
               onClick={() => setShowPersonaMenu(!showPersonaMenu)}
@@ -303,6 +312,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
                 onSelect={handleSwitchPersona}
                 onClose={() => setShowPersonaMenu(false)}
                 position="top"
+                align="left"
               />
             )}
           </div>
@@ -311,7 +321,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
 
       {/* 主内容区 */}
       <main className="flex-1 overflow-hidden bg-gray-50/50 flex flex-col">
-        {/* 顶部栏 - 添加设置按钮 */}
+        {/* 顶部栏 */}
         <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
           <div className="text-sm text-gray-500">
             {location.pathname === '/chat' ? '聊天' : 
@@ -330,7 +340,6 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
               

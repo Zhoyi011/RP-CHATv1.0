@@ -8,6 +8,7 @@ interface Props {
   onSelect: (persona: Persona) => void;
   onClose: () => void;
   position?: 'top' | 'bottom' | 'left' | 'right';
+  align?: 'left' | 'right';
 }
 
 const PersonaSwitchPanel: React.FC<Props> = ({ 
@@ -15,7 +16,8 @@ const PersonaSwitchPanel: React.FC<Props> = ({
   currentPersona, 
   onSelect, 
   onClose,
-  position = 'bottom'
+  position = 'bottom',
+  align = 'left'
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [recentPersonas, setRecentPersonas] = useState<string[]>([]);
@@ -50,13 +52,16 @@ const PersonaSwitchPanel: React.FC<Props> = ({
   });
 
   const getPositionClasses = () => {
-    switch (position) {
-      case 'top': return 'bottom-full mb-2';
-      case 'bottom': return 'top-full mt-2';
-      case 'left': return 'right-full mr-2';
-      case 'right': return 'left-full ml-2';
-      default: return 'top-full mt-2';
-    }
+    const positionClasses = {
+      top: 'bottom-full mb-2',
+      bottom: 'top-full mt-2',
+      left: 'right-full mr-2',
+      right: 'left-full ml-2',
+    };
+    
+    const alignClass = align === 'right' ? 'right-0' : 'left-0';
+    
+    return `${positionClasses[position]} ${alignClass}`;
   };
 
   return (
@@ -64,7 +69,7 @@ const PersonaSwitchPanel: React.FC<Props> = ({
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.95 }}
-      className={`absolute ${getPositionClasses()} left-0 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden`}
+      className={`absolute ${getPositionClasses()} w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden`}
     >
       {/* 头部 */}
       <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">

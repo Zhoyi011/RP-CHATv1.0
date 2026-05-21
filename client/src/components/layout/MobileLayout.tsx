@@ -31,6 +31,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
   const user = auth.currentUser;
   const { isKeyboardOpen } = useKeyboardHeight();
 
+  // 底部 Tab 配置
   const tabs: TabItem[] = [
     {
       name: '聊天',
@@ -42,20 +43,20 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
       ),
     },
     {
-      name: '角色',
-      path: '/persona',
+      name: '动态',
+      path: '/feed',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
         </svg>
       ),
     },
     {
-      name: '搜索',
-      path: '/search',
+      name: '主页',
+      path: '/home',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
         </svg>
       ),
     },
@@ -75,25 +76,27 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
+  // 刷新当前角色
+  const refreshCurrentPersona = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.activePersona) {
+        setCurrentPersona(data.activePersona.personaId);
+      }
+    } catch (error) {
+      console.error('刷新角色失败:', error);
+    }
+  }, []);
+
   // 获取当前激活的角色
   useEffect(() => {
-    const fetchCurrentPersona = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/active-persona', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        if (data.activePersona) {
-          setCurrentPersona(data.activePersona.personaId);
-        }
-      } catch (error) {
-        console.error('获取当前角色失败:', error);
-      }
-    };
-    fetchCurrentPersona();
-  }, []);
+    refreshCurrentPersona();
+  }, [refreshCurrentPersona]);
 
   // 获取角色列表
   useEffect(() => {
@@ -115,14 +118,15 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     fetchPersonas();
   }, []);
 
-  // 切换角色
+  // 切换角色 - 不刷新页面
   const handleSwitchPersona = async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
       setCurrentPersona(persona);
       localStorage.setItem('lastUsedPersonaId', persona._id);
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
-      window.location.reload();
+      refreshCurrentPersona();
+      window.dispatchEvent(new Event('personaSwitched'));
     } catch (error) {
       toast.error('切换失败');
     }
@@ -162,10 +166,14 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     return () => clearInterval(interval);
   }, [user]);
 
+  // 根据路径设置当前 Tab
   useEffect(() => {
-    const currentTab = tabs.find(tab => location.pathname.startsWith(tab.path));
-    if (currentTab) {
-      setActiveTab(currentTab.name.toLowerCase());
+    if (location.pathname === '/chat' || location.pathname.startsWith('/chat?')) {
+      setActiveTab('chat');
+    } else if (location.pathname === '/feed') {
+      setActiveTab('feed');
+    } else if (location.pathname === '/home') {
+      setActiveTab('home');
     }
   }, [location.pathname]);
 
@@ -178,6 +186,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
     try {
       await auth.signOut();
       localStorage.removeItem('token');
+      localStorage.removeItem('lastUsedPersonaId');
       navigate('/');
     } catch (error) {
       console.error('登出失败:', error);
@@ -207,7 +216,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
             </svg>
           </button>
 
-          {/* 当前角色头像 - 点击切换角色 */}
+          {/* 当前角色头像 - 点击切换角色（右对齐） */}
           <div className="relative" ref={switchPanelRef}>
             <button
               onClick={() => setShowSwitchPanel(!showSwitchPanel)}
@@ -226,6 +235,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
                 onSelect={handleSwitchPersona}
                 onClose={() => setShowSwitchPanel(false)}
                 position="bottom"
+                align="right"
               />
             )}
           </div>
