@@ -1,9 +1,14 @@
 // API 基础配置
+import toast from 'react-hot-toast';
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 const getToken = (): string | null => {
   return localStorage.getItem('token');
 };
+
+// 全局跳转标志，防止重复跳转
+let isRedirecting = false;
 
 async function request<T>(
   endpoint: string,
@@ -17,19 +22,54 @@ async function request<T>(
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: 'include', // 允许携带 cookie
-  });
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
 
-  const data = await response.json();
+    // 处理 401 未授权错误
+    if (response.status === 401) {
+      console.warn('⚠️ token 无效或已过期，正在跳转登录页...');
+      
+      // 清除本地存储
+      localStorage.removeItem('token');
+      localStorage.removeItem('lastUsedPersonaId');
+      
+      // 防止重复跳转
+      if (!isRedirecting && typeof window !== 'undefined') {
+        isRedirecting = true;
+        
+        // 显示提示
+        toast.error('登录已过期，请重新登录');
+        
+        // 延迟跳转
+        setTimeout(() => {
+          window.location.href = '/';
+          isRedirecting = false;
+        }, 1500);
+      }
+      
+      throw new Error('登录已过期，请重新登录');
+    }
 
-  if (!response.ok) {
-    throw new Error(data.error || '请求失败');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || '请求失败');
+    }
+
+    return data as T;
+  } catch (error) {
+    // 网络错误处理
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.error('网络错误，请检查网络连接');
+      toast.error('网络连接失败，请检查网络');
+      throw new Error('网络连接失败');
+    }
+    throw error;
   }
-
-  return data as T;
 }
 
 // ========== 类型定义 ==========
@@ -59,6 +99,8 @@ export interface User {
   lastLogin?: string;
   loginStreak?: number;
   dailyDiamondStreak?: number;
+  birthday?: string | null;
+  zodiac?: string;
   equippedItems?: {
     avatarFrame?: string;
     ring?: string;
@@ -69,8 +111,6 @@ export interface User {
     totalRooms: number;
     totalPersonas: number;
   };
-  birthday?: string | null;
-  zodiac?: string;
 }
 
 export interface UserSettings {
@@ -116,7 +156,7 @@ export interface ReplyToInfo {
   isDeleted: boolean;
 }
 
-// ========== 消息类型（完整版）==========
+// ========== 消息类型 ==========
 export interface Message {
   _id: string;
   content: string;
@@ -280,10 +320,11 @@ export const personaApi = {
     request<{ posts: any[]; total: number; page: number; totalPages: number }>(
       `/persona/${personaId}/posts?page=${page}&limit=${limit}`
     ),
+    
   likePost: (personaId: string, postId: string) =>
-  request<{ message: string; isLiked: boolean; likeCount: number }>(`/persona/${personaId}/posts/${postId}/like`, {
-    method: 'POST',
-  }),
+    request<{ message: string; isLiked: boolean; likeCount: number }>(`/persona/${personaId}/posts/${postId}/like`, {
+      method: 'POST',
+    }),
 };
 
 // ========== 聊天室 API ==========
@@ -299,11 +340,9 @@ export const roomApi = {
   getMessages: (roomId: string) =>
     request<Message[]>(`/room/${roomId}/messages`),
     
-  // 获取消息（支持分页）
   getMessagesWithLimit: (roomId: string, limit = 50, before?: string) =>
     request<Message[]>(`/room/${roomId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
     
-  // 发送消息（支持回复）
   sendMessageWithReply: (roomId: string, content: string, personaId: string, replyToId?: string) =>
     request<{ success: boolean; message: any }>(`/room/${roomId}/messages`, {
       method: 'POST',
@@ -327,14 +366,12 @@ export const roomApi = {
       method: 'POST',
     }),
     
-  // 撤回消息
   recallMessage: (messageId: string) =>
     request<{ success: boolean }>('/room/message/recall', {
       method: 'POST',
       body: JSON.stringify({ messageId }),
     }),
     
-  // 删除消息（软删除，仅自己不可见）
   deleteMessage: (messageId: string) =>
     request<{ success: boolean }>('/room/message/delete', {
       method: 'POST',
@@ -355,10 +392,10 @@ export const adminApi = {
   getInviteCodes: () => request<any[]>('/auth/admin/invite-codes'),
   
   generateInviteCode: (customCode?: string, type?: 'user' | 'admin') =>
-  request<{ message: string; code: string; type: string; expiresAt: string }>('/auth/admin/create-invite', {
-    method: 'POST',
-    body: JSON.stringify({ customCode, type: type || 'user' }),
-  }),
+    request<{ message: string; code: string; type: string; expiresAt: string }>('/auth/admin/create-invite', {
+      method: 'POST',
+      body: JSON.stringify({ customCode, type: type || 'user' }),
+    }),
     
   deleteInviteCode: (codeId: string) =>
     request<{ message: string }>(`/auth/admin/invite-codes/${codeId}`, {
