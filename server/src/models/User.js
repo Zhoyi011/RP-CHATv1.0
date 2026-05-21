@@ -335,5 +335,5 @@ userSchema.methods.toSafeObject = function() {
     inventory: this.inventory || [],
     achievements: this.achievements || []
   };
-
-module.exports = mongoose.model('User', userSchema)};
+};
+module.exports = mongoose.model('User', userSchema);
