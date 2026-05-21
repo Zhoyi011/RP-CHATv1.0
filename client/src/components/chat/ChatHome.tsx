@@ -430,7 +430,6 @@ const ChatHome = () => {
         }
       }
     }
-    // 没有上次使用的，用第一个角色
     if (personasList.length > 0 && !selectedPersona) {
       try {
         await roomApi.setActivePersona(personasList[0]._id);
@@ -620,7 +619,6 @@ const ChatHome = () => {
         const approved = personasData.filter((p: Persona) => p.status === 'approved');
         setPersonas(approved);
         
-        // 加载上次使用的角色
         if (approved.length > 0) {
           await loadLastUsedPersona(approved);
         }
@@ -851,12 +849,15 @@ const ChatHome = () => {
 
   const renderChatList = () => (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
+      {/* 头部搜索 */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2.5 flex items-center text-gray-400">
           <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <input type="text" placeholder="搜索聊天" className="bg-transparent flex-1 outline-none text-gray-600 dark:text-gray-300 placeholder-gray-400 text-sm" />
         </div>
       </div>
+      
+      {/* 创建聊天室按钮 */}
       <div className="px-4 py-2 flex-shrink-0">
         <button onClick={() => setShowCreateRoom(true)} className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2.5 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition flex items-center justify-center gap-2 shadow-md text-sm font-medium">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>创建新聊天室
@@ -887,8 +888,6 @@ const ChatHome = () => {
           {showUserList && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full" />}
         </button>
       </div>
-      
-      {/* 已删除「当前角色：XXX」那一行 */}
       
       {/* 聊天列表 */}
       <div className="flex-1 overflow-y-auto">
@@ -960,50 +959,6 @@ const ChatHome = () => {
             ))
           )}
       </div>
-
-      {/* 左下角 - 当前角色信息 */}
-      <div className="border-t border-gray-100 dark:border-gray-800 p-3 flex-shrink-0 bg-white dark:bg-gray-900">
-        <div className="relative" ref={personaSwitchPanelRef}>
-          <button
-            onClick={() => setShowPersonaQuickSwitch(!showPersonaQuickSwitch)}
-            className="w-full flex items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl p-2 transition -m-2"
-          >
-            {/* 角色头像 */}
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md">
-                {selectedPersona?.name?.charAt(0).toUpperCase() || '?'}
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-            </div>
-            
-            {/* 角色信息 */}
-            <div className="flex-1 text-left min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                {selectedPersona?.displayName || selectedPersona?.name || '未选择角色'}
-              </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                点击切换角色
-              </p>
-            </div>
-            
-            {/* 切换箭头 */}
-            <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPersonaQuickSwitch ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* 切换面板 */}
-          {showPersonaQuickSwitch && (
-            <PersonaSwitchPanel
-              personas={personas}
-              currentPersona={selectedPersona}
-              onSelect={handleSelectPersona}
-              onClose={() => setShowPersonaQuickSwitch(false)}
-              position="top"
-            />
-          )}
-        </div>
-      </div>
     </div>
   );
 
@@ -1031,6 +986,7 @@ const ChatHome = () => {
     
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        {/* 群聊头部 */}
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
           {isMobile && <button onClick={handleBackToList} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"><svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1055,6 +1011,7 @@ const ChatHome = () => {
           </div>
         </div>
 
+        {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-inherit">
           <MessageList 
             messages={messages} 
@@ -1069,6 +1026,7 @@ const ChatHome = () => {
           />
         </div>
 
+        {/* 回复预览 */}
         {replyToMessage && (
           <div className="px-4">
             <ReplyPreviewBar
@@ -1083,6 +1041,7 @@ const ChatHome = () => {
           </div>
         )}
 
+        {/* 输入框 */}
         <ChatInput
           onSendMessage={handleSendMessage}
           disabled={!selectedRoom}

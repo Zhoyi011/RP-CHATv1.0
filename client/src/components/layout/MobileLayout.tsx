@@ -18,17 +18,10 @@ interface TabItem {
   icon: React.ReactNode;
 }
 
-interface CurrentPersona {
-  _id: string;
-  name: string;
-  displayName?: string;
-  avatar?: string;
-}
-
 const MobileLayout: React.FC<Props> = ({ children }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [userData, setUserData] = useState<User | null>(null);
-  const [currentPersona, setCurrentPersona] = useState<CurrentPersona | null>(null);
+  const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showSwitchPanel, setShowSwitchPanel] = useState(false);
@@ -93,7 +86,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
         });
         const data = await response.json();
         if (data.activePersona) {
-          setCurrentPersona(data.activePersona);
+          setCurrentPersona(data.activePersona.personaId);
         }
       } catch (error) {
         console.error('获取当前角色失败:', error);
@@ -126,12 +119,7 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
   const handleSwitchPersona = async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
-      setCurrentPersona({
-        _id: persona._id,
-        name: persona.name,
-        displayName: persona.displayName,
-        avatar: persona.avatar
-      });
+      setCurrentPersona(persona);
       localStorage.setItem('lastUsedPersonaId', persona._id);
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
       window.location.reload();
