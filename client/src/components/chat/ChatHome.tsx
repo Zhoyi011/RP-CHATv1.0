@@ -145,38 +145,45 @@ const MessageBubble: React.FC<{
           </div>
         )}
         
-        <div className="flex items-end gap-2">
-          <div
-            {...longPressProps}
-            className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
-              isSelf 
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
-                : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
-            }`}
-          >
-            {message.replyTo && (
-              <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center gap-1 mb-1">
-                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
-                </div>
-                <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                  {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
-                </p>
-              </div>
-            )}
-            
-            <div className="break-words whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} />
-            {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
-            
-            <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
-              <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
-                {formatBubbleTime(new Date(message.createdAt))}
-              </span>
-            </div>
-          </div>
+        <div
+  {...longPressProps}
+  className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
+    isSelf 
+      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
+      : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
+  }`}
+>
+  {message.replyTo && (
+    <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-1 mb-1">
+        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        </svg>
+        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
+      </div>
+      <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+        {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
+      </p>
+    </div>
+  )}
+  
+  {/* ✅ 修改这里：链接颜色 */}
+  <div 
+    className={`break-words whitespace-pre-wrap ${
+      isSelf 
+        ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
+        : '[&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 [&_a]:break-all'
+    }`}
+    dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} 
+  />
+  
+  {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
+  
+  <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+    <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
+      {formatBubbleTime(new Date(message.createdAt))}
+    </span>
+  </div>
           
           <button
             onClick={() => onReply(message)}
@@ -415,31 +422,6 @@ const ChatHome = () => {
     localStorage.setItem('lastUsedPersonaId', personaId);
   }, []);
 
-  // 加载上次使用的角色
-  const loadLastUsedPersona = useCallback(async (personasList: Persona[]) => {
-    const lastUsedId = localStorage.getItem('lastUsedPersonaId');
-    if (lastUsedId) {
-      const lastUsed = personasList.find(p => p._id === lastUsedId);
-      if (lastUsed) {
-        try {
-          await roomApi.setActivePersona(lastUsed._id);
-          setSelectedPersona(lastUsed);
-          return;
-        } catch (e) {
-          console.error('激活上次角色失败:', e);
-        }
-      }
-    }
-    if (personasList.length > 0 && !selectedPersona) {
-      try {
-        await roomApi.setActivePersona(personasList[0]._id);
-        setSelectedPersona(personasList[0]);
-      } catch (e) {
-        console.error('激活默认角色失败:', e);
-      }
-    }
-  }, [selectedPersona]);
-
   const loadAvailablePersonas = useCallback(async () => {
     if (!selectedRoom) return;
     try {
@@ -517,7 +499,6 @@ const ChatHome = () => {
     onSwitch: handleQuickSwitchPersona,
     shortcutKey: 'Tab'
   });
-
   const filteredPersonas = availablePersonas.filter(p =>
     (p.displayName || p.name).toLowerCase().includes(personaSearchTerm.toLowerCase())
   );
@@ -603,6 +584,7 @@ const ChatHome = () => {
     return () => unsubscribe();
   }, [navigate]);
 
+  // 加载数据
   useEffect(() => {
     if (!authChecked || !user) return;
     const loadData = async () => {
@@ -619,17 +601,44 @@ const ChatHome = () => {
         const approved = personasData.filter((p: Persona) => p.status === 'approved');
         setPersonas(approved);
         
-        if (approved.length > 0) {
-          await loadLastUsedPersona(approved);
-        }
-        
-        if (activePersonaRes.activePersona && !selectedPersona) {
+        // 恢复当前角色
+        if (activePersonaRes.activePersona) {
           setSelectedPersona(activePersonaRes.activePersona.personaId);
+        } else if (approved.length > 0) {
+          const lastUsedId = localStorage.getItem('lastUsedPersonaId');
+          if (lastUsedId) {
+            const lastUsed = approved.find(p => p._id === lastUsedId);
+            if (lastUsed) {
+              await roomApi.setActivePersona(lastUsed._id);
+              setSelectedPersona(lastUsed);
+            } else {
+              await roomApi.setActivePersona(approved[0]._id);
+              setSelectedPersona(approved[0]);
+            }
+          } else {
+            await roomApi.setActivePersona(approved[0]._id);
+            setSelectedPersona(approved[0]);
+          }
         }
       } catch (err: any) { setError(err.message || '加载失败'); } finally { setLoading(false); }
     };
     loadData();
-  }, [authChecked, user, loadLastUsedPersona]);
+  }, [authChecked, user]);
+
+  // 在 ChatHome 组件中添加这个 useEffect
+  useEffect(() => {
+    const handlePersonaChanged = (e: CustomEvent) => {
+      const newPersona = e.detail;
+      if (newPersona) {
+      setSelectedPersona(newPersona);
+      // 同时更新当前角色显示
+      setCurrentPersona(newPersona);
+    }
+  };
+  
+  window.addEventListener('personaChanged', handlePersonaChanged as EventListener);
+  return () => window.removeEventListener('personaChanged', handlePersonaChanged as EventListener);
+}, []);
 
   useEffect(() => {
     if (!selectedRoom || !selectedPersona) return;
@@ -735,16 +744,43 @@ const ChatHome = () => {
     return () => { socketService.leaveRoom(); };
   }, [selectedRoom, selectedPersona, user]);
 
+  // 选择房间
   const handleSelectRoom = useCallback(async (room: Room) => {
-    if (!selectedPersona) { toast.error('请先选择一个角色'); return; }
-    try { await roomApi.markRead(room._id); setRooms(prev => prev.map(r => r._id === room._id ? { ...r, unreadCount: 0 } : r)); } catch {}
+    let persona = selectedPersona;
+    
+    // 如果没有 selectedPersona，尝试从 localStorage 恢复
+    if (!persona) {
+      const lastUsedId = localStorage.getItem('lastUsedPersonaId');
+      if (lastUsedId && personas.length > 0) {
+        persona = personas.find(p => p._id === lastUsedId);
+        if (persona) {
+          try {
+            await roomApi.setActivePersona(persona._id);
+            setSelectedPersona(persona);
+          } catch (e) {
+            console.error('恢复角色失败:', e);
+          }
+        }
+      }
+    }
+    
+    if (!persona) { 
+      toast.error('请先选择一个角色'); 
+      return; 
+    }
+    
+    try { 
+      await roomApi.markRead(room._id); 
+      setRooms(prev => prev.map(r => r._id === room._id ? { ...r, unreadCount: 0 } : r)); 
+    } catch {}
+    
     setSelectedRoom(room);
     setSelectedUser(null);
     setShowUserList(false);
     setShowAIChat(false);
     setReplyToMessage(null);
     if (isMobile) setShowChatWindow(true);
-  }, [selectedPersona, isMobile]);
+  }, [selectedPersona, personas, isMobile]);
 
   const handleSelectUser = useCallback((targetUser: User) => {
     setSelectedUser(targetUser);
@@ -781,7 +817,6 @@ const ChatHome = () => {
     } catch {}
   }, [saveLastUsedPersona]);
 
-  // 发送消息（支持回复）
   const handleSendMessage = useCallback((content: string, isAction = false, personaId?: string) => {
     if (!selectedRoom || !user) { toast.error('请先选择聊天室'); return; }
     if (!content.trim()) return;
@@ -849,22 +884,18 @@ const ChatHome = () => {
 
   const renderChatList = () => (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-      {/* 头部搜索 */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
         <div className="bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2.5 flex items-center text-gray-400">
           <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <input type="text" placeholder="搜索聊天" className="bg-transparent flex-1 outline-none text-gray-600 dark:text-gray-300 placeholder-gray-400 text-sm" />
         </div>
       </div>
-      
-      {/* 创建聊天室按钮 */}
       <div className="px-4 py-2 flex-shrink-0">
         <button onClick={() => setShowCreateRoom(true)} className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2.5 rounded-xl hover:from-blue-600 hover:to-cyan-600 transition flex items-center justify-center gap-2 shadow-md text-sm font-medium">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>创建新聊天室
         </button>
       </div>
       
-      {/* Tab 切换：AI 对戏 / 群聊 / 私聊 */}
       <div className="flex border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <button 
           onClick={() => { setShowAIChat(true); setShowUserList(false); setSelectedRoom(null); setSelectedUser(null); setShowChatWindow(isMobile); }} 
@@ -965,17 +996,14 @@ const ChatHome = () => {
   const renderChatWindow = () => {
     if (isMobile && !showChatWindow) return null;
     
-    // AI 对戏
     if (showAIChat) {
       return <AIChatRoom onClose={isMobile ? handleBackToList : undefined} />;
     }
     
-    // 私聊
     if (selectedUser) {
       return <PrivateChat targetUser={selectedUser} onClose={handleBackToList} />;
     }
     
-    // 群聊
     if (!selectedRoom) {
       return (
         <div className="h-full flex items-center justify-center text-gray-400">
@@ -986,7 +1014,6 @@ const ChatHome = () => {
     
     return (
       <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        {/* 群聊头部 */}
         <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
           {isMobile && <button onClick={handleBackToList} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"><svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1011,7 +1038,6 @@ const ChatHome = () => {
           </div>
         </div>
 
-        {/* 消息列表 */}
         <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-inherit">
           <MessageList 
             messages={messages} 
@@ -1026,7 +1052,6 @@ const ChatHome = () => {
           />
         </div>
 
-        {/* 回复预览 */}
         {replyToMessage && (
           <div className="px-4">
             <ReplyPreviewBar
@@ -1041,7 +1066,6 @@ const ChatHome = () => {
           </div>
         )}
 
-        {/* 输入框 */}
         <ChatInput
           onSendMessage={handleSendMessage}
           disabled={!selectedRoom}
@@ -1050,7 +1074,7 @@ const ChatHome = () => {
           roomPersonas={roomPersonas}
           onSwitchPersona={handleSwitchRoomPersona}
           onLoadRoomPersonas={loadRoomPersonas}
-          placeholder="输入消息... 使用 /me 进行动作扮演，点击消息气泡上的回复按钮可引用回复"
+          placeholder="输入消息... "
         />
       </div>
     );

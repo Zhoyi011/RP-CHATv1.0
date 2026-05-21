@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import type { Persona } from '../services/api';
+import { roomApi } from '../services/api';
 
 console.log('🔧 [useQuickSwitchPersona] 加载快捷键切换角色Hook');
 
@@ -41,6 +42,25 @@ export const useQuickSwitchPersona = ({
     return personas[prevIndex];
   }, [personas, currentPersona]);
 
+  // 执行切换（包含 API 调用）
+  const performSwitch = useCallback(async (targetPersona: Persona) => {
+    if (!targetPersona || targetPersona._id === currentPersona?._id) return;
+    
+    try {
+      console.log(`⌨️ [useQuickSwitchPersona] 切换角色: ${targetPersona.displayName || targetPersona.name}`);
+      await roomApi.setActivePersona(targetPersona._id);
+      localStorage.setItem('lastUsedPersonaId', targetPersona._id);
+      
+      // 触发自定义事件，通知其他组件角色已切换
+      window.dispatchEvent(new CustomEvent('personaChanged', { detail: targetPersona }));
+      
+      // 调用传入的回调
+      onSwitch(targetPersona);
+    } catch (error) {
+      console.error('⌨️ [useQuickSwitchPersona] 切换失败:', error);
+    }
+  }, [currentPersona, onSwitch]);
+
   useEffect(() => {
     if (!canSwitch) {
       console.log(`⌨️ [useQuickSwitchPersona] 快捷键已禁用 (canSwitch=false)`);
@@ -48,13 +68,13 @@ export const useQuickSwitchPersona = ({
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Tab 键切换（不阻止默认行为可能会改变焦点）
+      // Tab 键切换
       if (e.key === shortcutKey && !e.shiftKey) {
         e.preventDefault();
         const nextPersona = getNextPersona();
         if (nextPersona && nextPersona._id !== currentPersona?._id) {
           console.log(`⌨️ [useQuickSwitchPersona] Tab 键切换到: ${nextPersona.displayName || nextPersona.name}`);
-          onSwitch(nextPersona);
+          performSwitch(nextPersona);
         }
       }
       
@@ -64,7 +84,7 @@ export const useQuickSwitchPersona = ({
         const prevPersona = getPrevPersona();
         if (prevPersona && prevPersona._id !== currentPersona?._id) {
           console.log(`⌨️ [useQuickSwitchPersona] Shift+Tab 切换到: ${prevPersona.displayName || prevPersona.name}`);
-          onSwitch(prevPersona);
+          performSwitch(prevPersona);
         }
       }
     };
@@ -76,7 +96,7 @@ export const useQuickSwitchPersona = ({
       window.removeEventListener('keydown', handleKeyDown);
       console.log(`🧹 [useQuickSwitchPersona] 已移除快捷键监听`);
     };
-  }, [canSwitch, shortcutKey, getNextPersona, getPrevPersona, currentPersona, onSwitch]);
+  }, [canSwitch, shortcutKey, getNextPersona, getPrevPersona, currentPersona, performSwitch]);
 
   return {
     getNextPersona,

@@ -85,7 +85,8 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
       });
       const data = await response.json();
       if (data.activePersona) {
-        setCurrentPersona(data.activePersona.personaId);
+        const persona = data.activePersona.personaId || data.activePersona;
+        setCurrentPersona(persona);
       }
     } catch (error) {
       console.error('刷新角色失败:', error);
@@ -96,11 +97,11 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
   useEffect(() => {
     refreshCurrentPersona();
     
-    const handleStorageChange = () => {
+    const handlePersonaChanged = () => {
       refreshCurrentPersona();
     };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('personaChanged', handlePersonaChanged);
+    return () => window.removeEventListener('personaChanged', handlePersonaChanged);
   }, [refreshCurrentPersona]);
 
   // 获取角色列表
@@ -123,17 +124,15 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     fetchPersonas();
   }, []);
 
-  // 切换角色 - 不刷新页面
+  // 切换角色
   const handleSwitchPersona = async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
       setCurrentPersona(persona);
       localStorage.setItem('lastUsedPersonaId', persona._id);
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
-      // 刷新页面数据但不重新加载
+      window.dispatchEvent(new CustomEvent('personaChanged', { detail: persona }));
       refreshCurrentPersona();
-      // 可选：触发自定义事件通知其他组件
-      window.dispatchEvent(new Event('personaSwitched'));
     } catch (error) {
       toast.error('切换失败');
     }
@@ -196,7 +195,13 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 关闭菜单的透明层 */}
       {(showPersonaMenu || showUserMenu) && (
-        <div className="fixed inset-0 z-20" onClick={() => { setShowPersonaMenu(false); setShowUserMenu(false); }} />
+        <div 
+          className="fixed inset-0 z-20" 
+          onClick={() => {
+            setShowPersonaMenu(false);
+            setShowUserMenu(false);
+          }} 
+        />
       )}
 
       {/* 侧边栏 */}
@@ -263,7 +268,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           ))}
         </nav>
 
-        {/* 底部区域 */}
+        {/* 底部区域 - 角色切换 + 用户菜单 */}
         <div className="border-t border-gray-100 p-3 space-y-2">
           {/* 更新日志 */}
           <button
@@ -278,11 +283,14 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           </button>
 
           {/* 角色切换区域 */}
-          <div className="relative" ref={personaMenuRef}>
-            <button
-              onClick={() => setShowPersonaMenu(!showPersonaMenu)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${collapsed ? 'justify-center' : ''}`}
-            >
+<div className="relative" ref={personaMenuRef}>
+  <button
+    onClick={() => setShowPersonaMenu(!showPersonaMenu)}
+    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 
+      hover:scale-[1.02] active:scale-[0.98]
+      hover:bg-gray-100 
+      ${collapsed ? 'justify-center' : ''}`}
+  >
               <div className="relative">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
                   {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
@@ -316,12 +324,112 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
               />
             )}
           </div>
+
+{/* 用户菜单区域 - 移到左下角 */}
+<div className="relative" ref={userMenuRef}>
+  <button
+    onClick={() => {
+      console.log('🔘 用户菜单按钮被点击');
+      setShowUserMenu(!showUserMenu);
+    }}
+    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 
+      hover:scale-[1.02] active:scale-[0.98]
+      hover:bg-gray-100 
+      ${collapsed ? 'justify-center' : ''}`}
+  >
+    <div className="relative">
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </div>
+    </div>
+    {!collapsed && (
+      <div className="flex-1 text-left min-w-0">
+        <p className="text-sm font-medium text-gray-700 truncate group-hover:text-blue-600 transition">
+          {userData?.username || '用户'}
+        </p>
+        <p className="text-xs text-gray-400 truncate">账号设置</p>
+      </div>
+    )}
+    {!collapsed && (
+      <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} 
+        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    )}
+  </button>
+
+  {/* 用户下拉菜单 */}
+  {showUserMenu && !collapsed && (
+    <div 
+      className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-[9999]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* 菜单内容保持不变 */}
+      <div className="px-4 py-3 border-b border-gray-100">
+        <p className="text-sm font-medium text-gray-800 truncate">{userData?.username || '用户'}</p>
+        <div className="flex items-center gap-1 mt-1">
+          <DiamondBalance size="sm" />
+        </div>
+      </div>
+
+      {/* 皮主页入口 */}
+      {currentPersona && (
+        <button
+          onClick={() => { 
+            console.log('🔘 皮主页按钮被点击');
+            navigate(`/persona/${currentPersona._id}`);
+            setShowUserMenu(false);
+          }}
+          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
+        >
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          皮主页
+        </button>
+      )}
+
+      {/* 账号设置 */}
+      <button
+        onClick={() => { 
+          console.log('🔘 账号设置按钮被点击');
+          navigate('/settings');
+          setShowUserMenu(false);
+        }}
+        className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
+      >
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        </svg>
+        账号设置
+      </button>
+
+      <div className="border-t border-gray-100 my-1"></div>
+
+      {/* 退出登录 */}
+      <button
+        onClick={() => { 
+          console.log('🔘 退出登录按钮被点击');
+          handleLogout();
+        }}
+        className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-all duration-150 hover:pl-5"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        退出登录
+      </button>
+    </div>
+  )}
+</div>
         </div>
       </aside>
 
       {/* 主内容区 */}
       <main className="flex-1 overflow-hidden bg-gray-50/50 flex flex-col">
-        {/* 顶部栏 */}
+        {/* 顶部栏 - 简化，只保留钻石和标题 */}
         <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
           <div className="text-sm text-gray-500">
             {location.pathname === '/chat' ? '聊天' : 
@@ -331,48 +439,6 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
           
           <div className="flex items-center gap-3">
             <DiamondBalance size="sm" />
-            
-            {/* 设置按钮 */}
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="p-2 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100 transition-all duration-200"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                </svg>
-              </button>
-              
-              {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <p className="text-sm font-medium text-gray-800 truncate">{userData?.username || '用户'}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <DiamondBalance size="sm" />
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
-                    className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    </svg>
-                    账号设置
-                  </button>
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    退出登录
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
         

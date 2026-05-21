@@ -1,4 +1,3 @@
-```markdown
 # RP Chat - 项目上下文文档
 
 > 🤖 **AI 注意**：本文档记录项目的完整架构、文件职责和当前状态。
@@ -94,6 +93,7 @@
 | `Changelog.tsx` | 更新日志展示 |
 | `ContextMenu.tsx` | 右键菜单组件 |
 | `EmojiPicker.tsx` | 表情选择器 |
+| `PersonaSwitchPanel.tsx` | 角色切换弹窗面板（支持搜索、最近使用） |
 | `SearchPage.tsx` | 全局搜索页面 |
 
 **`components/diamond/`**
@@ -105,8 +105,8 @@
 **`components/layout/`**
 | 文件 | 职责 |
 |------|------|
-| `DesktopLayout.tsx` | 桌面端布局 |
-| `MobileLayout.tsx` | 移动端布局 |
+| `DesktopLayout.tsx` | 桌面端布局（左下角角色切换 + 顶部设置） |
+| `MobileLayout.tsx` | 移动端布局（右上角角色切换 + 底部 Tab） |
 | `TabletLayout.tsx` | 平板端布局 |
 
 **`components/legal/`**
@@ -119,7 +119,7 @@
 | 文件 | 职责 |
 |------|------|
 | `PersonaCreate.tsx` | 创建角色 |
-| `PersonaDetail.tsx` | 角色详情页 |
+| `PersonaDetail.tsx` | 角色详情页（皮主页） |
 | `PersonaEquipments.tsx` | 角色装备显示 |
 | `PersonaGuardianList.tsx` | 角色监护人/守护榜 |
 | `PersonaList.tsx` | 角色列表（网格布局） |
@@ -136,7 +136,7 @@
 **`components/settings/`**
 | 文件 | 职责 |
 |------|------|
-| `Settings.tsx` | 应用设置页面 |
+| `Settings.tsx` | 应用设置页面（账号设置 + 偏好设置） |
 
 **`components/user/`**
 | 文件 | 职责 |
@@ -245,6 +245,7 @@
 | `search.js` | 搜索功能 | 全局搜索 |
 | `shop.js` | 商城系统 | 商品列表、购买、装备 |
 | `translate.js` | 翻译功能 | 简繁转换 |
+| `upload.js` | 头像上传 | Cloudinary 上传、删除 |
 | `user.js` | 用户管理 | 资料、设置 |
 | `voice.js` | 语音功能 | 语音房管理 |
 
@@ -270,6 +271,7 @@
 | `linkService.js` | 链接处理 |
 | `markdownService.js` | Markdown 解析 |
 | `translateService.js` | 翻译服务 |
+| `uploadService.js` | Cloudinary 上传服务 |
 
 ---
 
@@ -319,22 +321,42 @@
 → 返回 entries 给前端
 → 管理员可手动点击同步按钮触发 POST /api/changelog/sync-github
 
+### 7. 角色切换流程
+点击切换按钮 → 打开 PersonaSwitchPanel
+→ 选择角色 → roomApi.setActivePersona
+→ 后端更新 ActivePersona → 前端更新 currentPersona
+→ localStorage 保存 lastUsedPersonaId
+→ 触发 refreshCurrentPersona → 更新界面显示
+→ 不刷新页面，仅更新状态
+
+### 8. 头像上传流程
+用户点击头像 → 打开 AvatarUpload 弹窗
+→ 选择图片 → FormData 上传到 /api/upload/user 或 /api/upload/persona
+→ 后端 multer 接收 → Cloudinary 上传
+→ 返回图片 URL → 保存到数据库
+→ 前端更新头像显示
+
 ---
 
 ## ⚙️ 环境变量
 
 ### 前端 (`client/.env`)
-env
+```env
 VITE_API_BASE=https://rp-chatv1-0.onrender.com/api
+```
 
 ### 后端 (`server/.env`)
-env
+```env
 PORT=5000
 MONGODB_URI=mongodb+srv://...
 JWT_SECRET=your_secret
 FIREBASE_CONFIG=...
 GITHUB_TOKEN=your_github_token
 DEEPSEEK_API_KEY=your_deepseek_api_key
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
 
 ---
 
@@ -352,6 +374,10 @@ DEEPSEEK_API_KEY=your_deepseek_api_key
 ### ✅ 已完成的核心功能
 - [x] 用户登录/注册（Firebase Auth + 邀请码）
 - [x] 角色创建/编辑/删除（Persona 系统）
+- [x] 角色切换面板（弹窗式，支持搜索和最近使用）
+- [x] 角色头像上传（Cloudinary 云存储）
+- [x] 角色简介编辑
+- [x] 记住上次使用的角色（localStorage）
 - [x] 创建群聊（支持设置群名、群主）
 - [x] 申请加入群聊（审核机制）
 - [x] 群聊列表（显示最后消息、未读计数、群主）
@@ -398,6 +424,12 @@ DEEPSEEK_API_KEY=your_deepseek_api_key
 - [x] 点赞/取消点赞
 - [x] 帖子列表（分页）
 - [x] 角色主页显示动态
+
+### ✅ 布局系统
+- [x] 电脑端：左下角显示当前角色，点击切换
+- [x] 手机端：右上角显示当前角色头像，点击切换
+- [x] 手机端底部 Tab：聊天/动态/主页
+- [x] 账号设置独立页面（`/settings`）
 
 ### ⏳ 开发中的功能
 - [ ] 私聊功能（PrivateChat 组件已创建，后端未完成）
@@ -477,9 +509,19 @@ DEEPSEEK_API_KEY=your_deepseek_api_key
 | `/manual/:id` | DELETE | 删除手动更新 |
 | `/sync-github` | POST | 手动同步 GitHub |
 
+### 上传相关 (`/api/upload`)
+| 路由 | 方法 | 功能 |
+|------|------|------|
+| `/user` | POST | 上传用户头像 |
+| `/user` | DELETE | 删除用户头像 |
+| `/persona/:personaId` | POST | 上传角色头像 |
+| `/persona/:personaId` | DELETE | 删除角色头像 |
+
 ---
 
 ## 🗄️ 数据库模型关系
+
+```
 User (用户)
   ├── Persona (角色) - 1:N
   ├── Room (创建的群聊) - 1:N
@@ -576,8 +618,8 @@ ShopItem (商城商品)
 > 阅读后你应该能理解：
 > - ✅ 项目的整体架构（前端 Vercel + 后端 Render + MongoDB）
 > - ✅ 核心文件在哪里（ChatHome.tsx、room.js、app.js、socket.ts）
-> - ✅ 关键数据流（消息发送含回复、撤回、删除、AI对戏、每日签到）
-> - ✅ 当前已完成的功能（含消息回复/撤回/软删除/AI对戏/商城/帖子/签到）
+> - ✅ 关键数据流（消息发送含回复、撤回、删除、AI对戏、每日签到、角色切换、头像上传）
+> - ✅ 当前已完成的功能（含消息回复/撤回/软删除/AI对戏/商城/帖子/签到/角色切换面板/头像上传）
 > - ✅ 数据库模型关系和 API 路由
 > - ✅ Socket.IO 事件列表
 > - ✅ 每日签到奖励规则
@@ -591,13 +633,18 @@ ShopItem (商城商品)
 > 6. 消息软删除仅影响删除者本人，其他人仍可见
 > 7. AI 对戏使用 DeepSeek API，需要配置 API Key
 > 8. 更新日志需要配置 GitHub Token 才能自动同步
+> 9. 角色切换使用 `PersonaSwitchPanel` 组件，支持 `align` 属性控制对齐
+> 10. 头像上传使用 Cloudinary，配置环境变量后生效
+> 11. 手机端底部 Tab 为：聊天(`/chat`)、动态(`/feed`)、主页(`/home`)
+> 12. 账号设置在 `/settings`，角色主页在 `/persona/:personaId`
 
 ---
 
-## 📅 最后更新记录 **请不要随意删除掉之前的记录，每次更新.md时都要写回之前的更新记录**
+## 📅 最后更新记录
 
 | 日期 | 更新内容 | 更新人 |
 |------|----------|--------|
+| 2026-05-21 | 完成角色切换面板、头像上传（Cloudinary）、角色记住功能、手机端 Tab 重构（聊天/动态/主页）、账号设置独立页面 | AI |
 | 2026-05-19 | 完成 AI 对戏模块（DeepSeek API）、商城系统、帖子系统、每日签到、角色页面样式统一、更新日志 GitHub 同步修复 | AI |
 | 2026-05-18 | 完成消息回复、撤回、软删除功能 | AI |
 | 2026-05-18 | 更新 Message 模型添加 replyTo/isRecalled/isDeleted 字段 | AI |

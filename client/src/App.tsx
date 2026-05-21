@@ -1,66 +1,129 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import InviteCode from './components/auth/InviteCode';
 import ChatHome from './components/chat/ChatHome';
 import PersonaManager from './components/persona/PersonaManager';
-import PersonaCreate from './components/persona/PersonaCreate';
 import PersonaDetail from './components/persona/PersonaDetail';
-import Changelog from './components/common/Changelog';
-import SearchPage from './components/common/SearchPage';
-import JoinRoom from './components/chat/JoinRoom';
-import PendingRequests from './components/chat/PendingRequests';
-import RoomMembers from './components/chat/RoomMembers';
-import RoomSettings from './components/chat/RoomSettings';
-import GroupDetail from './components/chat/GroupDetail';
-import GroupSettings from './components/chat/GroupSettings';
-import TermsOfService from './components/legal/TermsOfService';
-import PrivacyPolicy from './components/legal/PrivacyPolicy';
+import PersonaCreate from './components/persona/PersonaCreate';
 import Settings from './components/settings/Settings';
+import SearchPage from './components/common/SearchPage';
+import Changelog from './components/common/Changelog';
+import PrivacyPolicy from './components/legal/PrivacyPolicy';
+import TermsOfService from './components/legal/TermsOfService';
 import MobileFeed from './components/feed/MobileFeed';
 import MobileHome from './components/home/MobileHome';
+import SwipeBack from './components/common/SwipeBack';
 
 console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
 
-const AppContent = () => {
-  const { theme } = useTheme();
-  console.log(`🎨 [AppContent] 当前主题: ${theme}`);
-  return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: 'inherit' }}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/invite" element={<InviteCode />} />
-          <Route path="/chat" element={<ChatHome />} />
-          <Route path="/persona" element={<PersonaManager />} />
-          <Route path="/persona/create" element={<PersonaCreate />} />
-          <Route path="/persona/:personaId" element={<PersonaDetail />} />
-          <Route path="/changelog" element={<Changelog />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/join/:roomId" element={<JoinRoom />} />
-          <Route path="/room/:roomId/pending" element={<PendingRequests />} />
-          <Route path="/room/:roomId/members" element={<RoomMembers />} />
-          <Route path="/room/:roomId/settings" element={<RoomSettings />} />
-          <Route path="/group/:roomId" element={<GroupDetail />} />
-          <Route path="/group/:roomId/settings" element={<GroupSettings />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/feed" element={<MobileFeed />} />
-          <Route path="/home" element={<MobileHome />} />
-          <Route path="*" element={<div className="p-8 text-center">404 - 页面不存在</div>} />
-        </Routes>
-      </BrowserRouter>
-    </div>
+// 需要滑动返回的页面包装组件
+const withSwipeBack = (Component: React.ComponentType<any>, onSwipeBack?: () => void) => {
+  return (props: any) => (
+    <SwipeBack onSwipeBack={onSwipeBack}>
+      <Component {...props} />
+    </SwipeBack>
   );
 };
+
+function AppContent() {
+  const [theme, setTheme] = React.useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  React.useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  console.log(`🎨 [AppContent] 当前主题: ${theme}`);
+
+  return (
+    <Routes>
+      {/* 公开路由 */}
+      <Route path="/" element={<Login />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/invite" element={<InviteCode />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
+
+      {/* 需要登录的路由 - 带滑动返回 */}
+      <Route path="/chat" element={
+        <SwipeBack>
+          <ChatHome />
+        </SwipeBack>
+      } />
+      
+      <Route path="/persona" element={
+        <SwipeBack>
+          <PersonaManager />
+        </SwipeBack>
+      } />
+      
+      <Route path="/persona/create" element={
+        <SwipeBack>
+          <PersonaCreate />
+        </SwipeBack>
+      } />
+      
+      <Route path="/persona/:personaId" element={
+        <SwipeBack onSwipeBack={() => window.history.back()}>
+          <PersonaDetail />
+        </SwipeBack>
+      } />
+      
+      <Route path="/settings" element={
+        <SwipeBack>
+          <Settings />
+        </SwipeBack>
+      } />
+      
+      <Route path="/search" element={
+        <SwipeBack>
+          <SearchPage />
+        </SwipeBack>
+      } />
+      
+      <Route path="/changelog" element={
+        <SwipeBack>
+          <Changelog />
+        </SwipeBack>
+      } />
+      
+      {/* 手机端专用页面 */}
+      <Route path="/feed" element={
+        <SwipeBack>
+          <MobileFeed />
+        </SwipeBack>
+      } />
+      
+      <Route path="/home" element={
+        <SwipeBack>
+          <MobileHome />
+        </SwipeBack>
+      } />
+
+      {/* 404 重定向 */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
 function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <Router>
+        <AppContent />
+      </Router>
     </ThemeProvider>
   );
 }

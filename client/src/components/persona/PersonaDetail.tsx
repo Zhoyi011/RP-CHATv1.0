@@ -241,6 +241,7 @@ const PersonaDetail = () => {
                         onSelect={handleQuickSwitch}
                         onClose={() => setShowSwitchPanel(false)}
                         position="bottom"
+                        align="left"
                       />
                     )}
                   </div>

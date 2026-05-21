@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
-import { authApi, type User, type UserSettings } from '../../services/api';
+import { authApi, type User, type UserSettings, adminApi } from '../../services/api';
 import toast from 'react-hot-toast';
+import { usePermissions } from '../../hooks/usePermissions';
 
 // 星座列表
 const zodiacSigns = [
@@ -21,11 +22,23 @@ const zodiacSigns = [
   { name: '双鱼座', dates: '2.19-3.20', icon: '♓' },
 ];
 
+interface InviteCode {
+  _id: string;
+  code: string;
+  type: 'user' | 'admin';
+  createdBy: { username: string; role: string };
+  usedBy?: { username: string; email: string };
+  isActive: boolean;
+  expiresAt: string;
+  createdAt: string;
+}
+
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const { isAdmin, isOwner } = usePermissions();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'account' | 'preferences'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'preferences' | 'admin'>('account');
   
   // 账号信息
   const [displayName, setDisplayName] = useState('');
@@ -42,9 +55,18 @@ const Settings: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
 
+  // 邀请码相关
+  const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [inviteType, setInviteType] = useState<'user' | 'admin'>('user');
+  const [loadingInvites, setLoadingInvites] = useState(false);
+
   useEffect(() => {
     loadUserData();
-  }, []);
+    if (isAdmin || isOwner) {
+      loadInviteCodes();
+    }
+  }, [isAdmin, isOwner]);
 
   const loadUserData = async () => {
     try {
@@ -63,6 +85,18 @@ const Settings: React.FC = () => {
       toast.error('加载失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadInviteCodes = async () => {
+    try {
+      setLoadingInvites(true);
+      const codes = await adminApi.getInviteCodes();
+      setInviteCodes(codes);
+    } catch (error) {
+      console.error('加载邀请码失败:', error);
+    } finally {
+      setLoadingInvites(false);
     }
   };
 
@@ -143,9 +177,46 @@ const Settings: React.FC = () => {
     }
   };
 
+  // 创建邀请码
+  const handleCreateInviteCode = async () => {
+    setCreatingInvite(true);
+    try {
+      const result = await adminApi.generateInviteCode(undefined, inviteType);
+      toast.success(`邀请码创建成功: ${result.code}`);
+      loadInviteCodes();
+    } catch (error: any) {
+      toast.error(error.message || '创建失败');
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  // 删除邀请码
+  const handleDeleteInviteCode = async (codeId: string) => {
+    if (!confirm('确定要删除这个邀请码吗？')) return;
+    try {
+      await adminApi.deleteInviteCode(codeId);
+      toast.success('删除成功');
+      loadInviteCodes();
+    } catch (error: any) {
+      toast.error(error.message || '删除失败');
+    }
+  };
+
   const getZodiacIcon = (zodiacName: string) => {
     const zodiac = zodiacSigns.find(z => z.name === zodiacName);
     return zodiac?.icon || '✨';
+  };
+
+  // 格式化时间
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (loading) {
@@ -170,10 +241,10 @@ const Settings: React.FC = () => {
         </div>
         
         {/* Tab 切换 */}
-        <div className="flex px-4 gap-2">
+        <div className="flex px-4 gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('account')}
-            className={`px-4 py-2 text-sm font-medium transition rounded-t-lg ${
+            className={`px-4 py-2 text-sm font-medium transition rounded-t-lg whitespace-nowrap ${
               activeTab === 'account' ? 'bg-white text-blue-600' : 'text-white hover:bg-white/10'
             }`}
           >
@@ -181,12 +252,22 @@ const Settings: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('preferences')}
-            className={`px-4 py-2 text-sm font-medium transition rounded-t-lg ${
+            className={`px-4 py-2 text-sm font-medium transition rounded-t-lg whitespace-nowrap ${
               activeTab === 'preferences' ? 'bg-white text-blue-600' : 'text-white hover:bg-white/10'
             }`}
           >
             偏好设置
           </button>
+          {(isAdmin || isOwner) && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`px-4 py-2 text-sm font-medium transition rounded-t-lg whitespace-nowrap ${
+                activeTab === 'admin' ? 'bg-white text-blue-600' : 'text-white hover:bg-white/10'
+              }`}
+            >
+              👑 管理面板
+            </button>
+          )}
         </div>
       </div>
 
@@ -317,7 +398,7 @@ const Settings: React.FC = () => {
                     user?.role === 'admin' ? 'bg-purple-100 text-purple-600' :
                     'bg-gray-100 text-gray-600'
                   }`}>
-                    {user?.role === 'owner' ? '超级管理员' : user?.role === 'admin' ? '管理员' : '普通用户'}
+                    {user?.role === 'owner' ? '👑 超级管理员' : user?.role === 'admin' ? '🛡️ 管理员' : '👤 普通用户'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
@@ -400,6 +481,140 @@ const Settings: React.FC = () => {
             >
               {saving ? '保存中...' : '保存设置'}
             </button>
+          </div>
+        )}
+
+        {/* 管理面板（仅管理员可见） */}
+        {(isAdmin || isOwner) && activeTab === 'admin' && (
+          <div className="space-y-6">
+            {/* 创建邀请码 */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">创建邀请码</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    邀请码类型
+                  </label>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setInviteType('user')}
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition ${
+                        inviteType === 'user'
+                          ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-md'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      👤 普通用户
+                    </button>
+                    {isOwner && (
+                      <button
+                        onClick={() => setInviteType('admin')}
+                        className={`flex-1 px-4 py-2 rounded-xl font-medium transition ${
+                          inviteType === 'admin'
+                            ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-md'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        👑 管理员
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={handleCreateInviteCode}
+                  disabled={creatingInvite}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl font-medium hover:from-emerald-600 hover:to-teal-700 transition disabled:opacity-50 shadow-md"
+                >
+                  {creatingInvite ? '创建中...' : '生成邀请码'}
+                </button>
+              </div>
+            </div>
+
+            {/* 邀请码列表 */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">邀请码列表</h2>
+                <button
+                  onClick={loadInviteCodes}
+                  className="text-sm text-blue-500 hover:text-blue-600 transition"
+                >
+                  刷新
+                </button>
+              </div>
+              
+              {loadingInvites ? (
+                <div className="text-center py-8 text-gray-400">加载中...</div>
+              ) : inviteCodes.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">暂无邀请码</div>
+              ) : (
+                <div className="space-y-3">
+                  {inviteCodes.map((code) => (
+                    <div
+                      key={code._id}
+                      className={`p-4 rounded-xl border ${
+                        code.usedBy
+                          ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
+                          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-mono font-bold ${
+                            code.type === 'admin' ? 'text-purple-600' : 'text-blue-600'
+                          }`}>
+                            {code.code}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            code.type === 'admin'
+                              ? 'bg-purple-100 text-purple-600'
+                              : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            {code.type === 'admin' ? '管理员' : '普通用户'}
+                          </span>
+                          {code.usedBy && (
+                            <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                              已使用
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-400">
+                            创建于 {formatDate(code.createdAt)}
+                          </span>
+                          {!code.usedBy && (
+                            <button
+                              onClick={() => handleDeleteInviteCode(code._id)}
+                              className="text-xs text-red-400 hover:text-red-600 transition"
+                            >
+                              删除
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        <span>创建者: {code.createdBy?.username}</span>
+                        {code.usedBy && (
+                          <span className="ml-4">使用者: {code.usedBy.username}</span>
+                        )}
+                        {code.expiresAt && new Date(code.expiresAt) < new Date() && !code.usedBy && (
+                          <span className="ml-4 text-red-500">已过期</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 权限说明 */}
+            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-2xl p-4">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>👑 权限说明：</strong><br />
+                • 超级管理员 (owner)：可以创建管理员和普通用户邀请码<br />
+                • 管理员 (admin)：只能创建普通用户邀请码，每天1个<br />
+                • 已使用的邀请码不可删除，但会显示使用状态
+              </p>
+            </div>
           </div>
         )}
       </div>
