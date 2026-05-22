@@ -6,6 +6,7 @@ import { personaApi, type Persona } from '../../services/api';
 import { roomApi } from '../../services/api';
 import toast from 'react-hot-toast';
 import AvatarUpload from '../common/AvatarUpload';
+import AvatarFrame from '../common/AvatarFrame';
 import PersonaGuardianList from './PersonaGuardianList';
 import PersonaRelationships from './PersonaRelationships';
 import PersonaPosts from './PersonaPosts';
@@ -87,7 +88,6 @@ const PersonaDetail = () => {
       await roomApi.setActivePersona(selectedPersona._id);
       localStorage.setItem('lastUsedPersonaId', selectedPersona._id);
       toast.success(`已切换至 ${selectedPersona.displayName || selectedPersona.name}`);
-      // 跳转到新角色的主页
       navigate(`/persona/${selectedPersona._id}`);
       window.location.reload();
     } catch (error) {
@@ -193,17 +193,16 @@ const PersonaDetail = () => {
         {/* 角色信息卡片 */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <div className="flex items-center gap-4">
+            {/* 头像区域 - 使用 AvatarFrame 组件 */}
             <div 
               className="relative cursor-pointer group" 
               onClick={() => isCurrentUserPersona && setShowAvatarUpload(true)}
             >
-              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg">
-                <img
-                  src={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
-                  alt={persona.name}
-                  className="w-full h-full object-cover group-hover:opacity-80 transition"
-                />
-              </div>
+              <AvatarFrame
+                avatarUrl={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
+                frameUrl={persona.equipped?.avatarFrame}
+                size="xl"
+              />
               {isCurrentUserPersona && (
                 <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

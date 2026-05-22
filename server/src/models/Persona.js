@@ -81,10 +81,11 @@ const personaSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
   }],
   
+// server/src/models/Persona.js
   equipped: {
-    avatarFrame: { type: String, default: '' },
-    ring: { type: String, default: '' },
-    relationshipCard: { type: String, default: '' }
+    avatarFrame: { type: String, default: null },
+    ring: { type: String, default: null },
+    relationshipCard: { type: String, default: null }
   },
   
   // ✅ 该 Persona 在各个群的最后使用时间（用于切皮优先级）
