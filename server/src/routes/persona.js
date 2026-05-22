@@ -178,20 +178,37 @@ router.get('/search', authMiddleware, async (req, res) => {
 // 获取角色详情
 router.get('/:personaId', authMiddleware, async (req, res) => {
   try {
-    const persona = await Persona.findById(req.params.personaId);
+    const persona = await Persona.findById(req.params.personaId)
+      .populate('createdBy', 'username')
+      .populate('guardians.userId', 'username avatar')
+      .populate('relationships.targetPersonaId', 'name displayName avatar globalNumber');
     
     if (!persona) {
       return res.status(404).json({ error: '角色不存在' });
     }
     
-    // 增加浏览次数
-    persona.viewCount = (persona.viewCount || 0) + 1;
-    await persona.save();
+    // 获取装备信息
+    let equipped = persona.equipped || { avatarFrame: null, ring: null, relationshipCard: null };
     
-    res.json(persona);
+    // 如果装备了头像框，获取头像框图片URL
+    let frameUrl = null;
+    if (equipped.avatarFrame) {
+      const ShopItem = require('../models/ShopItem');
+      const frame = await ShopItem.findById(equipped.avatarFrame);
+      if (frame) {
+        frameUrl = frame.image;
+      }
+    }
+    
+    res.json({
+      ...persona.toObject(),
+      equipped: {
+        ...equipped,
+        avatarFrameUrl: frameUrl
+      }
+    });
   } catch (error) {
-    console.error('获取角色详情失败:', error);
-    res.status(500).json({ error: '服务器错误' });
+    res.status(500).json({ error: error.message });
   }
 });
 
