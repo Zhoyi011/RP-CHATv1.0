@@ -223,6 +223,8 @@ export interface Persona {
     avatarFrame?: string;
     ring?: string;
     relationshipCard?: string;
+    avatarFrameUrl?: string; 
+    avatarFrameId?: string;
   };
 }
 

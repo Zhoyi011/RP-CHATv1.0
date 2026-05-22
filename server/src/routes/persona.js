@@ -187,27 +187,59 @@ router.get('/:personaId', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '角色不存在' });
     }
     
-    // 获取装备信息
-    let equipped = persona.equipped || { avatarFrame: null, ring: null, relationshipCard: null };
+    // ✅ 获取装备的图片 URL
+    const ShopItem = require('../models/ShopItem');
+    let equippedWithUrls = { avatarFrame: null, ring: null, relationshipCard: null };
     
-    // 如果装备了头像框，获取头像框图片URL
-    let frameUrl = null;
-    if (equipped.avatarFrame) {
-      const ShopItem = require('../models/ShopItem');
-      const frame = await ShopItem.findById(equipped.avatarFrame);
-      if (frame) {
-        frameUrl = frame.image;
+    if (persona.equipped) {
+      // 头像框
+      if (persona.equipped.avatarFrame) {
+        const frame = await ShopItem.findById(persona.equipped.avatarFrame);
+        if (frame) {
+          equippedWithUrls.avatarFrame = frame.image;
+        }
+      }
+      // 戒指
+      if (persona.equipped.ring) {
+        const ring = await ShopItem.findById(persona.equipped.ring);
+        if (ring) {
+          equippedWithUrls.ring = ring.image;
+        }
+      }
+      // 关系卡
+      if (persona.equipped.relationshipCard) {
+        const card = await ShopItem.findById(persona.equipped.relationshipCard);
+        if (card) {
+          equippedWithUrls.relationshipCard = card.image;
+        }
       }
     }
     
+    // 返回角色数据，包含装备图片 URL
     res.json({
-      ...persona.toObject(),
-      equipped: {
-        ...equipped,
-        avatarFrameUrl: frameUrl
-      }
+      _id: persona._id,
+      name: persona.name,
+      displayName: persona.displayName,
+      description: persona.description,
+      avatar: persona.avatar,
+      tags: persona.tags,
+      status: persona.status,
+      globalNumber: persona.globalNumber,
+      sameNameNumber: persona.sameNameNumber,
+      userId: persona.userId,
+      usageCount: persona.usageCount,
+      viewCount: persona.viewCount,
+      likeCount: persona.likeCount,
+      postsCount: persona.postsCount,
+      createdBy: persona.createdBy,
+      createdAt: persona.createdAt,
+      guardians: persona.guardians,
+      totalGuardianAmount: persona.totalGuardianAmount,
+      relationships: persona.relationships,
+      equipped: equippedWithUrls  // ✅ 返回带图片 URL 的装备
     });
   } catch (error) {
+    console.error('获取角色详情失败:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -200,7 +200,8 @@ const PersonaDetail = () => {
             >
               <AvatarFrame
                 avatarUrl={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
-                frameUrl={persona.equipped?.avatarFrame}
+                frameUrl={persona.equipped?.avatarFrameUrl}
+                frameId={persona.equipped?.avatarFrameId}
                 size="xl"
               />
               {isCurrentUserPersona && (

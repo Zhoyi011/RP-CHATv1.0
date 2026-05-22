@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Persona = require('../models/Persona');
 const ShopItem = require('../models/ShopItem');
 const UserInventory = require('../models/UserInventory');
+const ActivePersona = require('../models/ActivePersona');
 
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -49,19 +51,16 @@ router.post('/buy', authMiddleware, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     
-    // 检查余额
     const balance = item.currency === 'diamonds' ? (user.diamonds || 0) : (user.coins || 0);
     if (balance < item.price) {
       return res.status(400).json({ error: `${item.currency === 'diamonds' ? '钻石' : '金币'}不足` });
     }
     
-    // 检查是否已拥有
     const existing = await UserInventory.findOne({ userId: req.userId, itemId });
     if (existing) {
       return res.status(400).json({ error: '已经拥有该物品了' });
     }
     
-    // 扣款
     if (item.currency === 'diamonds') {
       user.diamonds -= item.price;
     } else {
@@ -69,13 +68,13 @@ router.post('/buy', authMiddleware, async (req, res) => {
     }
     await user.save();
     
-    // 添加物品到库存
     const inventory = await UserInventory.create({
       userId: req.userId,
       itemId: item._id,
       itemType: item.type,
       itemName: item.name,
-      itemImage: item.image
+      itemImage: item.image,
+      isEquipped: false
     });
     
     res.json({ 
@@ -90,52 +89,96 @@ router.post('/buy', authMiddleware, async (req, res) => {
   }
 });
 
-// 装备物品
+// ✅ 装备物品到当前激活的角色
 router.post('/equip', authMiddleware, async (req, res) => {
   try {
     const { inventoryId } = req.body;
+    
+    // 获取物品
     const inventory = await UserInventory.findOne({ _id: inventoryId, userId: req.userId });
     if (!inventory) return res.status(404).json({ error: '物品不存在' });
     
-    const user = await User.findById(req.userId);
+    // 获取当前激活的角色
+    const active = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
+    if (!active || !active.personaId) {
+      return res.status(404).json({ error: '请先选择一个角色' });
+    }
     
-    // 同类物品只能装备一个
+    const persona = active.personaId;
+    
+    // 初始化 equipped 字段
+    if (!persona.equipped) persona.equipped = {};
+    
+    // 更新角色的装备
+    persona.equipped[inventory.itemType] = inventory.itemId;
+    await persona.save();
+    
+    // 更新库存状态（同类物品只能装备一个）
     await UserInventory.updateMany(
       { userId: req.userId, itemType: inventory.itemType, isEquipped: true },
       { isEquipped: false }
     );
-    
     inventory.isEquipped = true;
     await inventory.save();
     
-    // 更新用户装备记录
-    if (!user.equippedItems) user.equippedItems = {};
-    user.equippedItems[inventory.itemType] = inventory.itemId;
-    await user.save();
+    console.log(`✅ 用户 ${req.userId} 将 ${inventory.itemName} 装备到角色 ${persona.name}`);
     
-    res.json({ success: true, message: `已装备 ${inventory.itemName}` });
+    res.json({ 
+      success: true, 
+      message: `已装备 ${inventory.itemName} 到 ${persona.displayName || persona.name}`,
+      equipped: persona.equipped
+    });
+  } catch (error) {
+    console.error('装备失败:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ 卸下角色的物品
+router.post('/unequip', authMiddleware, async (req, res) => {
+  try {
+    const { inventoryId } = req.body;
+    
+    const inventory = await UserInventory.findOne({ _id: inventoryId, userId: req.userId });
+    if (!inventory) return res.status(404).json({ error: '物品不存在' });
+    
+    // 获取当前激活的角色
+    const active = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
+    if (!active || !active.personaId) {
+      return res.status(404).json({ error: '请先选择一个角色' });
+    }
+    
+    const persona = active.personaId;
+    
+    // 移除角色的装备
+    if (persona.equipped) {
+      persona.equipped[inventory.itemType] = null;
+      await persona.save();
+    }
+    
+    inventory.isEquipped = false;
+    await inventory.save();
+    
+    res.json({ 
+      success: true, 
+      message: `已卸下 ${inventory.itemName}`,
+      equipped: persona.equipped
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 卸下物品
-router.post('/unequip', authMiddleware, async (req, res) => {
+// ✅ 获取当前角色的装备
+router.get('/my-equip', authMiddleware, async (req, res) => {
   try {
-    const { inventoryId } = req.body;
-    const inventory = await UserInventory.findOne({ _id: inventoryId, userId: req.userId });
-    if (!inventory) return res.status(404).json({ error: '物品不存在' });
-    
-    inventory.isEquipped = false;
-    await inventory.save();
-    
-    const user = await User.findById(req.userId);
-    if (user.equippedItems) {
-      delete user.equippedItems[inventory.itemType];
-      await user.save();
+    const active = await ActivePersona.findOne({ userId: req.userId }).populate('personaId');
+    if (!active || !active.personaId) {
+      return res.json({ equipped: {} });
     }
     
-    res.json({ success: true, message: `已卸下 ${inventory.itemName}` });
+    const persona = active.personaId;
+    res.json({ equipped: persona.equipped || {} });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
