@@ -89,7 +89,7 @@ router.post('/buy', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 装备物品到当前激活的角色
+// ✅ 装备物品到当前激活的角色（修复版）
 router.post('/equip', authMiddleware, async (req, res) => {
   try {
     const { inventoryId } = req.body;
@@ -106,14 +106,16 @@ router.post('/equip', authMiddleware, async (req, res) => {
     
     const persona = active.personaId;
     
-    // 初始化 equipped 字段
-    if (!persona.equipped) persona.equipped = {};
+    // ✅ 直接更新现有的 Persona 文档
+    const updateData = {};
+    updateData[`equipped.${inventory.itemType}`] = inventory.itemId;
     
-    // 更新角色的装备
-    persona.equipped[inventory.itemType] = inventory.itemId;
-    await persona.save();
+    await Persona.updateOne(
+      { _id: persona._id },
+      { $set: updateData }
+    );
     
-    // 更新库存状态（同类物品只能装备一个）
+    // 更新库存状态
     await UserInventory.updateMany(
       { userId: req.userId, itemType: inventory.itemType, isEquipped: true },
       { isEquipped: false }
@@ -121,12 +123,15 @@ router.post('/equip', authMiddleware, async (req, res) => {
     inventory.isEquipped = true;
     await inventory.save();
     
-    console.log(`✅ 用户 ${req.userId} 将 ${inventory.itemName} 装备到角色 ${persona.name}`);
+    // 获取更新后的角色数据
+    const updatedPersona = await Persona.findById(persona._id);
+    
+    console.log(`✅ 用户 ${req.userId} 将 ${inventory.itemName} 装备到角色 ${updatedPersona.name}`);
     
     res.json({ 
       success: true, 
-      message: `已装备 ${inventory.itemName} 到 ${persona.displayName || persona.name}`,
-      equipped: persona.equipped
+      message: `已装备 ${inventory.itemName} 到 ${updatedPersona.displayName || updatedPersona.name}`,
+      equipped: updatedPersona.equipped
     });
   } catch (error) {
     console.error('装备失败:', error);
