@@ -23,6 +23,7 @@ import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
 import { parseMarkdown } from '../../utils/renderMarkdown';
 import { smartConvert } from '../../services/translateApi';
+import AvatarFrame from '../common/AvatarFrame';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 

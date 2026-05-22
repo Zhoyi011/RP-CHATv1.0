@@ -17,6 +17,8 @@ import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import TermsOfService from './components/legal/TermsOfService';
 import MobileFeed from './components/feed/MobileFeed';
 import MobileHome from './components/home/MobileHome';
+import Shop from './components/shop/Shop';
+import Inventory from './components/inventory/Inventory';
 
 console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
 
@@ -146,6 +148,18 @@ function AppContent() {
         <Route path="/home" element={
           <ProtectedRoute>
             <MobileHome />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/shop" element={
+          <ProtectedRoute>
+            <Shop />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/inventory" element={
+          <ProtectedRoute>
+            <Inventory />
           </ProtectedRoute>
         } />
 
