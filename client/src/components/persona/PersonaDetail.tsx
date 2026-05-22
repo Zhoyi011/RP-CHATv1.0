@@ -30,7 +30,6 @@ const PersonaDetail = () => {
   const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
   const switchPanelRef = useRef<HTMLDivElement>(null);
   
-  // 编辑简介
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [editBio, setEditBio] = useState('');
   const [savingBio, setSavingBio] = useState(false);
@@ -129,17 +128,6 @@ const PersonaDetail = () => {
     }
   };
 
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      'from-blue-400 to-cyan-500',
-      'from-indigo-400 to-blue-500',
-      'from-purple-400 to-indigo-500',
-      'from-pink-400 to-rose-500',
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -158,7 +146,6 @@ const PersonaDetail = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* 头部渐变区 */}
       <div className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white">
         <div className="px-4 py-3 flex items-center">
           <button onClick={() => navigate(-1)} className="mr-3 p-1 hover:bg-white/20 rounded-full transition">
@@ -190,18 +177,15 @@ const PersonaDetail = () => {
           </div>
         </div>
 
-        {/* 角色信息卡片 */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <div className="flex items-center gap-4">
-            {/* 头像区域 - 使用 AvatarFrame 组件 */}
             <div 
               className="relative cursor-pointer group" 
               onClick={() => isCurrentUserPersona && setShowAvatarUpload(true)}
             >
               <AvatarFrame
                 avatarUrl={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
-                frameUrl={persona.equipped?.avatarFrameUrl}
-                frameId={persona.equipped?.avatarFrameId}
+                frameUrl={persona.equipped?.avatarFrame}
                 size="xl"
               />
               {isCurrentUserPersona && (
@@ -220,7 +204,6 @@ const PersonaDetail = () => {
                 {persona.globalNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">#{persona.globalNumber}</span>}
                 {persona.sameNameNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">同名 #{persona.sameNameNumber}</span>}
                 
-                {/* 快捷切换按钮 */}
                 {isCurrentUserPersona && availablePersonas.length > 1 && (
                   <div className="relative" ref={switchPanelRef}>
                     <button
@@ -256,7 +239,6 @@ const PersonaDetail = () => {
           </div>
         </div>
 
-        {/* 标签页 */}
         <div className="flex px-4 pb-2 gap-1 overflow-x-auto">
           {[
             { key: 'info', label: '主页', icon: '🏠' },
@@ -276,13 +258,11 @@ const PersonaDetail = () => {
         </div>
       </div>
 
-      {/* 内容区域 */}
       <div className="p-4">
         {activeTab === 'info' && (
           <div className="space-y-4">
             <PersonaEquipments persona={persona} isOwner={isCurrentUserPersona} onUpdate={loadPersona} />
             
-            {/* 关于我 - 可编辑 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
@@ -335,7 +315,6 @@ const PersonaDetail = () => {
               )}
             </div>
 
-            {/* 角色信息 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
                 <span>📊</span> 角色信息
@@ -364,7 +343,6 @@ const PersonaDetail = () => {
               </div>
             </div>
 
-            {/* 操作按钮组 */}
             <div className="grid grid-cols-2 gap-3">
               <motion.button
                 onClick={() => setShowCardPreview(true)}
@@ -406,7 +384,6 @@ const PersonaDetail = () => {
         )}
       </div>
 
-      {/* 头像上传弹窗 */}
       <AnimatePresence>
         {showAvatarUpload && (
           <AvatarUpload
@@ -420,7 +397,6 @@ const PersonaDetail = () => {
         )}
       </AnimatePresence>
 
-      {/* 角色卡预览弹窗 */}
       <AnimatePresence>
         {showCardPreview && (
           <motion.div
@@ -466,7 +442,6 @@ const PersonaDetail = () => {
         )}
       </AnimatePresence>
 
-      {/* AI 聊天弹窗 */}
       <AnimatePresence>
         {showAIChat && (
           <AIChat persona={persona} onClose={() => setShowAIChat(false)} />
