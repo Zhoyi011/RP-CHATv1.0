@@ -8,15 +8,13 @@ interface Props {
   onClick?: () => void;
 }
 
-// 头像框容器（比头像大）
 const containerSizeMap = {
-  sm: 48,   // 容器 48px
-  md: 64,   // 容器 64px
-  lg: 96,   // 容器 96px
-  xl: 128,  // 容器 128px
+  sm: 48,
+  md: 64,
+  lg: 96,
+  xl: 128,
 };
 
-// 头像大小（比容器小，露出头像框）
 const avatarSizeMap = {
   sm: 36,
   md: 48,
@@ -24,10 +22,12 @@ const avatarSizeMap = {
   xl: 96,
 };
 
-// 每个头像框的配置（scale 可以让头像框更大）
 const frameConfigs: Record<string, { scale: number; offsetX: number; offsetY: number }> = {
   'cat': { scale: 1.55, offsetX: 35, offsetY: 0 },
   'star': { scale: 1.1, offsetX: 0, offsetY: 0 },
+  'gold': { scale: 1.1, offsetX: 0, offsetY: 0 },
+  'sakura': { scale: 1.1, offsetX: 0, offsetY: 0 },
+  'simple': { scale: 1.1, offsetX: 0, offsetY: 0 },
   'default': { scale: 1.1, offsetX: 0, offsetY: 0 },
 };
 
@@ -52,7 +52,7 @@ const AvatarFrame: React.FC<Props> = ({
   if (!frameUrl) {
     return (
       <div 
-        className={`relative inline-flex items-center justify-center ${className}`}
+        className={`relative inline-flex items-center justify-center cursor-pointer ${className}`}
         style={{ width: avatarSize, height: avatarSize }}
         onClick={onClick}
       >
@@ -71,11 +71,11 @@ const AvatarFrame: React.FC<Props> = ({
 
   return (
     <div 
-      className={`relative inline-flex items-center justify-center ${className}`}
+      className={`relative inline-flex items-center justify-center cursor-pointer ${className}`}
       style={{ width: containerSize, height: containerSize }}
       onClick={onClick}
     >
-      {/* 头像框（底层，更大） */}
+      {/* 头像框（底层） */}
       <img
         src={frameUrl}
         alt="头像框"
@@ -89,18 +89,17 @@ const AvatarFrame: React.FC<Props> = ({
         }}
       />
       
-      {/* 头像（上层，较小，居中） */}
+      {/* 头像（上层，居中） */}
       <img
         src={avatarUrl || `https://ui-avatars.com/api/?name=U&background=3b82f6&color=fff`}
         alt="头像"
-        className="rounded-full object-cover relative"
+        className="rounded-full object-cover absolute"
         style={{ 
           width: avatarSize,
           height: avatarSize,
           left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
-          position: 'absolute',
         }}
       />
     </div>

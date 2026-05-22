@@ -55,9 +55,21 @@ const PersonaDetail = () => {
       const data = await personaApi.getPersonaDetail(personaId!);
       setPersona(data);
       
-      const currentUser = auth.currentUser;
-      if (currentUser && data.userId === currentUser.uid) {
-        setIsCurrentUserPersona(true);
+      // 通过 API 获取当前用户信息（一劳永逸）
+      const token = localStorage.getItem('token');
+      if (token) {
+        const userRes = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (userRes.ok) {
+          const currentUser = await userRes.json();
+          const isOwner = currentUser && data.userId === currentUser._id;
+          setIsCurrentUserPersona(isOwner);
+        } else {
+          setIsCurrentUserPersona(false);
+        }
+      } else {
+        setIsCurrentUserPersona(false);
       }
     } catch (error) {
       toast.error('角色不存在或已被删除');
@@ -156,46 +168,42 @@ const PersonaDetail = () => {
           <h1 className="text-xl font-bold flex-1">角色主页</h1>
           
           <div className="flex items-center gap-1">
-            <button onClick={() => setShowAIChat(true)} className="p-1.5 hover:bg-white/20 rounded-full transition" title="AI 对话">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </button>
-            <button onClick={() => setShowCardPreview(true)} className="p-1.5 hover:bg-white/20 rounded-full transition" title="生成角色卡">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
+            {/* 更换头像按钮 - 使用 isCurrentUserPersona 控制 */}
             {isCurrentUserPersona && (
-              <button onClick={() => setShowAvatarUpload(true)} className="p-1.5 hover:bg-white/20 rounded-full transition" title="更换头像">
+              <button 
+                onClick={() => setShowAvatarUpload(true)} 
+                className="p-1.5 hover:bg-white/20 rounded-full transition" 
+                title="更换头像"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
             )}
+            
+            <button onClick={() => setShowAIChat(true)} className="p-1.5 hover:bg-white/20 rounded-full transition" title="AI 对话">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </button>
+            
+            <button onClick={() => setShowCardPreview(true)} className="p-1.5 hover:bg-white/20 rounded-full transition" title="生成角色卡">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
           </div>
         </div>
 
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
           <div className="flex items-center gap-4">
-            <div 
-              className="relative cursor-pointer group" 
-              onClick={() => isCurrentUserPersona && setShowAvatarUpload(true)}
-            >
+            <div className="relative">
               <AvatarFrame
                 avatarUrl={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
                 frameUrl={persona.equipped?.avatarFrame}
                 size="xl"
               />
-              {isCurrentUserPersona && (
-                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-              )}
             </div>
             
             <div className="flex-1">

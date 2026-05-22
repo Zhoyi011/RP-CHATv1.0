@@ -485,4 +485,35 @@ router.post('/:personaId/posts/:postId/like', authMiddleware, async (req, res) =
   }
 });
 
+// 生成角色卡图片
+router.get('/:personaId/card', authMiddleware, async (req, res) => {
+  try {
+    const persona = await Persona.findById(req.params.personaId)
+      .populate('createdBy', 'username');
+    
+    if (!persona) {
+      return res.status(404).json({ error: '角色不存在' });
+    }
+    
+    // 简单返回一个 SVG 角色卡（或重定向到默认图片）
+    const svg = `
+      <svg width="400" height="500" xmlns="http://www.w3.org/2000/svg">
+        <rect width="400" height="500" fill="#1a1a2e" rx="20"/>
+        <circle cx="200" cy="120" r="60" fill="#3b82f6"/>
+        <text x="200" y="135" text-anchor="middle" fill="white" font-size="40" font-weight="bold">${persona.name.charAt(0)}</text>
+        <text x="200" y="220" text-anchor="middle" fill="white" font-size="24" font-weight="bold">${persona.displayName || persona.name}</text>
+        <text x="200" y="260" text-anchor="middle" fill="#94a3b8" font-size="14">${persona.description?.substring(0, 50) || ''}</text>
+        <rect x="50" y="400" width="300" height="2" fill="#334155"/>
+        <text x="200" y="440" text-anchor="middle" fill="#64748b" font-size="12">RP Chat 角色卡</text>
+        <text x="200" y="460" text-anchor="middle" fill="#64748b" font-size="10">${persona.createdBy?.username || '未知'}</text>
+      </svg>
+    `;
+    
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.send(svg);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

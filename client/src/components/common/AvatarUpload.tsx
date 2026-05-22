@@ -35,8 +35,8 @@ const AvatarUpload: React.FC<Props> = ({
       return;
     }
 
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error('图片大小不能超过 20MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('图片大小不能超过 10MB');
       return;
     }
 
@@ -79,7 +79,7 @@ const AvatarUpload: React.FC<Props> = ({
       }
     } catch (error) {
       console.error('上传失败:', error);
-      toast.error('上传失败');
+      toast.error('上传失败，请稍后重试');
     } finally {
       setUploading(false);
     }
@@ -134,12 +134,14 @@ const AvatarUpload: React.FC<Props> = ({
         className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* 头部 */}
         <div className="bg-gradient-to-r from-blue-500 to-cyan-600 px-6 py-4">
           <h2 className="text-xl font-bold text-white">{title}</h2>
-          <p className="text-blue-100 text-sm">支持 JPG、PNG、GIF，最大 20MB</p>
+          <p className="text-blue-100 text-sm">支持 JPG、PNG、GIF，最大 10MB</p>
         </div>
 
         <div className="p-6">
+          {/* 头像预览 */}
           <div className="flex justify-center mb-6">
             <div className="relative">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 shadow-lg">
@@ -157,6 +159,7 @@ const AvatarUpload: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* 按钮组 */}
           <div className="space-y-3">
             <button
               onClick={() => fileInputRef.current?.click()}
