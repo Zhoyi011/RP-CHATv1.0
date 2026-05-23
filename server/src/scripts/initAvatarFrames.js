@@ -4,14 +4,14 @@ require('dotenv').config();
 
 const frames = [
   {
-    name: '金色传说',
+    name: '恶化羽',
     type: 'avatarFrame',
-    price: 200,
+    price: 300,
     currency: 'diamonds',
     rarity: 'legendary',
-    image: '/frames/frame_gold.png',
-    previewImage: '/frames/frame_gold.png',
-    description: '金色的华丽边框，彰显尊贵身份',
+    image: '/frames/demon.png',
+    previewImage: '/frames/demon.png',
+    description: '暗黑恶化羽毛边框',
     isActive: true
   },
   {
@@ -34,6 +34,17 @@ const frames = [
     image: '/frames/frame_sakura.png',
     previewImage: '/frames/frame_sakura.png',
     description: '粉色樱花飞舞的边框',
+    isActive: true
+  },
+  {
+    name: '紫缎星轨',
+    type: 'avatarFrame',
+    price: 300,
+    currency: 'diamonds',
+    rarity: 'legendary',
+    image: '/frames/purple.png',
+    previewImage: '/frames/purple.png',
+    description: '紫色缎面星轨边框',
     isActive: true
   },
   {
