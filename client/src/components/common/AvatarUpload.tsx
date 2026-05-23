@@ -73,7 +73,10 @@ const AvatarUpload: React.FC<Props> = ({
       if (response.ok) {
         toast.success('头像上传成功');
         onUpload(data.avatar);
-        onClose();
+        setTimeout(() => {
+          onClose();
+          window.location.reload();
+        }, 500);
       } else {
         toast.error(data.error || '上传失败');
       }
@@ -107,7 +110,10 @@ const AvatarUpload: React.FC<Props> = ({
       if (response.ok) {
         toast.success('已恢复默认头像');
         onUpload('');
-        onClose();
+        setTimeout(() => {
+          onClose();
+          window.location.reload();
+        }, 500);
       } else {
         toast.error(data.error || '删除失败');
       }
@@ -134,14 +140,12 @@ const AvatarUpload: React.FC<Props> = ({
         className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 头部 */}
         <div className="bg-gradient-to-r from-blue-500 to-cyan-600 px-6 py-4">
           <h2 className="text-xl font-bold text-white">{title}</h2>
           <p className="text-blue-100 text-sm">支持 JPG、PNG、GIF，最大 10MB</p>
         </div>
 
         <div className="p-6">
-          {/* 头像预览 */}
           <div className="flex justify-center mb-6">
             <div className="relative">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 shadow-lg">
@@ -159,7 +163,6 @@ const AvatarUpload: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* 按钮组 */}
           <div className="space-y-3">
             <button
               onClick={() => fileInputRef.current?.click()}
