@@ -1,34 +1,57 @@
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
+const { Readable } = require('stream');
 
-// ✅ 新版本：使用 CLOUDINARY_URL 环境变量
-cloudinary.config({
-  url: process.env.CLOUDINARY_URL || 'cloudinary://你的api_key:你的api_secret@你的cloud_name'
-});
+// ✅ 支持两种配置方式
+if (process.env.CLOUDINARY_URL) {
+  // 新版本：使用 CLOUDINARY_URL
+  cloudinary.config({
+    url: process.env.CLOUDINARY_URL
+  });
+} else {
+  // 旧版本：分开配置
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+}
 
-// 或者分别配置
-// cloudinary.config({
-//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-//   api_key: process.env.CLOUDINARY_API_KEY,
-//   api_secret: process.env.CLOUDINARY_API_SECRET
-// });
+console.log('📸 Cloudinary 已配置');
 
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'rp-chat/avatars',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-    transformation: [{ width: 300, height: 300, crop: 'limit' }],
-    public_id: (req, file) => {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const type = req.params?.type || req.body?.type || 'user';
-      return `${type}-${req.userId}-${uniqueSuffix}`;
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage, 
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('只支持图片格式'), false);
     }
   }
 });
 
-const upload = multer({ storage: storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const uploadToCloudinary = (fileBuffer, folder, publicId) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder,
+        public_id: publicId,
+        transformation: [{ width: 300, height: 300, crop: 'limit' }]
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    
+    const readableStream = new Readable();
+    readableStream.push(fileBuffer);
+    readableStream.push(null);
+    readableStream.pipe(uploadStream);
+  });
+};
 
 const deleteOldAvatar = async (oldUrl) => {
   if (!oldUrl) return;
@@ -44,4 +67,4 @@ const deleteOldAvatar = async (oldUrl) => {
   }
 };
 
-module.exports = { upload, deleteOldAvatar };
+module.exports = { upload, uploadToCloudinary, deleteOldAvatar };
