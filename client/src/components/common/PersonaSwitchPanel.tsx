@@ -12,6 +12,14 @@ interface Props {
   align?: 'left' | 'right';
 }
 
+// 辅助函数：从 URL 中提取头像框文件名
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
+
 const PersonaSwitchPanel: React.FC<Props> = ({ 
   personas, 
   currentPersona, 
@@ -65,11 +73,6 @@ const PersonaSwitchPanel: React.FC<Props> = ({
     return `${positionClasses[position]} ${alignClass}`;
   };
 
-  // 获取头像框 URL
-  const getAvatarFrameUrl = (persona: Persona): string | null => {
-    return persona.avatarFrame || persona.equipped?.avatarFrameUrl || null;
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -108,6 +111,7 @@ const PersonaSwitchPanel: React.FC<Props> = ({
         ) : (
           sortedPersonas.map(persona => {
             const isCurrent = currentPersona?._id === persona._id;
+            const frameName = getFrameNameFromUrl(persona.avatarFrame || persona.equipped?.avatarFrame);
             return (
               <button
                 key={persona._id}
@@ -124,9 +128,9 @@ const PersonaSwitchPanel: React.FC<Props> = ({
               >
                 <AvatarFrame
                   avatarUrl={persona.avatar || ''}
-                  frameUrl={getAvatarFrameUrl(persona)}
+                  frameName={frameName}
                   size="sm"
-                  className="flex-shrink-0"
+                  className="persona-switch flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">

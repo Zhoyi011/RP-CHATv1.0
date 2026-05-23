@@ -52,6 +52,15 @@ const formatDividerTime = (date: Date): string => {
   }
 };
 
+// ========== 辅助函数：从 URL 中提取头像框文件名 ==========
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  // 如果是 Cloudinary URL 或 /frames/xxx.png 格式，提取文件名
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
+
 // ========== 回复预览组件 ==========
 const ReplyPreviewBar: React.FC<{
   replyTo: ReplyToInfo;
@@ -115,20 +124,21 @@ const MessageBubble: React.FC<{
 
   const isReplyHidden = message.replyTo && (message.replyTo.isRecalled || message.replyTo.isDeleted);
 
-  // 获取头像框 URL
-  const getAvatarFrameUrl = (): string | null => {
-    return message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame || null;
+  // 获取头像框文件名
+  const getFrameName = (): string | null => {
+    const frameUrl = message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame;
+    return getFrameNameFromUrl(frameUrl);
   };
 
   return (
     <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group`}>
-      {/* 对方头像 - 使用 AvatarFrame */}
+      {/* 对方头像 */}
       {!isSelf && (
         <AvatarFrame
           avatarUrl={message.personaId?.avatar || ''}
-          frameUrl={getAvatarFrameUrl()}
+          frameName={getFrameName()}
           size="sm"
-          className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
+          className="chat-message-other flex-shrink-0 cursor-pointer hover:scale-105 transition"
           onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
         />
       )}
@@ -204,13 +214,13 @@ const MessageBubble: React.FC<{
         </div>
       </div>
 
-      {/* 自己头像 - 使用 AvatarFrame */}
+      {/* 自己头像 */}
       {isSelf && selectedPersona && (
         <AvatarFrame
           avatarUrl={selectedPersona.avatar || ''}
-          frameUrl={selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame || null}
+          frameName={getFrameNameFromUrl(selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame)}
           size="sm"
-          className="flex-shrink-0"
+          className="chat-message-self flex-shrink-0"
         />
       )}
 
@@ -691,14 +701,16 @@ const ChatHome = () => {
     const handleNewMessage = (message: Message) => {
       const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
       if (!isSelf) {
-        // 通知弹窗 - 使用 AvatarFrame
+        // 通知弹窗
+        const frameName = getFrameNameFromUrl(message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame);
         toast.custom((t) => (
           <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 flex items-center gap-3 cursor-pointer ${t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}
             onClick={() => toast.dismiss(t.id)}>
             <AvatarFrame
               avatarUrl={message.personaId?.avatar || ''}
-              frameUrl={message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame || null}
+              frameName={frameName}
               size="sm"
+              className="notification"
             />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate text-gray-800 dark:text-gray-200">{message.personaId?.displayName || message.personaId?.name}</p>

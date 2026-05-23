@@ -2,14 +2,15 @@ import React from 'react';
 
 interface Props {
   avatarUrl: string;
-  frameUrl?: string | null;
+  frameName?: string | null;  // 改成文件名，比如 'cat', 'demon'
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   onClick?: () => void;
-  // 手动调整头像框大小（相对于容器的比例）
-  frameScale?: number;
-  // 手动调整头像大小（相对于容器的比例）
-  avatarScale?: number;
+  // 手动调整参数（每个位置独立调整）
+  frameSize?: number;   // 头像框大小（像素）
+  avatarSize?: number;  // 头像大小（像素）
+  offsetX?: number;     // 水平偏移
+  offsetY?: number;     // 垂直偏移
 }
 
 const sizeMap = {
@@ -19,85 +20,74 @@ const sizeMap = {
   xl: 128,
 };
 
-// 默认配置（可全局调整）
-const defaultConfig = {
-  frameScale: 1.2,   // 头像框放大到容器的 120%
-  avatarScale: 0.65, // 头像缩小到容器的 65%
-};
-
-// 根据头像框文件名自动配置（可选）
-const getAutoConfig = (frameUrl: string | null | undefined) => {
-  if (!frameUrl) return defaultConfig;
-  
-  const fileName = frameUrl.toLowerCase();
-  
-  // 猫耳头像框 - 需要更大
-  if (fileName.includes('cat')) {
-    return { frameScale: 1.4, avatarScale: 0.55 };
-  }
-  // 王冠头像框
-  if (fileName.includes('crown')) {
-    return { frameScale: 1.3, avatarScale: 0.6 };
-  }
-  // 恶魔头像框
-  if (fileName.includes('demon')) {
-    return { frameScale: 1.35, avatarScale: 0.58 };
-  }
-  // 翅膀头像框
-  if (fileName.includes('wing')) {
-    return { frameScale: 1.4, avatarScale: 0.55 };
-  }
-  // 紫色系列
-  if (fileName.includes('purple')) {
-    return { frameScale: 1.2, avatarScale: 0.65 };
-  }
-  
-  // 默认
-  return defaultConfig;
-};
-
-const getFullImageUrl = (url: string): string => {
-  if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    return url;
-  }
-  const API_BASE = import.meta.env.VITE_API_BASE?.replace('/api', '') || 'https://rp-chatv1-0.onrender.com';
-  return `${API_BASE}${url}`;
+// 每个头像框的独立调整参数（你手动调到这里）
+// 结构：位置 -> 头像框名称 -> 参数
+const frameAdjustments: Record<string, Record<string, { frameSize: number; avatarSize: number; offsetX: number; offsetY: number }>> = {
+  // 聊天消息（对方）
+  'chat-message-other': {
+    'cat': { frameSize: 70, avatarSize: 40, offsetX: 0, offsetY: 0 },
+    'demon': { frameSize: 75, avatarSize: 38, offsetX: 0, offsetY: 2 },
+    'purple': { frameSize: 500, avatarSize: 42, offsetX: 0, offsetY: 0 },
+    'default': { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 },
+  },
+  // 聊天消息（自己）
+  'chat-message-self': {
+    'cat': { frameSize: 70, avatarSize: 40, offsetX: 0, offsetY: 0 },
+    'demon': { frameSize: 75, avatarSize: 38, offsetX: 0, offsetY: 2 },
+    'default': { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 },
+  },
+  // 侧边栏
+  'sidebar': {
+    'cat': { frameSize: 70, avatarSize: 42, offsetX: 0, offsetY: 0 },
+    'default': { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 },
+  },
+  // 角色详情页
+  'persona-detail': {
+    'cat': { frameSize: 140, avatarSize: 90, offsetX: 0, offsetY: 0 },
+    'demon': { frameSize: 150, avatarSize: 85, offsetX: 0, offsetY: 5 },
+    'default': { frameSize: 130, avatarSize: 90, offsetX: 0, offsetY: 0 },
+  },
 };
 
 const AvatarFrame: React.FC<Props> = ({ 
   avatarUrl, 
-  frameUrl, 
-  size = 'md', 
+  frameName, 
+  size = 'md',
   className = '',
   onClick,
-  frameScale: customFrameScale,
-  avatarScale: customAvatarScale,
+  frameSize: propFrameSize,
+  avatarSize: propAvatarSize,
+  offsetX: propOffsetX,
+  offsetY: propOffsetY,
 }) => {
   const containerSize = sizeMap[size];
   
-  // 获取自动配置
-  const autoConfig = getAutoConfig(frameUrl);
+  // 获取这个位置的头像框调整参数
+  const locationKey = className.includes('chat-message') ? 'chat-message-other' 
+    : className.includes('sidebar') ? 'sidebar'
+    : className.includes('persona-detail') ? 'persona-detail'
+    : 'chat-message-other';
   
-  const frameScale = customFrameScale ?? autoConfig.frameScale;
-  const avatarScale = customAvatarScale ?? autoConfig.avatarScale;
+  const frameKey = frameName || 'default';
+  const adjustments = frameAdjustments[locationKey]?.[frameKey] || frameAdjustments[locationKey]?.default || { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 };
   
-  const frameSize = containerSize * frameScale;
-  const avatarSize = containerSize * avatarScale;
+  // 优先使用 props 传入的值，否则使用调整表的值
+  const frameSize = propFrameSize ?? adjustments.frameSize;
+  const avatarSize = propAvatarSize ?? adjustments.avatarSize;
+  const offsetX = propOffsetX ?? adjustments.offsetX;
+  const offsetY = propOffsetY ?? adjustments.offsetY;
   
-  const fullAvatarUrl = getFullImageUrl(avatarUrl);
-  const fullFrameUrl = frameUrl ? getFullImageUrl(frameUrl) : null;
-  
+  const frameUrl = frameName ? `/frames/${frameName}.png` : null;
   const defaultAvatar = `https://ui-avatars.com/api/?name=U&background=3b82f6&color=fff&size=128`;
   
-  if (!fullFrameUrl) {
+  if (!frameUrl) {
     return (
       <div 
         className={`rounded-full overflow-hidden ${className}`}
         style={{ width: containerSize, height: containerSize }}
         onClick={onClick}
       >
-        <img src={fullAvatarUrl || defaultAvatar} alt="头像" className="w-full h-full object-cover" />
+        <img src={avatarUrl || defaultAvatar} alt="头像" className="w-full h-full object-cover" />
       </div>
     );
   }
@@ -105,12 +95,12 @@ const AvatarFrame: React.FC<Props> = ({
   return (
     <div 
       className={`relative ${className}`}
-      style={{ width: containerSize, height: containerSize }}
+      style={{ width: containerSize, height: containerSize, overflow: 'visible' }}
       onClick={onClick}
     >
-      {/* 头像（底层） */}
+      {/* 头像 */}
       <img
-        src={fullAvatarUrl || defaultAvatar}
+        src={avatarUrl || defaultAvatar}
         alt="头像"
         className="absolute rounded-full object-cover"
         style={{
@@ -118,13 +108,13 @@ const AvatarFrame: React.FC<Props> = ({
           height: avatarSize,
           top: '50%',
           left: '50%',
-          transform: 'translate(-50%, -50%)',
+          transform: `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`,
           zIndex: 1,
         }}
       />
-      {/* 头像框（上层） */}
+      {/* 头像框 */}
       <img
-        src={fullFrameUrl}
+        src={frameUrl}
         alt="头像框"
         className="absolute"
         style={{
@@ -135,6 +125,7 @@ const AvatarFrame: React.FC<Props> = ({
           transform: 'translate(-50%, -50%)',
           zIndex: 2,
           pointerEvents: 'none',
+          objectFit: 'contain',
         }}
       />
     </div>

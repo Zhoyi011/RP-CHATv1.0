@@ -16,6 +16,14 @@ import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com';
 
+// 辅助函数：从 URL 中提取头像框文件名
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
+
 const PersonaDetail = () => {
   const { personaId } = useParams<{ personaId: string }>();
   const navigate = useNavigate();
@@ -55,7 +63,6 @@ const PersonaDetail = () => {
       const data = await personaApi.getPersonaDetail(personaId!);
       setPersona(data);
       
-      // 通过 API 获取当前用户信息（一劳永逸）
       const token = localStorage.getItem('token');
       if (token) {
         const userRes = await fetch(`${API_BASE}/api/auth/me`, {
@@ -156,19 +163,22 @@ const PersonaDetail = () => {
     );
   }
 
+  // 获取头像框文件名
+  const frameName = getFrameNameFromUrl(persona.equipped?.avatarFrame || persona.equipped?.avatarFrameUrl);
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      {/* 头部渐变区 */}
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white">
         <div className="px-4 py-3 flex items-center">
-          <button onClick={() => navigate(-1)} className="mr-3 p-1 hover:bg-white/20 rounded-full transition">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onClick={() => navigate(-1)} className="mr-3 p-1.5 hover:bg-white/20 rounded-full transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1">角色主页</h1>
+          <h1 className="text-lg font-semibold flex-1">角色主页</h1>
           
           <div className="flex items-center gap-1">
-            {/* 更换头像按钮 - 使用 isCurrentUserPersona 控制 */}
             {isCurrentUserPersona && (
               <button 
                 onClick={() => setShowAvatarUpload(true)} 
@@ -196,15 +206,15 @@ const PersonaDetail = () => {
           </div>
         </div>
 
+        {/* 头像区域 - 使用新版 AvatarFrame */}
         <div className="mx-4 mb-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <AvatarFrame
-                avatarUrl={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=96`}
-                frameUrl={persona.equipped?.avatarFrame}
-                size="xl"
-              />
-            </div>
+          <div className="flex items-center gap-5">
+            <AvatarFrame
+              avatarUrl={persona.avatar || `https://ui-avatars.com/api/?name=${persona.name}&background=3b82f6&color=fff&size=128`}
+              frameName={frameName}
+              size="xl"
+              className="persona-detail"
+            />
             
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -247,6 +257,7 @@ const PersonaDetail = () => {
           </div>
         </div>
 
+        {/* Tab 导航 */}
         <div className="flex px-4 pb-2 gap-1 overflow-x-auto">
           {[
             { key: 'info', label: '主页', icon: '🏠' },
@@ -266,6 +277,7 @@ const PersonaDetail = () => {
         </div>
       </div>
 
+      {/* 内容区 */}
       <div className="p-4">
         {activeTab === 'info' && (
           <div className="space-y-4">
@@ -392,6 +404,7 @@ const PersonaDetail = () => {
         )}
       </div>
 
+      {/* 头像上传弹窗 */}
       <AnimatePresence>
         {showAvatarUpload && (
           <AvatarUpload
@@ -405,6 +418,7 @@ const PersonaDetail = () => {
         )}
       </AnimatePresence>
 
+      {/* 角色卡预览弹窗 */}
       <AnimatePresence>
         {showCardPreview && (
           <motion.div
@@ -427,7 +441,7 @@ const PersonaDetail = () => {
               </div>
               <div className="p-0">
                 <img 
-                  src={`${API_BASE}/persona/${persona._id}/card`}
+                  src={`${API_BASE}/api/persona/${persona._id}/card`}
                   alt="角色卡"
                   className="w-full"
                   onError={(e) => {
@@ -438,7 +452,7 @@ const PersonaDetail = () => {
               <div className="p-4 flex gap-2">
                 <button onClick={() => setShowCardPreview(false)} className="flex-1 py-2 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-300">关闭</button>
                 <a 
-                  href={`${API_BASE}/persona/${persona._id}/card`}
+                  href={`${API_BASE}/api/persona/${persona._id}/card`}
                   download={`${persona.name}_角色卡.png`}
                   className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl text-center font-medium hover:shadow-lg transition"
                 >
@@ -450,6 +464,7 @@ const PersonaDetail = () => {
         )}
       </AnimatePresence>
 
+      {/* AI 对话弹窗 */}
       <AnimatePresence>
         {showAIChat && (
           <AIChat persona={persona} onClose={() => setShowAIChat(false)} />

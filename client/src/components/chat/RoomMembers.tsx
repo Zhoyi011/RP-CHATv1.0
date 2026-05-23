@@ -18,6 +18,9 @@ interface Member {
     sameNameNumber?: number;
     globalNumber?: number;
     avatarFrame?: string | null;
+    equipped?: {
+      avatarFrame?: string | null;
+    };
   };
   role: 'owner' | 'admin' | 'member';
   title?: string;
@@ -29,6 +32,14 @@ interface Persona {
   name: string;
   displayName: string;
 }
+
+// 辅助函数：从 URL 中提取头像框文件名
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
 
 const RoomMembers = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -234,70 +245,99 @@ const RoomMembers = () => {
             <p className="text-gray-400 dark:text-gray-500">暂无成员</p>
           </div>
         ) : (
-          members.map((member) => (
-            <div
-              key={member.personaId?._id || member._id}
-              className={`p-4 rounded-xl transition-colors ${
-                theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
-              } shadow-sm`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {/* 头像 - 使用 AvatarFrame */}
-                  <AvatarFrame
-                    avatarUrl={member.personaId?.avatar || ''}
-                    frameUrl={member.personaId?.avatarFrame || null}
-                    size="md"
-                    className="flex-shrink-0"
-                  />
-                  
-                  {/* 信息 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
-                        {member.personaId?.displayName || member.personaId?.name || '未知角色'}
+          members.map((member) => {
+            const frameUrl = member.personaId?.avatarFrame || member.personaId?.equipped?.avatarFrame;
+            const frameName = getFrameNameFromUrl(frameUrl);
+            return (
+              <div
+                key={member.personaId?._id || member._id}
+                className={`p-4 rounded-xl transition-colors ${
+                  theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
+                } shadow-sm`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* 头像 - 使用 AvatarFrame */}
+                    <AvatarFrame
+                      avatarUrl={member.personaId?.avatar || ''}
+                      frameName={frameName}
+                      size="md"
+                      className="member-list flex-shrink-0"
+                    />
+                    
+                    {/* 信息 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                          {member.personaId?.displayName || member.personaId?.name || '未知角色'}
+                        </p>
+                        {member.title && (
+                          <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full">
+                            {member.title}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        #{member.personaId?.sameNameNumber || member.personaId?.globalNumber || '?'}
                       </p>
-                      {member.title && (
-                        <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full">
-                          {member.title}
-                        </span>
-                      )}
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      #{member.personaId?.sameNameNumber || member.personaId?.globalNumber || '?'}
-                    </p>
+                  </div>
+
+                  {/* 角色标签 */}
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      member.role === 'owner' 
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                        : member.role === 'admin'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                    }`}>
+                      {member.role === 'owner' ? '群主' : member.role === 'admin' ? '管理员' : '成员'}
+                    </span>
                   </div>
                 </div>
 
-                {/* 角色标签 */}
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    member.role === 'owner' 
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                      : member.role === 'admin'
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                  }`}>
-                    {member.role === 'owner' ? '群主' : member.role === 'admin' ? '管理员' : '成员'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 操作按钮（仅管理员/群主可见，且不能操作自己和群主） */}
-              {canManage && member.role !== 'owner' && member.personaId?._id !== currentPersona?._id && (
-                <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
-                  {/* 转让群主（仅当前群主可见） */}
-                  {isOwner && (
-                    showTransferConfirm === member.personaId?._id ? (
+                {/* 操作按钮（仅管理员/群主可见，且不能操作自己和群主） */}
+                {canManage && member.role !== 'owner' && member.personaId?._id !== currentPersona?._id && (
+                  <div className="flex justify-end gap-2 mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+                    {/* 转让群主（仅当前群主可见） */}
+                    {isOwner && (
+                      showTransferConfirm === member.personaId?._id ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleTransferOwner(member.personaId!._id)}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white"
+                          >
+                            确认转让
+                          </button>
+                          <button
+                            onClick={() => setShowTransferConfirm(null)}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowTransferConfirm(member.personaId!._id)}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition"
+                        >
+                          转让群主
+                        </button>
+                      )
+                    )}
+                    
+                    {/* 设置/取消管理员 */}
+                    {showSetAdmin === member.personaId?._id ? (
                       <div className="flex gap-1">
                         <button
-                          onClick={() => handleTransferOwner(member.personaId!._id)}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white"
+                          onClick={() => handleSetAdmin(member.personaId!._id, member.role !== 'admin')}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white"
                         >
-                          确认转让
+                          确认
                         </button>
                         <button
-                          onClick={() => setShowTransferConfirm(null)}
+                          onClick={() => setShowSetAdmin(null)}
                           className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                         >
                           取消
@@ -305,67 +345,42 @@ const RoomMembers = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => setShowTransferConfirm(member.personaId!._id)}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition"
+                        onClick={() => setShowSetAdmin(member.personaId!._id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition"
                       >
-                        转让群主
+                        {member.role === 'admin' ? '取消管理员' : '设为管理员'}
                       </button>
-                    )
-                  )}
-                  
-                  {/* 设置/取消管理员 */}
-                  {showSetAdmin === member.personaId?._id ? (
-                    <div className="flex gap-1">
+                    )}
+                    
+                    {/* 踢出群聊 */}
+                    {showKickConfirm === member.personaId?._id ? (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleKickMember(member.personaId!._id)}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white"
+                        >
+                          确认踢出
+                        </button>
+                        <button
+                          onClick={() => setShowKickConfirm(null)}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
                       <button
-                        onClick={() => handleSetAdmin(member.personaId!._id, member.role !== 'admin')}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white"
+                        onClick={() => setShowKickConfirm(member.personaId!._id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition"
                       >
-                        确认
+                        踢出群聊
                       </button>
-                      <button
-                        onClick={() => setShowSetAdmin(null)}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowSetAdmin(member.personaId!._id)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition"
-                    >
-                      {member.role === 'admin' ? '取消管理员' : '设为管理员'}
-                    </button>
-                  )}
-                  
-                  {/* 踢出群聊 */}
-                  {showKickConfirm === member.personaId?._id ? (
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => handleKickMember(member.personaId!._id)}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-red-500 text-white"
-                      >
-                        确认踢出
-                      </button>
-                      <button
-                        onClick={() => setShowKickConfirm(null)}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowKickConfirm(member.personaId!._id)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition"
-                    >
-                      踢出群聊
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

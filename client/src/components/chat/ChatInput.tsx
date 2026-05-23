@@ -19,6 +19,14 @@ interface ChatInputProps {
   onLoadRoomPersonas?: () => void;
 }
 
+// 辅助函数：从 URL 中提取头像框文件名
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
+
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   disabled = false, 
@@ -44,11 +52,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
 
   console.log(`📊 [ChatInput] 状态: inputLength=${inputValue.length}, isFocused=${isFocused}, isKeyboardOpen=${isKeyboardOpen}`);
-
-  // 获取头像框 URL
-  const getAvatarFrameUrl = (persona: Persona): string | null => {
-    return persona.avatarFrame || persona.equipped?.avatarFrameUrl || null;
-  };
 
   // 键盘弹出时滚动输入框到可视区域
   const scrollInputToVisible = () => {
@@ -253,6 +256,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   <div className="max-h-60 overflow-y-auto">
                     {roomPersonas.map(persona => {
                       const isActive = selectedPersona?._id === persona._id;
+                      // 获取头像框文件名
+                      const frameName = getFrameNameFromUrl(persona.avatarFrame || persona.equipped?.avatarFrame);
                       return (
                         <motion.button
                           key={persona._id}
@@ -266,9 +271,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
                         >
                           <AvatarFrame
                             avatarUrl={persona.avatar || ''}
-                            frameUrl={getAvatarFrameUrl(persona)}
+                            frameName={frameName}
                             size="sm"
-                            className="flex-shrink-0"
+                            className="chat-input-menu flex-shrink-0"
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
