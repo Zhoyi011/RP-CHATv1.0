@@ -6,6 +6,7 @@ import { roomApi } from '../../services/api';
 import DiamondBalance from '../diamond/DiamondBalance';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
+import AvatarFrame from '../common/AvatarFrame';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -83,8 +84,16 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
       });
       const data = await response.json();
       if (data.activePersona) {
-        const persona = data.activePersona.personaId || data.activePersona;
-        setCurrentPersona(persona);
+        const personaId = data.activePersona.personaId?._id || data.activePersona._id;
+        const personaRes = await fetch(`https://rp-chatv1-0.onrender.com/api/persona/${personaId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (personaRes.ok) {
+          const fullPersona = await personaRes.json();
+          setCurrentPersona(fullPersona);
+        } else {
+          setCurrentPersona(data.activePersona.personaId || data.activePersona);
+        }
       }
     } catch (error) {
       console.error('刷新角色失败:', error);
@@ -203,9 +212,11 @@ const MobileLayout: React.FC<Props> = ({ children }) => {
                 onClick={() => setShowSwitchPanel(!showSwitchPanel)}
                 className="relative focus:outline-none active:scale-90 transition-transform"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                  {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
-                </div>
+                <AvatarFrame
+                  avatarUrl={currentPersona?.avatar || ''}
+                  frameUrl={currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrameUrl || null}
+                  size="sm"
+                />
                 <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full ring-1 ring-white"></div>
               </button>
 

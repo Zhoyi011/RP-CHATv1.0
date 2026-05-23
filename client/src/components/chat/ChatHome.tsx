@@ -115,15 +115,22 @@ const MessageBubble: React.FC<{
 
   const isReplyHidden = message.replyTo && (message.replyTo.isRecalled || message.replyTo.isDeleted);
 
+  // 获取头像框 URL
+  const getAvatarFrameUrl = (): string | null => {
+    return message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame || null;
+  };
+
   return (
     <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group`}>
+      {/* 对方头像 - 使用 AvatarFrame */}
       {!isSelf && (
-        <div 
+        <AvatarFrame
+          avatarUrl={message.personaId?.avatar || ''}
+          frameUrl={getAvatarFrameUrl()}
+          size="sm"
+          className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
           onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
-          className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold cursor-pointer hover:scale-105 transition shadow-sm"
-        >
-          {(message.personaId?.displayName || message.personaId?.name || '?').charAt(0)}
-        </div>
+        />
       )}
       
       <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
@@ -147,44 +154,43 @@ const MessageBubble: React.FC<{
         )}
         
         <div
-  {...longPressProps}
-  className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
-    isSelf 
-      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
-      : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
-  }`}
->
-  {message.replyTo && (
-    <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-      <div className="flex items-center gap-1 mb-1">
-        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-        </svg>
-        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
-      </div>
-      <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
-        {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
-      </p>
-    </div>
-  )}
-  
-  {/* ✅ 修改这里：链接颜色 */}
-  <div 
-    className={`break-words whitespace-pre-wrap ${
-      isSelf 
-        ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
-        : '[&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 [&_a]:break-all'
-    }`}
-    dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} 
-  />
-  
-  {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
-  
-  <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
-    <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
-      {formatBubbleTime(new Date(message.createdAt))}
-    </span>
-  </div>
+          {...longPressProps}
+          className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
+            isSelf 
+              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
+              : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
+          }`}
+        >
+          {message.replyTo && (
+            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-1 mb-1">
+                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
+              </div>
+              <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
+              </p>
+            </div>
+          )}
+          
+          <div 
+            className={`break-words whitespace-pre-wrap ${
+              isSelf 
+                ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
+                : '[&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 [&_a]:break-all'
+            }`}
+            dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} 
+          />
+          
+          {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
+          
+          <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+            <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
+              {formatBubbleTime(new Date(message.createdAt))}
+            </span>
+          </div>
           
           <button
             onClick={() => onReply(message)}
@@ -198,10 +204,14 @@ const MessageBubble: React.FC<{
         </div>
       </div>
 
-      {isSelf && (
-        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
-          {(selectedPersona?.displayName || selectedPersona?.name || '?').charAt(0)}
-        </div>
+      {/* 自己头像 - 使用 AvatarFrame */}
+      {isSelf && selectedPersona && (
+        <AvatarFrame
+          avatarUrl={selectedPersona.avatar || ''}
+          frameUrl={selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame || null}
+          size="sm"
+          className="flex-shrink-0"
+        />
       )}
 
       {!isSelf && (
@@ -626,20 +636,19 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-  // 在 ChatHome 组件中添加这个 useEffect
+  // 监听角色切换事件
   useEffect(() => {
     const handlePersonaChanged = (e: CustomEvent) => {
       const newPersona = e.detail;
       if (newPersona) {
-      setSelectedPersona(newPersona);
-      // 同时更新当前角色显示
-      setCurrentPersona(newPersona);
-    }
-  };
-  
-  window.addEventListener('personaChanged', handlePersonaChanged as EventListener);
-  return () => window.removeEventListener('personaChanged', handlePersonaChanged as EventListener);
-}, []);
+        setSelectedPersona(newPersona);
+        setCurrentPersona(newPersona);
+      }
+    };
+    
+    window.addEventListener('personaChanged', handlePersonaChanged as EventListener);
+    return () => window.removeEventListener('personaChanged', handlePersonaChanged as EventListener);
+  }, []);
 
   useEffect(() => {
     if (!selectedRoom || !selectedPersona) return;
@@ -682,12 +691,15 @@ const ChatHome = () => {
     const handleNewMessage = (message: Message) => {
       const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
       if (!isSelf) {
+        // 通知弹窗 - 使用 AvatarFrame
         toast.custom((t) => (
           <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 flex items-center gap-3 cursor-pointer ${t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}
             onClick={() => toast.dismiss(t.id)}>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold">
-              {(message.personaId?.displayName || message.personaId?.name || '?').charAt(0)}
-            </div>
+            <AvatarFrame
+              avatarUrl={message.personaId?.avatar || ''}
+              frameUrl={message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame || null}
+              size="sm"
+            />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate text-gray-800 dark:text-gray-200">{message.personaId?.displayName || message.personaId?.name}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{message.content}</p>
@@ -749,7 +761,6 @@ const ChatHome = () => {
   const handleSelectRoom = useCallback(async (room: Room) => {
     let persona = selectedPersona;
     
-    // 如果没有 selectedPersona，尝试从 localStorage 恢复
     if (!persona) {
       const lastUsedId = localStorage.getItem('lastUsedPersonaId');
       if (lastUsedId && personas.length > 0) {
@@ -877,8 +888,6 @@ const ChatHome = () => {
   };
 
   const handleReport = () => toast('举报功能开发中，请通过邮件联系我们：zhoyi.lee@gmail.com', { icon: '📧', duration: 5000 });
-
-  const currentDisplayName = selectedPersona?.displayName || selectedPersona?.name || '选择角色';
 
   if (!authChecked) return <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center"><div className="text-white/60 text-lg animate-pulse">加载中...</div></div>;
   if (error) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-center"><div className="text-6xl mb-4">😢</div><p className="text-red-500 mb-6">{error}</p><button onClick={() => window.location.reload()} className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition">重试</button></div></div>;

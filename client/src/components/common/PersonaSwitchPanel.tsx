@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { type Persona } from '../../services/api';
+import AvatarFrame from '../common/AvatarFrame';
 
 interface Props {
   personas: Persona[];
@@ -64,6 +65,11 @@ const PersonaSwitchPanel: React.FC<Props> = ({
     return `${positionClasses[position]} ${alignClass}`;
   };
 
+  // 获取头像框 URL
+  const getAvatarFrameUrl = (persona: Persona): string | null => {
+    return persona.avatarFrame || persona.equipped?.avatarFrameUrl || null;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -116,9 +122,12 @@ const PersonaSwitchPanel: React.FC<Props> = ({
                   ${isCurrent ? 'bg-blue-50 dark:bg-blue-900/30' : ''}
                 `}
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                  {persona.name.charAt(0).toUpperCase()}
-                </div>
+                <AvatarFrame
+                  avatarUrl={persona.avatar || ''}
+                  frameUrl={getAvatarFrameUrl(persona)}
+                  size="sm"
+                  className="flex-shrink-0"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
                     {persona.displayName || persona.name}

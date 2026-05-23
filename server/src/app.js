@@ -277,7 +277,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 发送消息（支持回复）
+    // 发送消息（支持回复，包含头像框）
   socket.on('send-message', async (data) => {
     const { roomId, userId, personaId, content, isAction, replyToId } = data;
     console.log(`📨 [Socket] 收到消息，房间: ${roomId}, 用户: ${userId}, 回复: ${replyToId || '无'}, 内容长度: ${content?.length}`);
@@ -316,6 +316,24 @@ io.on('connection', (socket) => {
         }
       }
       
+      // ✅ 获取角色信息（包含头像框装备）
+      const Persona = require('./models/Persona');
+      const persona = await Persona.findById(personaId).populate('equipped.avatarFrame', 'image name');
+      
+      if (!persona) {
+        console.log(`❌ [Socket] 角色不存在: ${personaId}`);
+        socket.emit('error', { message: '角色不存在' });
+        return;
+      }
+      console.log(`✅ [Socket] 找到角色: ${persona.name}`);
+      
+      // ✅ 获取头像框 URL
+      let avatarFrameUrl = null;
+      if (persona.equipped && persona.equipped.avatarFrame) {
+        avatarFrameUrl = persona.equipped.avatarFrame.image;
+        console.log(`🖼️ [Socket] 角色有头像框: ${avatarFrameUrl}`);
+      }
+      
       const Message = require('./models/Message');
       const message = new Message({
         roomId,
@@ -328,15 +346,6 @@ io.on('connection', (socket) => {
       
       await message.save();
       console.log(`💾 [Socket] 消息已保存，ID: ${message._id}`);
-      
-      const Persona = require('./models/Persona');
-      const persona = await Persona.findById(personaId);
-      
-      if (!persona) {
-        console.log(`❌ [Socket] 角色不存在: ${personaId}`);
-        return;
-      }
-      console.log(`✅ [Socket] 找到角色: ${persona.name}`);
 
       // 更新 Persona 在群里的最后使用时间
       try {
@@ -358,6 +367,7 @@ io.on('connection', (socket) => {
         };
       }
       
+      // ✅ 构建消息对象（包含头像框信息）
       const messageToSend = {
         _id: message._id,
         content: message.content,
@@ -372,7 +382,12 @@ io.on('connection', (socket) => {
           name: persona.name,
           displayName: persona.displayName,
           avatar: persona.avatar,
-          sameNameNumber: persona.sameNameNumber
+          sameNameNumber: persona.sameNameNumber,
+          // ✅ 新增头像框字段
+          avatarFrame: avatarFrameUrl,
+          equipped: {
+            avatarFrame: avatarFrameUrl
+          }
         },
         userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
       };

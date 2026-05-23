@@ -33,18 +33,12 @@ async function request<T>(
     if (response.status === 401) {
       console.warn('⚠️ token 无效或已过期，正在跳转登录页...');
       
-      // 清除本地存储
       localStorage.removeItem('token');
       localStorage.removeItem('lastUsedPersonaId');
       
-      // 防止重复跳转
       if (!isRedirecting && typeof window !== 'undefined') {
         isRedirecting = true;
-        
-        // 显示提示
         toast.error('登录已过期，请重新登录');
-        
-        // 延迟跳转
         setTimeout(() => {
           window.location.href = '/';
           isRedirecting = false;
@@ -62,7 +56,6 @@ async function request<T>(
 
     return data as T;
   } catch (error) {
-    // 网络错误处理
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       console.error('网络错误，请检查网络连接');
       toast.error('网络连接失败，请检查网络');
@@ -169,6 +162,11 @@ export interface Message {
     displayName: string;
     avatar?: string;
     sameNameNumber?: number;
+    // ✅ 头像框字段
+    avatarFrame?: string | null;
+    equipped?: {
+      avatarFrame?: string | null;
+    };
   };
   userId: {
     _id: string;
@@ -179,6 +177,7 @@ export interface Message {
   replyTo?: ReplyToInfo | null;
 }
 
+// ========== Persona 类型（只定义一次，完整版）==========
 export interface Persona {
   _id: string;
   name: string;
@@ -223,9 +222,11 @@ export interface Persona {
     avatarFrame?: string;
     ring?: string;
     relationshipCard?: string;
-    avatarFrameUrl?: string; 
+    avatarFrameUrl?: string;
     avatarFrameId?: string;
   };
+  // ✅ 头像框快捷字段（从 equipped.avatarFrameUrl 派生，方便使用）
+  avatarFrame?: string | null;
 }
 
 export interface ActivePersonaResponse {

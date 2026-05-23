@@ -4,6 +4,7 @@ import EmojiPicker from '../common/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import type { Persona } from '../../services/api';
+import AvatarFrame from '../common/AvatarFrame';
 
 console.log('🔧 [ChatInput] 组件加载（原生键盘版 - 完美贴合）');
 
@@ -44,17 +45,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   console.log(`📊 [ChatInput] 状态: inputLength=${inputValue.length}, isFocused=${isFocused}, isKeyboardOpen=${isKeyboardOpen}`);
 
-  // ✅ 键盘弹出时滚动输入框到可视区域（完美贴合）
+  // 获取头像框 URL
+  const getAvatarFrameUrl = (persona: Persona): string | null => {
+    return persona.avatarFrame || persona.equipped?.avatarFrameUrl || null;
+  };
+
+  // 键盘弹出时滚动输入框到可视区域
   const scrollInputToVisible = () => {
     if (!inputRef.current) return;
-    // 等待键盘完全弹出
     setTimeout(() => {
       inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       console.log('📱 [ChatInput] 键盘弹出，输入框已滚动到贴合位置');
     }, 100);
   };
 
-  // 监听键盘打开/关闭（来自 useKeyboardHeight 检测）
+  // 监听键盘打开/关闭
   useEffect(() => {
     if (isKeyboardOpen && isFocused && inputRef.current) {
       scrollInputToVisible();
@@ -62,7 +67,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [isKeyboardOpen, isFocused]);
 
-  // iOS 下额外监听 resize（备用）
+  // iOS 下额外监听 resize
   useEffect(() => {
     const handleResize = () => {
       if (isFocused && inputRef.current && isIOS) {
@@ -142,7 +147,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     onSendMessage(content, isAction, selectedPersona?._id);
     setInputValue('');
     
-    // 发送后重新聚焦
     setTimeout(() => {
       inputRef.current?.focus();
       console.log('📱 [ChatInput] 发送后重新聚焦输入框');
@@ -206,9 +210,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
         )}
       </AnimatePresence>
 
-      {/* ❌ 已删除重复的"当前发言身份"显示区块 */}
-      {/* 发言身份现在只在 ChatHome 中统一显示 */}
-
       <div className="flex items-end gap-2">
         {/* 角色切换按钮 */}
         {canSwitchPersona && (
@@ -263,9 +264,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
                             ${isActive ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}
                           `}
                         >
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0">
-                            {persona.name.charAt(0).toUpperCase()}
-                          </div>
+                          <AvatarFrame
+                            avatarUrl={persona.avatar || ''}
+                            frameUrl={getAvatarFrameUrl(persona)}
+                            size="sm"
+                            className="flex-shrink-0"
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
                               {persona.displayName || persona.name}
@@ -378,7 +382,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onFocus={() => {
               setIsFocused(true);
               console.log('🔍 [ChatInput] 输入框获得焦点');
-              // 聚焦时滚动，确保键盘升起后输入框可见
               setTimeout(() => {
                 inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
                 console.log('📱 [ChatInput] 聚焦后滚动输入框');

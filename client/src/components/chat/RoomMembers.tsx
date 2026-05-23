@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import toast from 'react-hot-toast';
+import AvatarFrame from '../common/AvatarFrame';
 
 console.log('🔧 [RoomMembers] 组件加载');
 
@@ -16,6 +17,7 @@ interface Member {
     avatar?: string;
     sameNameNumber?: number;
     globalNumber?: number;
+    avatarFrame?: string | null;
   };
   role: 'owner' | 'admin' | 'member';
   title?: string;
@@ -158,7 +160,7 @@ const RoomMembers = () => {
     }
   };
 
-  // ✅ 转让群主
+  // 转让群主
   const handleTransferOwner = async (memberPersonaId: string) => {
     console.log(`🔧 [RoomMembers] 转让群主给: ${memberPersonaId}`);
     try {
@@ -175,7 +177,6 @@ const RoomMembers = () => {
       const data = await response.json();
       if (response.ok) {
         toast.success('群主已转让');
-        // 重新加载数据
         await loadCurrentPersona();
         await loadMembers();
       } else {
@@ -242,10 +243,13 @@ const RoomMembers = () => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {/* 头像 */}
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md flex-shrink-0">
-                    {(member.personaId?.displayName || member.personaId?.name || '?').charAt(0)}
-                  </div>
+                  {/* 头像 - 使用 AvatarFrame */}
+                  <AvatarFrame
+                    avatarUrl={member.personaId?.avatar || ''}
+                    frameUrl={member.personaId?.avatarFrame || null}
+                    size="md"
+                    className="flex-shrink-0"
+                  />
                   
                   {/* 信息 */}
                   <div className="flex-1 min-w-0">

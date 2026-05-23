@@ -316,7 +316,14 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
     const before = req.query.before;
     
     let query = Message.find({ roomId })
-      .populate('personaId', 'name displayName avatar sameNameNumber')
+      .populate({
+        path: 'personaId',
+        populate: {
+          path: 'equipped.avatarFrame',
+          model: 'ShopItem',
+          select: 'image name'
+        }
+      })
       .populate('replyTo', 'content isRecalled isDeleted')
       .sort({ createdAt: -1 })
       .limit(limit);
@@ -324,7 +331,14 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
     if (before) {
       const beforeDate = new Date(before);
       query = Message.find({ roomId, createdAt: { $lt: beforeDate } })
-        .populate('personaId', 'name displayName avatar sameNameNumber')
+        .populate({
+          path: 'personaId',
+          populate: {
+            path: 'equipped.avatarFrame',
+            model: 'ShopItem',
+            select: 'image name'
+          }
+        })
         .populate('replyTo', 'content isRecalled isDeleted')
         .sort({ createdAt: -1 })
         .limit(limit);
@@ -356,6 +370,12 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       const persona = msg.personaId;
       const senderName = persona ? (persona.displayName || persona.name) : '用户';
       
+      // ✅ 获取头像框 URL（如果有装备）
+      let avatarFrameUrl = null;
+      if (persona && persona.equipped && persona.equipped.avatarFrame) {
+        avatarFrameUrl = persona.equipped.avatarFrame.image;
+      }
+      
       return {
         _id: msg._id,
         content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
@@ -369,7 +389,12 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
           name: persona.name,
           displayName: persona.displayName,
           avatar: persona.avatar,
-          sameNameNumber: persona.sameNameNumber
+          sameNameNumber: persona.sameNameNumber,
+          // ✅ 新增头像框字段
+          avatarFrame: avatarFrameUrl,
+          equipped: persona.equipped ? {
+            avatarFrame: avatarFrameUrl
+          } : null
         } : null,
         userId: { _id: req.userId }
       };
@@ -391,7 +416,8 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: '房间不存在' });
     
-    const persona = await Persona.findOne({ _id: personaId, userId: req.userId, status: 'approved' });
+    const persona = await Persona.findOne({ _id: personaId, userId: req.userId, status: 'approved' })
+      .populate('equipped.avatarFrame', 'image name');
     if (!persona) return res.status(400).json({ error: '角色不存在' });
     
     let replyToMessage = null;
@@ -415,17 +441,32 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
     
     // 填充回复消息信息
     let populatedMessage = await Message.findById(message._id)
-      .populate('personaId', 'name displayName avatar sameNameNumber')
+      .populate({
+        path: 'personaId',
+        populate: {
+          path: 'equipped.avatarFrame',
+          model: 'ShopItem',
+          select: 'image name'
+        }
+      })
       .populate('replyTo', 'content isRecalled isDeleted');
     
     let replyToData = null;
     if (populatedMessage.replyTo) {
+      const replyIsHidden = populatedMessage.replyTo.isDeleted || populatedMessage.replyTo.isRecalled;
       replyToData = {
         _id: populatedMessage.replyTo._id,
-        content: populatedMessage.replyTo.content,
+        content: replyIsHidden ? '[消息已不可见]' : populatedMessage.replyTo.content,
         isRecalled: populatedMessage.replyTo.isRecalled || false,
         isDeleted: populatedMessage.replyTo.isDeleted || false
       };
+    }
+    
+    // ✅ 获取头像框 URL
+    const personaData = populatedMessage.personaId;
+    let avatarFrameUrl = null;
+    if (personaData && personaData.equipped && personaData.equipped.avatarFrame) {
+      avatarFrameUrl = personaData.equipped.avatarFrame.image;
     }
     
     const io = req.app.get('io');
@@ -443,7 +484,10 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
           name: persona.name,
           displayName: persona.displayName,
           avatar: persona.avatar,
-          sameNameNumber: persona.sameNameNumber
+          sameNameNumber: persona.sameNameNumber,
+          // ✅ 新增头像框字段
+          avatarFrame: avatarFrameUrl,
+          equipped: { avatarFrame: avatarFrameUrl }
         },
         userId: { _id: req.userId }
       });
