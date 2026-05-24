@@ -79,7 +79,7 @@ export interface User {
   email: string;
   displayName?: string;
   avatar?: string;
-  role: 'owner' | 'admin' | 'user';
+  role: 'owner' | 'super_admin' | 'admin' | 'user';
   status: 'active' | 'banned' | 'muted' | 'online' | 'away';
   hasAccess: boolean;
   coins: number;
@@ -177,7 +177,7 @@ export interface Message {
   replyTo?: ReplyToInfo | null;
 }
 
-// ========== Persona 类型（只定义一次，完整版）==========
+// ========== Persona 类型 ==========
 export interface Persona {
   _id: string;
   name: string;
@@ -225,7 +225,7 @@ export interface Persona {
     avatarFrameUrl?: string;
     avatarFrameId?: string;
   };
-  // ✅ 头像框快捷字段（从 equipped.avatarFrameUrl 派生，方便使用）
+  // ✅ 头像框快捷字段
   avatarFrame?: string | null;
 }
 
@@ -235,6 +235,29 @@ export interface ActivePersonaResponse {
     userId: string;
     personaId: Persona;
   } | null;
+}
+
+// ========== 邀请码类型 ==========
+export interface InviteCode {
+  _id: string;
+  code: string;
+  type: 'user' | 'admin' | 'super_admin';
+  createdBy: { username: string; role: string };
+  usedBy?: { username: string; email: string };
+  usedAt?: string;
+  isActive: boolean;
+  expiresAt: string;
+  createdAt: string;
+  maxUses: number;
+  usesCount: number;
+}
+
+export interface CreateInviteResponse {
+  message: string;
+  code: string;
+  type: 'user' | 'admin' | 'super_admin';
+  expiresAt: string;
+  maxUses?: number;
 }
 
 // ========== 认证 API ==========
@@ -391,13 +414,19 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     }),
-    
-  getInviteCodes: () => request<any[]>('/auth/admin/invite-codes'),
   
-  generateInviteCode: (customCode?: string, type?: 'user' | 'admin') =>
-    request<{ message: string; code: string; type: string; expiresAt: string }>('/auth/admin/create-invite', {
+  updateUserRole: (userId: string, role: 'user' | 'admin' | 'super_admin') =>
+    request<{ message: string; user: User }>(`/auth/admin/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+  
+  getInviteCodes: () => request<InviteCode[]>('/auth/admin/invite-codes'),
+  
+  generateInviteCode: (customCode?: string, type?: 'user' | 'admin' | 'super_admin', maxUses?: number, expiresInDays?: number) =>
+    request<CreateInviteResponse>('/auth/admin/create-invite', {
       method: 'POST',
-      body: JSON.stringify({ customCode, type: type || 'user' }),
+      body: JSON.stringify({ customCode, type: type || 'user', maxUses, expiresInDays }),
     }),
     
   deleteInviteCode: (codeId: string) =>

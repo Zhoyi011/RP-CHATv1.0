@@ -25,12 +25,15 @@ const zodiacSigns = [
 interface InviteCode {
   _id: string;
   code: string;
-  type: 'user' | 'admin';
+  type: 'user' | 'admin' | 'super_admin';
   createdBy: { username: string; role: string };
   usedBy?: { username: string; email: string };
+  usedAt?: string;
   isActive: boolean;
   expiresAt: string;
   createdAt: string;
+  maxUses: number;
+  usesCount: number;
 }
 
 const Settings: React.FC = () => {
@@ -58,8 +61,15 @@ const Settings: React.FC = () => {
   // 邀请码相关
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
   const [creatingInvite, setCreatingInvite] = useState(false);
-  const [inviteType, setInviteType] = useState<'user' | 'admin'>('user');
+  const [inviteType, setInviteType] = useState<'user' | 'admin' | 'super_admin'>('user');
+  const [maxUses, setMaxUses] = useState(1);
+  const [expiresInDays, setExpiresInDays] = useState(7);
+  const [customCode, setCustomCode] = useState('');
   const [loadingInvites, setLoadingInvites] = useState(false);
+
+  // 检查用户是否有权限创建对应类型的邀请码
+  const canCreateAdmin = user?.role === 'owner' || user?.role === 'super_admin';
+  const canCreateSuperAdmin = user?.role === 'owner';
 
   useEffect(() => {
     loadUserData();
@@ -181,9 +191,30 @@ const Settings: React.FC = () => {
   const handleCreateInviteCode = async () => {
     setCreatingInvite(true);
     try {
-      const result = await adminApi.generateInviteCode(undefined, inviteType);
-      toast.success(`邀请码创建成功: ${result.code}`);
-      loadInviteCodes();
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api'}/auth/admin/create-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: inviteType,
+          maxUses,
+          expiresInDays,
+          customCode: customCode || undefined
+        })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(`邀请码创建成功: ${data.code}`);
+        toast(`类型: ${data.type}, 可用${data.maxUses}次`, { icon: '🎫' });
+        setCustomCode('');
+        loadInviteCodes();
+      } else {
+        toast.error(data.error || '创建失败');
+      }
     } catch (error: any) {
       toast.error(error.message || '创建失败');
     } finally {
@@ -217,6 +248,15 @@ const Settings: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // 获取邀请码类型显示
+  const getInviteTypeDisplay = (type: string) => {
+    switch (type) {
+      case 'super_admin': return { text: '超级管理员', color: 'bg-amber-100 text-amber-700', icon: '👑' };
+      case 'admin': return { text: '管理员', color: 'bg-purple-100 text-purple-600', icon: '⚙️' };
+      default: return { text: '普通用户', color: 'bg-blue-100 text-blue-600', icon: '👤' };
+    }
   };
 
   if (loading) {
@@ -394,11 +434,15 @@ const Settings: React.FC = () => {
                 <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
                   <span className="text-gray-500 dark:text-gray-400">角色权限</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
-                    user?.role === 'owner' ? 'bg-red-100 text-red-600' :
+                    user?.role === 'owner' ? 'bg-amber-100 text-amber-700' :
+                    user?.role === 'super_admin' ? 'bg-amber-100 text-amber-700' :
                     user?.role === 'admin' ? 'bg-purple-100 text-purple-600' :
                     'bg-gray-100 text-gray-600'
                   }`}>
-                    {user?.role === 'owner' ? '👑 超级管理员' : user?.role === 'admin' ? '🛡️ 管理员' : '👤 普通用户'}
+                    {user?.role === 'owner' && '👑 超级管理员'}
+                    {user?.role === 'super_admin' && '👑 超级管理员'}
+                    {user?.role === 'admin' && '⚙️ 管理员'}
+                    {user?.role === 'user' && '👤 普通用户'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
@@ -491,14 +535,15 @@ const Settings: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">创建邀请码</h2>
               <div className="space-y-4">
+                {/* 邀请码类型 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     邀请码类型
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <button
                       onClick={() => setInviteType('user')}
-                      className={`flex-1 px-4 py-2 rounded-xl font-medium transition ${
+                      className={`px-4 py-2 rounded-xl font-medium transition ${
                         inviteType === 'user'
                           ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-md'
                           : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -506,20 +551,78 @@ const Settings: React.FC = () => {
                     >
                       👤 普通用户
                     </button>
-                    {isOwner && (
+                    {canCreateAdmin && (
                       <button
                         onClick={() => setInviteType('admin')}
-                        className={`flex-1 px-4 py-2 rounded-xl font-medium transition ${
+                        className={`px-4 py-2 rounded-xl font-medium transition ${
                           inviteType === 'admin'
                             ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-md'
                             : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                         }`}
                       >
-                        👑 管理员
+                        ⚙️ 管理员
+                      </button>
+                    )}
+                    {canCreateSuperAdmin && (
+                      <button
+                        onClick={() => setInviteType('super_admin')}
+                        className={`px-4 py-2 rounded-xl font-medium transition ${
+                          inviteType === 'super_admin'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        👑 超级管理员
                       </button>
                     )}
                   </div>
                 </div>
+
+                {/* 自定义邀请码 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    自定义邀请码（可选）
+                  </label>
+                  <input
+                    type="text"
+                    value={customCode}
+                    onChange={(e) => setCustomCode(e.target.value.toUpperCase())}
+                    placeholder="留空则自动生成，如: SA-MYCODE001"
+                    className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                    maxLength={30}
+                  />
+                </div>
+
+                {/* 使用次数 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    最大使用次数: {maxUses}
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={maxUses}
+                    onChange={(e) => setMaxUses(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* 有效期 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    有效期: {expiresInDays} 天
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="365"
+                    value={expiresInDays}
+                    onChange={(e) => setExpiresInDays(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
                 <button
                   onClick={handleCreateInviteCode}
                   disabled={creatingInvite}
@@ -548,60 +651,76 @@ const Settings: React.FC = () => {
                 <div className="text-center py-8 text-gray-400">暂无邀请码</div>
               ) : (
                 <div className="space-y-3">
-                  {inviteCodes.map((code) => (
-                    <div
-                      key={code._id}
-                      className={`p-4 rounded-xl border ${
-                        code.usedBy
-                          ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
-                          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-mono font-bold ${
-                            code.type === 'admin' ? 'text-purple-600' : 'text-blue-600'
-                          }`}>
-                            {code.code}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            code.type === 'admin'
-                              ? 'bg-purple-100 text-purple-600'
-                              : 'bg-blue-100 text-blue-600'
-                          }`}>
-                            {code.type === 'admin' ? '管理员' : '普通用户'}
-                          </span>
-                          {code.usedBy && (
-                            <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                              已使用
+                  {inviteCodes.map((code) => {
+                    const typeInfo = getInviteTypeDisplay(code.type);
+                    const isExpired = new Date(code.expiresAt) < new Date() && code.usesCount < code.maxUses;
+                    const isFullyUsed = code.usesCount >= code.maxUses;
+                    const isUsed = !!code.usedBy;
+                    
+                    return (
+                      <div
+                        key={code._id}
+                        className={`p-4 rounded-xl border ${
+                          isUsed || isFullyUsed
+                            ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
+                            : isExpired
+                            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-mono font-bold ${
+                              code.type === 'super_admin' ? 'text-amber-600' :
+                              code.type === 'admin' ? 'text-purple-600' : 'text-blue-600'
+                            }`}>
+                              {code.code}
                             </span>
-                          )}
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${typeInfo.color}`}>
+                              {typeInfo.icon} {typeInfo.text}
+                            </span>
+                            {isUsed && (
+                              <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                                已使用
+                              </span>
+                            )}
+                            {!isUsed && isFullyUsed && (
+                              <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
+                                已达上限
+                              </span>
+                            )}
+                            {!isUsed && !isFullyUsed && isExpired && (
+                              <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                                已过期
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-400">
+                              使用 {code.usesCount}/{code.maxUses} 次
+                            </span>
+                            {!isUsed && !isFullyUsed && !isExpired && (
+                              <button
+                                onClick={() => handleDeleteInviteCode(code._id)}
+                                className="text-xs text-red-400 hover:text-red-600 transition"
+                              >
+                                删除
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-gray-400">
-                            创建于 {formatDate(code.createdAt)}
-                          </span>
-                          {!code.usedBy && (
-                            <button
-                              onClick={() => handleDeleteInviteCode(code._id)}
-                              className="text-xs text-red-400 hover:text-red-600 transition"
-                            >
-                              删除
-                            </button>
-                          )}
+                        <div className="mt-2 text-xs text-gray-500">
+                          <span>创建者: {code.createdBy?.username}</span>
+                          <span className="ml-4">有效期至: {new Date(code.expiresAt).toLocaleDateString()}</span>
                         </div>
-                      </div>
-                      <div className="mt-2 text-xs text-gray-500">
-                        <span>创建者: {code.createdBy?.username}</span>
                         {code.usedBy && (
-                          <span className="ml-4">使用者: {code.usedBy.username}</span>
-                        )}
-                        {code.expiresAt && new Date(code.expiresAt) < new Date() && !code.usedBy && (
-                          <span className="ml-4 text-red-500">已过期</span>
+                          <div className="mt-1 text-xs text-green-600">
+                            使用者: {code.usedBy.username} {code.usedAt && `于 ${new Date(code.usedAt).toLocaleDateString()}`}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -610,9 +729,10 @@ const Settings: React.FC = () => {
             <div className="bg-blue-50 dark:bg-blue-900/30 rounded-2xl p-4">
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>👑 权限说明：</strong><br />
-                • 超级管理员 (owner)：可以创建管理员和普通用户邀请码<br />
+                • 超级管理员 (owner/super_admin)：可以创建所有类型的邀请码<br />
                 • 管理员 (admin)：只能创建普通用户邀请码，每天1个<br />
-                • 已使用的邀请码不可删除，但会显示使用状态
+                • 邀请码支持多次使用（可设置最大使用次数）<br />
+                • 支持自定义邀请码（注意不要重复）
               </p>
             </div>
           </div>

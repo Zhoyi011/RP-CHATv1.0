@@ -31,15 +31,26 @@ router.post('/request', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '角色名称至少需要2个字符' });
     }
     
+    // ✅ 获取当前用户的 ObjectId
+    const User = require('../models/User');
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    
     const persona = new Persona({
       name: name.trim(),
       description: description || '',
       tags: tags || [],
       userId: req.userId,
+      createdBy: req.userId,  // ✅ 添加 createdBy 字段
       status: 'pending'
     });
     
     await persona.save();
+    
+    console.log(`✅ 用户 ${user.username} 创建角色申请: ${persona.name}`);
     
     res.status(201).json({
       message: '角色申请已提交，等待审核',
