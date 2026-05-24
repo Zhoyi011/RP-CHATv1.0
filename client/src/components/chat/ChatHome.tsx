@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useLongPress } from '../../hooks/useLongPress';
-import { useQuickSwitchPersona } from '../../hooks/useQuickSwitchPersona';
 import { ContextMenu, type MenuItem } from '../common/ContextMenu';
 import DesktopLayout from '../layout/DesktopLayout';
 import TabletLayout from '../layout/TabletLayout';
@@ -24,12 +23,21 @@ import { extractUrls } from '../../utils/linkParser';
 import { parseMarkdown } from '../../utils/renderMarkdown';
 import { smartConvert } from '../../services/translateApi';
 import AvatarFrame from '../common/AvatarFrame';
+import { useQuickSwitchPersona } from '../../hooks/useQuickSwitchPersona';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
-// ========== 时间分隔线辅助函数 ==========
+// ========== 辅助函数：从 URL 中提取头像框文件名 ==========
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
+
+// ========== 时间分隔线 ==========
 const shouldShowTimeDivider = (prevMsg: Message | null, currentMsg: Message): boolean => {
   if (!prevMsg) return true;
   const prevTime = new Date(prevMsg.createdAt).getTime();
@@ -50,15 +58,6 @@ const formatDividerTime = (date: Date): string => {
   } else {
     return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   }
-};
-
-// ========== 辅助函数：从 URL 中提取头像框文件名 ==========
-const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null;
-  // 如果是 Cloudinary URL 或 /frames/xxx.png 格式，提取文件名
-  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
-  if (match) return match[1].toLowerCase();
-  return null;
 };
 
 // ========== 回复预览组件 ==========
@@ -87,7 +86,7 @@ const ReplyPreviewBar: React.FC<{
   );
 };
 
-// ========== 消息气泡组件 ==========
+// ========== 消息气泡组件（新版：滑动回复 + 回复按钮在外部）==========
 const MessageBubble: React.FC<{
   message: Message;
   isSelf: boolean;
@@ -100,7 +99,11 @@ const MessageBubble: React.FC<{
   onReply: (message: Message) => void;
 }> = ({ message, isSelf, isMobile, navigate, selectedPersona, onTranslate, translatingMsgId, onLongPress, onReply }) => {
   const urls = extractUrls(message.content);
+  const [showReplyButton, setShowReplyButton] = useState(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const dragRef = useRef<HTMLDivElement>(null);
   
+  // 长按事件
   const longPressProps = useLongPress({
     duration: 500,
     enableMobile: true,
@@ -124,26 +127,81 @@ const MessageBubble: React.FC<{
 
   const isReplyHidden = message.replyTo && (message.replyTo.isRecalled || message.replyTo.isDeleted);
 
-  // 获取头像框文件名
   const getFrameName = (): string | null => {
     const frameUrl = message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame;
     return getFrameNameFromUrl(frameUrl);
   };
 
+  // 滑动回复处理
+  const handleDrag = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const maxOffset = 80;
+    if (isSelf) {
+      // 自己的消息向左滑（负数）
+      const newOffset = Math.max(-maxOffset, Math.min(0, info.offset.x));
+      setSwipeOffset(newOffset);
+    } else {
+      // 别人的消息向右滑（正数）
+      const newOffset = Math.min(maxOffset, Math.max(0, info.offset.x));
+      setSwipeOffset(newOffset);
+    }
+  };
+
+  const handleDragEnd = () => {
+    const threshold = 50;
+    if (Math.abs(swipeOffset) >= threshold) {
+      // 触发回复
+      onReply(message);
+      // 添加触觉反馈（如果支持）
+      if (window.navigator && window.navigator.vibrate) {
+        window.navigator.vibrate(50);
+      }
+      toast.success(`回复 ${getSenderDisplayName()}`, { icon: '💬', duration: 1500 });
+    }
+    // 重置偏移
+    setSwipeOffset(0);
+  };
+
+  // 获取气泡样式
+  const getBubbleClasses = () => {
+    const baseClasses = "relative px-4 py-2.5 rounded-2xl max-w-full transition-all duration-200 select-text";
+    if (isSelf) {
+      return `${baseClasses} bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-br-md shadow-md`;
+    }
+    return `${baseClasses} bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-md shadow-sm hover:shadow-md`;
+  };
+
+  // 获取气泡内联样式（滑动偏移）
+  const getBubbleStyle = (): React.CSSProperties => {
+    if (swipeOffset !== 0) {
+      return {
+        transform: `translateX(${swipeOffset}px)`,
+        transition: 'transform 0.1s ease-out',
+      };
+    }
+    return {};
+  };
+
+  // 回复按钮的位置样式
+  const replyButtonClasses = `absolute top-1/2 -translate-y-1/2 p-2 rounded-full bg-blue-500 text-white shadow-md hover:bg-blue-600 transition-all duration-200 z-10 ${
+    isSelf ? '-left-12' : '-right-12'
+  }`;
+
   return (
-    <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group`}>
+    <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group relative`}>
       {/* 对方头像 */}
       {!isSelf && (
         <AvatarFrame
           avatarUrl={message.personaId?.avatar || ''}
           frameName={getFrameName()}
           size="sm"
-          className="chat-message-other flex-shrink-0 cursor-pointer hover:scale-105 transition"
+          className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
           onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
         />
       )}
       
-      <div className={`max-w-[70%] ${isSelf ? 'items-end' : ''}`}>
+      {/* 消息主体区域（包含气泡和回复按钮） */}
+      <div className={`relative ${isSelf ? 'items-end' : ''} max-w-[75%]`}>
+        {/* 发送者名称 */}
         {!isSelf && (
           <div 
             onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
@@ -163,14 +221,20 @@ const MessageBubble: React.FC<{
           </div>
         )}
         
-        <div
+        {/* 可拖拽的气泡容器 */}
+        <motion.div
+          ref={dragRef}
+          drag={isMobile ? "x" : false}
+          dragConstraints={{ left: isSelf ? -80 : 0, right: isSelf ? 0 : 80 }}
+          dragElastic={0.5}
+          dragMomentum={false}
+          onDrag={handleDrag}
+          onDragEnd={handleDragEnd}
+          style={getBubbleStyle()}
+          className={getBubbleClasses()}
           {...longPressProps}
-          className={`px-4 py-2 rounded-2xl max-w-full relative transition-all duration-200 ${
-            isSelf 
-              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
-              : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-tl-none shadow-sm hover:shadow-md'
-          }`}
         >
+          {/* 回复引用区域 */}
           {message.replyTo && (
             <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-1 mb-1">
@@ -185,6 +249,7 @@ const MessageBubble: React.FC<{
             </div>
           )}
           
+          {/* 消息内容（Markdown 渲染） */}
           <div 
             className={`break-words whitespace-pre-wrap ${
               isSelf 
@@ -194,24 +259,27 @@ const MessageBubble: React.FC<{
             dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} 
           />
           
+          {/* 链接预览 */}
           {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
           
-          <div className={`flex items-center gap-1 mt-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
-            <span className={`text-[9px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
+          {/* 时间戳 */}
+          <div className={`flex items-center gap-1 mt-1.5 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+            <span className={`text-[10px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
               {formatBubbleTime(new Date(message.createdAt))}
             </span>
           </div>
-          
-          <button
-            onClick={() => onReply(message)}
-            className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 flex-shrink-0"
-            title="回复"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-            </svg>
-          </button>
-        </div>
+        </motion.div>
+
+        {/* 回复按钮（悬停时显示，在气泡外部） */}
+        <button
+          onClick={() => onReply(message)}
+          className={`${replyButtonClasses} opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 active:scale-95`}
+          title="回复"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+        </button>
       </div>
 
       {/* 自己头像 */}
@@ -220,23 +288,24 @@ const MessageBubble: React.FC<{
           avatarUrl={selectedPersona.avatar || ''}
           frameName={getFrameNameFromUrl(selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame)}
           size="sm"
-          className="chat-message-self flex-shrink-0"
+          className="flex-shrink-0"
         />
       )}
 
+      {/* 简繁转换按钮（仅对方消息） */}
       {!isSelf && (
         <button 
           onClick={() => onTranslate(message.content, message._id)} 
           disabled={translatingMsgId === message._id}
-          className="opacity-0 group-hover:opacity-100 transition-all p-1 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 flex-shrink-0" 
+          className="opacity-0 group-hover:opacity-100 transition-all p-1.5 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 flex-shrink-0" 
           title="简繁转换"
         >
           {translatingMsgId === message._id ? (
-            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
             </svg>
           )}
@@ -400,7 +469,7 @@ const MessageList: React.FC<{
   );
 };
 
-// ========== 主组件 ==========
+// ========== 主组件（保持原有逻辑，只改了导入和消息列表） ==========
 const ChatHome = () => {
   console.log('🎨 [ChatHome] 主组件渲染');
   const navigate = useNavigate();
@@ -701,7 +770,6 @@ const ChatHome = () => {
     const handleNewMessage = (message: Message) => {
       const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
       if (!isSelf) {
-        // 通知弹窗
         const frameName = getFrameNameFromUrl(message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame);
         toast.custom((t) => (
           <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 flex items-center gap-3 cursor-pointer ${t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}

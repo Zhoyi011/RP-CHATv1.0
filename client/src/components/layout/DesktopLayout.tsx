@@ -46,7 +46,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
   // 页面标题映射
   const getPageTitle = () => {
     const path = location.pathname;
-    if (path === '/chat' || path.startsWith('/chat?')) return '💬 聊天室';
+    if (path === '/chat' || path.startsWith('/chat?')) return '聊天室';
     if (path === '/feed') return '📰 动态广场';
     if (path === '/home') return '🏠 个人主页';
     if (path === '/persona') return '🎭 角色管理';
