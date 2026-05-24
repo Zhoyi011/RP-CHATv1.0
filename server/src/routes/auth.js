@@ -205,17 +205,50 @@ router.post('/verify-invite', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取当前用户 ==========
+// server/src/routes/auth.js
+
+// ========== 获取当前用户（增强版 - 检查访问权限）==========
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
+    
+    // ✅ 关键：检查用户是否有访问权限
+    if (!user.hasAccess) {
+      console.warn(`⚠️ 安全警告: 用户 ${user.username} (${user._id}) 尝试无权限访问 API`);
+      
+      // 记录异常日志
+      const fs = require('fs');
+      const logEntry = {
+        type: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+        userId: user._id,
+        username: user.username,
+        email: user.email,
+        action: '尝试访问受保护的 API',
+        timestamp: new Date().toISOString(),
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      };
+      
+      // 写入日志文件
+      fs.appendFileSync(
+        '/tmp/security_alerts.json',
+        JSON.stringify(logEntry) + '\n'
+      );
+      
+      return res.status(403).json({ 
+        error: '您的账号尚未激活，请联系管理员获取邀请码',
+        code: 'ACCESS_DENIED'
+      });
+    }
+    
     res.json({
       ...user.toSafeObject(),
       birthday: user.birthday ? user.birthday.toISOString().split('T')[0] : null,
-      zodiac: user.zodiac || ''
+      zodiac: user.zodiac || '',
+      hasAccess: user.hasAccess  // ✅ 确保返回这个字段
     });
   } catch (error) {
     console.error('获取用户信息错误:', error);

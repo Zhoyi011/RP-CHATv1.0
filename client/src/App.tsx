@@ -1,4 +1,6 @@
-import React, { useEffect } from 'react';
+// App.tsx - 修改 ProtectedRoute 组件
+
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import toast, { Toaster } from 'react-hot-toast';
@@ -9,7 +11,6 @@ import ChatHome from './components/chat/ChatHome';
 import PersonaManager from './components/persona/PersonaManager';
 import PersonaDetail from './components/persona/PersonaDetail';
 import PersonaCreate from './components/persona/PersonaCreate';
-//import Profile from './components/profile/Profile';
 import Settings from './components/settings/Settings';
 import SearchPage from './components/common/SearchPage';
 import Changelog from './components/common/Changelog';
@@ -19,18 +20,90 @@ import MobileFeed from './components/feed/MobileFeed';
 import MobileHome from './components/home/MobileHome';
 import Shop from './components/shop/Shop';
 import Inventory from './components/inventory/Inventory';
+import { auth } from './firebase/config';
 
 console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
 
-// 受保护路由组件
+// ✅ 增强版受保护路由组件
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const token = localStorage.getItem('token');
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
   const location = useLocation();
-  
-  if (!token) {
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          setIsAuthenticated(false);
+          setHasAccess(false);
+          setLoading(false);
+          return;
+        }
+
+        // ✅ 验证 token 并检查用户是否有访问权限
+        const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
+        const response = await fetch(`${API_BASE}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          // token 无效
+          localStorage.removeItem('token');
+          localStorage.removeItem('lastUsedPersonaId');
+          setIsAuthenticated(false);
+          setHasAccess(false);
+          setLoading(false);
+          return;
+        }
+
+        const userData = await response.json();
+        
+        // ✅ 关键检查：用户必须有 hasAccess = true
+        if (!userData.hasAccess) {
+          console.warn('⚠️ 用户没有访问权限（无邀请码）:', userData.username);
+          localStorage.removeItem('token');
+          localStorage.removeItem('lastUsedPersonaId');
+          setIsAuthenticated(false);
+          setHasAccess(false);
+          setLoading(false);
+          return;
+        }
+
+        setIsAuthenticated(true);
+        setHasAccess(true);
+      } catch (error) {
+        console.error('认证检查失败:', error);
+        localStorage.removeItem('token');
+        setIsAuthenticated(false);
+        setHasAccess(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [location.pathname]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-white/60 text-lg animate-pulse">验证中...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !hasAccess) {
+    // 清除所有本地数据
+    localStorage.removeItem('token');
+    localStorage.removeItem('lastUsedPersonaId');
     return <Navigate to="/" state={{ from: location }} replace />;
   }
-  
+
   return <>{children}</>;
 };
 
