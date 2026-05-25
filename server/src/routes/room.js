@@ -932,7 +932,7 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
 });
 
 // ========== 删除消息（软删除 - 仅自己不可见）==========
-router/post('/message/delete', authMiddleware, async (req, res) => {
+router.post('/message/delete', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
   console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}`);
   
