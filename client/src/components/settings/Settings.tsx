@@ -5,6 +5,8 @@ import { auth } from '../../firebase/config';
 import { authApi, type User, type UserSettings, adminApi } from '../../services/api';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useTheme } from '../../contexts/ThemeContext';
+import NotificationSettings from '../common/NotificationSettings';
 
 // 星座列表
 const zodiacSigns = [
@@ -39,6 +41,7 @@ interface InviteCode {
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin, isOwner } = usePermissions();
+  const { theme: currentTheme, setTheme: setCurrentTheme, toggleTheme } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'account' | 'preferences' | 'admin'>('account');
@@ -51,7 +54,7 @@ const Settings: React.FC = () => {
   
   // 偏好设置
   const [settings, setSettings] = useState<UserSettings>({
-    theme: 'auto',
+    theme: 'light',
     notifications: true,
     soundEnabled: true,
     defaultTranslate: 'off'
@@ -67,7 +70,6 @@ const Settings: React.FC = () => {
   const [customCode, setCustomCode] = useState('');
   const [loadingInvites, setLoadingInvites] = useState(false);
 
-  // 检查用户是否有权限创建对应类型的邀请码
   const canCreateAdmin = user?.role === 'owner' || user?.role === 'super_admin';
   const canCreateSuperAdmin = user?.role === 'owner';
 
@@ -89,7 +91,21 @@ const Settings: React.FC = () => {
       setDisplayName(userData.displayName || '');
       setBirthday(userData.birthday || '');
       setZodiac(userData.zodiac || '');
-      setSettings(settingsData);
+      
+      // 安全处理 defaultTranslate
+      let defaultTranslate: 'off' | 'simplified' | 'traditional' = 'off';
+      if (userData.defaultTranslate === 'simplified') {
+        defaultTranslate = 'simplified';
+      } else if (userData.defaultTranslate === 'traditional') {
+        defaultTranslate = 'traditional';
+      }
+      
+      setSettings({
+        theme: userData.theme === 'dark' ? 'dark' : 'light',
+        notifications: userData.notifications !== false,
+        soundEnabled: userData.soundEnabled !== false,
+        defaultTranslate
+      });
     } catch (error) {
       console.error('加载用户数据失败:', error);
       toast.error('加载失败');
@@ -169,22 +185,25 @@ const Settings: React.FC = () => {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      await authApi.updateSettings(settings);
+      await authApi.updateSettings({
+        theme: settings.theme,
+        notifications: settings.notifications,
+        soundEnabled: settings.soundEnabled,
+        defaultTranslate: settings.defaultTranslate
+      });
       toast.success('设置已保存');
-      if (settings.theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else if (settings.theme === 'light') {
-        document.documentElement.classList.remove('dark');
-      } else {
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (isDark) document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
-      }
     } catch (error) {
       toast.error('保存设置失败');
     } finally {
       setSaving(false);
     }
+  };
+
+  // 切换主题
+  const handleThemeToggle = () => {
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setCurrentTheme(newTheme);
+    setSettings({ ...settings, theme: newTheme });
   };
 
   // 创建邀请码
@@ -209,7 +228,6 @@ const Settings: React.FC = () => {
       const data = await response.json();
       if (response.ok) {
         toast.success(`邀请码创建成功: ${data.code}`);
-        toast(`类型: ${data.type}, 可用${data.maxUses}次`, { icon: '🎫' });
         setCustomCode('');
         loadInviteCodes();
       } else {
@@ -226,9 +244,21 @@ const Settings: React.FC = () => {
   const handleDeleteInviteCode = async (codeId: string) => {
     if (!confirm('确定要删除这个邀请码吗？')) return;
     try {
-      await adminApi.deleteInviteCode(codeId);
-      toast.success('删除成功');
-      loadInviteCodes();
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api'}/auth/admin/invite-codes/${codeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        toast.success('删除成功');
+        loadInviteCodes();
+      } else {
+        const data = await response.json();
+        toast.error(data.error || '删除失败');
+      }
     } catch (error: any) {
       toast.error(error.message || '删除失败');
     }
@@ -239,7 +269,6 @@ const Settings: React.FC = () => {
     return zodiac?.icon || '✨';
   };
 
-  // 格式化时间
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('zh-CN', {
@@ -250,12 +279,11 @@ const Settings: React.FC = () => {
     });
   };
 
-  // 获取邀请码类型显示
   const getInviteTypeDisplay = (type: string) => {
     switch (type) {
-      case 'super_admin': return { text: '超级管理员', color: 'bg-amber-100 text-amber-700', icon: '👑' };
-      case 'admin': return { text: '管理员', color: 'bg-purple-100 text-purple-600', icon: '⚙️' };
-      default: return { text: '普通用户', color: 'bg-blue-100 text-blue-600', icon: '👤' };
+      case 'super_admin': return { text: '超级管理员', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400', icon: '👑' };
+      case 'admin': return { text: '管理员', color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400', icon: '⚙️' };
+      default: return { text: '普通用户', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400', icon: '👤' };
     }
   };
 
@@ -315,7 +343,6 @@ const Settings: React.FC = () => {
         {/* 账号设置 */}
         {activeTab === 'account' && (
           <div className="space-y-6">
-            {/* 账号信息卡片 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">账号信息</h2>
@@ -406,7 +433,6 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            {/* 资产卡片 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">资产</h2>
               <div className="flex gap-6">
@@ -427,17 +453,16 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            {/* 角色权限 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">账户信息</h2>
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
                   <span className="text-gray-500 dark:text-gray-400">角色权限</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
-                    user?.role === 'owner' ? 'bg-amber-100 text-amber-700' :
-                    user?.role === 'super_admin' ? 'bg-amber-100 text-amber-700' :
-                    user?.role === 'admin' ? 'bg-purple-100 text-purple-600' :
-                    'bg-gray-100 text-gray-600'
+                    user?.role === 'owner' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                    user?.role === 'super_admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                    user?.role === 'admin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' :
+                    'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                   }`}>
                     {user?.role === 'owner' && '👑 超级管理员'}
                     {user?.role === 'super_admin' && '👑 超级管理员'}
@@ -454,7 +479,6 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            {/* 退出登录 */}
             <button
               onClick={async () => {
                 if (confirm('确定要退出登录吗？')) {
@@ -472,74 +496,83 @@ const Settings: React.FC = () => {
 
         {/* 偏好设置 */}
         {activeTab === 'preferences' && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700 dark:text-gray-300">深色模式</span>
-                <select
-                  value={settings.theme}
-                  onChange={(e) => setSettings({ ...settings, theme: e.target.value as 'light' | 'dark' | 'auto' })}
-                  className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="auto">跟随系统</option>
-                  <option value="light">浅色</option>
-                  <option value="dark">深色</option>
-                </select>
+          <div className="space-y-6">
+            {/* 原有偏好设置 */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700 dark:text-gray-300">深色模式</span>
+                  <button
+                    onClick={handleThemeToggle}
+                    className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${currentTheme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700 dark:text-gray-300">消息通知</span>
+                  <button
+                    onClick={() => setSettings({ ...settings, notifications: !settings.notifications })}
+                    className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700 dark:text-gray-300">音效</span>
+                  <button
+                    onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })}
+                    className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700 dark:text-gray-300">默认翻译</span>
+                  <select
+                    value={settings.defaultTranslate}
+                    onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
+                    className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="off">不翻译</option>
+                    <option value="simplified">转为简体</option>
+                    <option value="traditional">转为繁体</option>
+                  </select>
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700 dark:text-gray-300">消息通知</span>
-                <button
-                  onClick={() => setSettings({ ...settings, notifications: !settings.notifications })}
-                  className={`w-10 h-5 rounded-full transition ${settings.notifications ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.notifications ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700 dark:text-gray-300">音效</span>
-                <button
-                  onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })}
-                  className={`w-10 h-5 rounded-full transition ${settings.soundEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.soundEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700 dark:text-gray-300">默认翻译</span>
-                <select
-                  value={settings.defaultTranslate}
-                  onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
-                  className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="off">不翻译</option>
-                  <option value="simplified">转为简体</option>
-                  <option value="traditional">转为繁体</option>
-                </select>
-              </div>
+              
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md"
+              >
+                {saving ? '保存中...' : '保存设置'}
+              </button>
             </div>
-            <button
-              onClick={handleSaveSettings}
-              disabled={saving}
-              className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md"
-            >
-              {saving ? '保存中...' : '保存设置'}
-            </button>
+
+            {/* 通知设置 */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                🔔 通知设置
+              </h2>
+              <NotificationSettings />
+            </div>
           </div>
         )}
 
-        {/* 管理面板（仅管理员可见） */}
+        {/* 管理面板 */}
         {(isAdmin || isOwner) && activeTab === 'admin' && (
           <div className="space-y-6">
             {/* 创建邀请码 */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">创建邀请码</h2>
               <div className="space-y-4">
-                {/* 邀请码类型 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    邀请码类型
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">邀请码类型</label>
                   <div className="flex gap-3 flex-wrap">
                     <button
                       onClick={() => setInviteType('user')}
@@ -578,11 +611,8 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 自定义邀请码 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    自定义邀请码（可选）
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">自定义邀请码（可选）</label>
                   <input
                     type="text"
                     value={customCode}
@@ -593,11 +623,8 @@ const Settings: React.FC = () => {
                   />
                 </div>
 
-                {/* 使用次数 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    最大使用次数: {maxUses}
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">最大使用次数: {maxUses}</label>
                   <input
                     type="range"
                     min="1"
@@ -608,11 +635,8 @@ const Settings: React.FC = () => {
                   />
                 </div>
 
-                {/* 有效期 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    有效期: {expiresInDays} 天
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">有效期: {expiresInDays} 天</label>
                   <input
                     type="range"
                     min="1"
@@ -637,12 +661,7 @@ const Settings: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">邀请码列表</h2>
-                <button
-                  onClick={loadInviteCodes}
-                  className="text-sm text-blue-500 hover:text-blue-600 transition"
-                >
-                  刷新
-                </button>
+                <button onClick={loadInviteCodes} className="text-sm text-blue-500 hover:text-blue-600 transition">刷新</button>
               </div>
               
               {loadingInvites ? (
@@ -671,41 +690,22 @@ const Settings: React.FC = () => {
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <span className={`text-sm font-mono font-bold ${
-                              code.type === 'super_admin' ? 'text-amber-600' :
-                              code.type === 'admin' ? 'text-purple-600' : 'text-blue-600'
+                              code.type === 'super_admin' ? 'text-amber-600 dark:text-amber-400' :
+                              code.type === 'admin' ? 'text-purple-600 dark:text-purple-400' : 'text-blue-600 dark:text-blue-400'
                             }`}>
                               {code.code}
                             </span>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${typeInfo.color}`}>
                               {typeInfo.icon} {typeInfo.text}
                             </span>
-                            {isUsed && (
-                              <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                                已使用
-                              </span>
-                            )}
-                            {!isUsed && isFullyUsed && (
-                              <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
-                                已达上限
-                              </span>
-                            )}
-                            {!isUsed && !isFullyUsed && isExpired && (
-                              <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-                                已过期
-                              </span>
-                            )}
+                            {isUsed && <span className="text-xs bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">已使用</span>}
+                            {!isUsed && isFullyUsed && <span className="text-xs bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-0.5 rounded-full">已达上限</span>}
+                            {!isUsed && !isFullyUsed && isExpired && <span className="text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">已过期</span>}
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs text-gray-400">
-                              使用 {code.usesCount}/{code.maxUses} 次
-                            </span>
+                            <span className="text-xs text-gray-400">使用 {code.usesCount}/{code.maxUses} 次</span>
                             {!isUsed && !isFullyUsed && !isExpired && (
-                              <button
-                                onClick={() => handleDeleteInviteCode(code._id)}
-                                className="text-xs text-red-400 hover:text-red-600 transition"
-                              >
-                                删除
-                              </button>
+                              <button onClick={() => handleDeleteInviteCode(code._id)} className="text-xs text-red-400 hover:text-red-600 transition">删除</button>
                             )}
                           </div>
                         </div>
@@ -725,7 +725,6 @@ const Settings: React.FC = () => {
               )}
             </div>
 
-            {/* 权限说明 */}
             <div className="bg-blue-50 dark:bg-blue-900/30 rounded-2xl p-4">
               <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>👑 权限说明：</strong><br />

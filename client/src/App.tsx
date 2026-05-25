@@ -1,4 +1,4 @@
-// App.tsx - 修改 ProtectedRoute 组件
+// App.tsx - 完整修复版
 
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -20,6 +20,11 @@ import MobileFeed from './components/feed/MobileFeed';
 import MobileHome from './components/home/MobileHome';
 import Shop from './components/shop/Shop';
 import Inventory from './components/inventory/Inventory';
+// ✅ 导入群组相关组件
+import GroupDetail from './components/chat/GroupDetail';
+import GroupSettings from './components/chat/GroupSettings';
+import RoomMembers from './components/chat/RoomMembers';
+import PendingRequests from './components/chat/PendingRequests';
 import { auth } from './firebase/config';
 
 console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
@@ -43,7 +48,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           return;
         }
 
-        // ✅ 验证 token 并检查用户是否有访问权限
         const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
         const response = await fetch(`${API_BASE}/auth/me`, {
           headers: {
@@ -52,7 +56,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         });
 
         if (!response.ok) {
-          // token 无效
           localStorage.removeItem('token');
           localStorage.removeItem('lastUsedPersonaId');
           setIsAuthenticated(false);
@@ -63,7 +66,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
         const userData = await response.json();
         
-        // ✅ 关键检查：用户必须有 hasAccess = true
         if (!userData.hasAccess) {
           console.warn('⚠️ 用户没有访问权限（无邀请码）:', userData.username);
           localStorage.removeItem('token');
@@ -98,7 +100,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (!isAuthenticated || !hasAccess) {
-    // 清除所有本地数据
     localStorage.removeItem('token');
     localStorage.removeItem('lastUsedPersonaId');
     return <Navigate to="/" state={{ from: location }} replace />;
@@ -123,7 +124,6 @@ function AppContent() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // 监听全局 Toast 事件（用于 API 401 错误）
   useEffect(() => {
     const handleShowToast = (e: CustomEvent) => {
       toast.error(e.detail.message);
@@ -233,6 +233,31 @@ function AppContent() {
         <Route path="/inventory" element={
           <ProtectedRoute>
             <Inventory />
+          </ProtectedRoute>
+        } />
+
+        {/* ✅ 群组相关路由（新增） */}
+        <Route path="/group/:roomId" element={
+          <ProtectedRoute>
+            <GroupDetail />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/group/:roomId/settings" element={
+          <ProtectedRoute>
+            <GroupSettings />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/room/:roomId/members" element={
+          <ProtectedRoute>
+            <RoomMembers />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/room/:roomId/pending" element={
+          <ProtectedRoute>
+            <PendingRequests />
           </ProtectedRoute>
         } />
 

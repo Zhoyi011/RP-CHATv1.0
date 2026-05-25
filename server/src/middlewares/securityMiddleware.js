@@ -1,125 +1,44 @@
 // server/src/middlewares/securityMiddleware.js
 const fs = require('fs');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const { sendDiscordAlert } = require('../services/discordAlert');
 
 // ========== 配置 ==========
 const CONFIG = {
-  BLACKLIST_DURATION: 24 * 60 * 60 * 1000, // 24小时
+  BLACKLIST_DURATION: 24 * 60 * 60 * 1000,
   MAX_FAILED_ATTEMPTS: 5,
-  RATE_LIMIT_WINDOW: 60000, // 1分钟
+  RATE_LIMIT_WINDOW: 60000,
   RATE_LIMIT_MAX: 60,
   SUSPICIOUS_THRESHOLD: 10,
-  TOKEN_BLACKLIST_DURATION: 24 * 60 * 60 * 1000, // 24小时
-  DEBUG_CODE_EXPIRY: 5 * 60 * 1000, // 5分钟
-  DEBUG_SESSION_DURATION: 30 * 60 * 1000 // 30分钟
+  TOKEN_BLACKLIST_DURATION: 24 * 60 * 60 * 1000,
+  DEBUG_CODE_EXPIRY: 5 * 60 * 1000,
+  DEBUG_SESSION_DURATION: 30 * 60 * 1000
 };
 
 // ========== 存储 ==========
-let blacklist = new Map();      // IP -> { bannedAt, reason, attempts }
-let tokenBlacklist = new Map(); // token -> expiresAt
-let failedAttempts = new Map(); // IP -> { count, firstAttempt, lastAttempt }
-let rateLimitStore = new Map(); // IP -> timestamps[]
-let debugSessions = new Map();  // sessionToken -> { userId, expiresAt, createdAt }
+let blacklist = new Map();
+let tokenBlacklist = new Map();
+let failedAttempts = new Map();
+let rateLimitStore = new Map();
+let debugSessions = new Map();
 
 // ========== 文件路径 ==========
 const DATA_DIR = '/tmp';
 const BLACKLIST_FILE = `${DATA_DIR}/blacklist.json`;
 const SECURITY_LOG_FILE = `${DATA_DIR}/security_events.log`;
-const SUSPICIOUS_LOG_FILE = `${DATA_DIR}/suspicious_activities.log`;
 
-// 确保目录存在
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// ========== 加载持久化数据 ==========
+// 加载黑名单
 try {
   if (fs.existsSync(BLACKLIST_FILE)) {
     const data = fs.readFileSync(BLACKLIST_FILE, 'utf8');
     const parsed = JSON.parse(data);
     blacklist = new Map(Object.entries(parsed));
-    const now = Date.now();
-    for (const [ip, entry] of blacklist) {
-      if (entry.bannedAt && now - entry.bannedAt > CONFIG.BLACKLIST_DURATION) {
-        blacklist.delete(ip);
-      }
-    }
-    saveBlacklist();
   }
 } catch (e) {}
-
-// ========== 邮件配置 ==========
-// 创建邮件 transporter（使用你的邮箱配置）
-let emailTransporter = null;
-
-function initEmailTransporter() {
-  if (!emailTransporter && process.env.DEBUG_EMAIL_HOST) {
-    emailTransporter = nodemailer.createTransport({
-      host: process.env.DEBUG_EMAIL_HOST,
-      port: parseInt(process.env.DEBUG_EMAIL_PORT) || 587,
-      secure: process.env.DEBUG_EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.DEBUG_EMAIL_USER,
-        pass: process.env.DEBUG_EMAIL_PASS
-      }
-    });
-    console.log('📧 邮件服务已初始化');
-  }
-}
-
-// 发送调试码邮件
-async function sendDebugCodeEmail(email, code, username) {
-  initEmailTransporter();
-  
-  if (!emailTransporter) {
-    console.log(`⚠️ 邮件服务未配置，调试码: ${code} (未发送)`);
-    return false;
-  }
-  
-  try {
-    const info = await emailTransporter.sendMail({
-      from: `"RP Chat 安全系统" <${process.env.DEBUG_EMAIL_USER}>`,
-      to: email,
-      subject: '【RP Chat】调试验证码',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #3b82f6, #06b6d4); padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">RP Chat</h1>
-            <p style="color: #e0f2fe; margin: 5px 0 0;">调试验证码</p>
-          </div>
-          <div style="background: #f8fafc; padding: 30px;">
-            <p style="color: #334155;">尊敬的 <strong>${username}</strong>：</p>
-            <p style="color: #334155;">您正在申请 RP Chat 调试模式授权，验证码如下：</p>
-            <div style="background: #e2e8f0; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1e293b;">${code}</span>
-            </div>
-            <p style="color: #334155;">此验证码 <strong>5 分钟</strong>内有效，请勿泄露给他人。</p>
-            <p style="color: #64748b; font-size: 12px; margin-top: 20px;">如果这不是您本人的操作，请立即联系管理员。</p>
-          </div>
-          <div style="background: #1e293b; padding: 15px; text-align: center;">
-            <p style="color: #94a3b8; font-size: 12px; margin: 0;">© RP Chat 安全系统</p>
-          </div>
-        </div>
-      `,
-      text: `您的调试验证码是：${code}，5分钟内有效。`
-    });
-    console.log(`✅ 调试码已发送至 ${email}`);
-    return true;
-  } catch (error) {
-    console.error('发送邮件失败:', error);
-    return false;
-  }
-}
-
-// ========== 辅助函数 ==========
-function getClientIp(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0] ||
-         req.headers['x-real-ip'] ||
-         req.connection?.remoteAddress ||
-         req.socket?.remoteAddress ||
-         'unknown';
-}
 
 function saveBlacklist() {
   try {
@@ -128,114 +47,103 @@ function saveBlacklist() {
   } catch (e) {}
 }
 
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0] ||
+         req.headers['x-real-ip'] ||
+         req.connection?.remoteAddress ||
+         req.socket?.remoteAddress ||
+         'unknown';
+}
+
 function logSecurityEvent(type, req, details = {}) {
-  const ip = getClientIp(req);
-  const userId = req.userId || 'anonymous';
-  const userAgent = req.headers['user-agent'] || 'unknown';
-  
   const event = {
     type,
     timestamp: new Date().toISOString(),
-    ip,
-    userId,
-    userAgent,
-    method: req.method,
+    ip: getClientIp(req),
+    userId: req.userId || 'anonymous',
     url: req.url,
+    method: req.method,
     ...details
   };
-  
-  try {
-    fs.appendFileSync(SECURITY_LOG_FILE, JSON.stringify(event) + '\n');
-    if (type.includes('SUSPICIOUS') || type.includes('FAILED') || type.includes('DEBUG')) {
-      fs.appendFileSync(SUSPICIOUS_LOG_FILE, JSON.stringify(event) + '\n');
-    }
-  } catch (e) {}
-  
+  fs.appendFileSync(SECURITY_LOG_FILE, JSON.stringify(event) + '\n');
   return event;
 }
 
-// ========== 开发者白名单 ==========
+// ========== 核心告警函数 ==========
+async function triggerAlert(type, req, details = {}) {
+  const ip = getClientIp(req);
+  const userId = req.userId || '未登录';
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  
+  let message = '';
+  let alertType = 'warning';
+  
+  switch (type) {
+    case 'RATE_LIMIT_EXCEEDED':
+      message = `**🚫 频率限制超限**\nIP: ${ip}\n用户: ${userId}\n限制: ${CONFIG.RATE_LIMIT_MAX}/分钟`;
+      alertType = 'warning';
+      break;
+    case 'INJECTION_ATTEMPT':
+      message = `**💉 SQL注入/XSS攻击**\nIP: ${ip}\n用户: ${userId}\n参数: ${details.parameter || '未知'}\n值: ${details.value || '未知'}`;
+      alertType = 'critical';
+      break;
+    case 'MALICIOUS_UA':
+      message = `**🤖 恶意User-Agent**\nIP: ${ip}\n用户: ${userId}\nUA: ${userAgent.substring(0, 100)}`;
+      alertType = 'warning';
+      break;
+    case 'AUTO_BANNED':
+      message = `**🔒 IP已被自动封禁**\nIP: ${ip}\n原因: ${details.reason}\n尝试次数: ${details.attempts || 0}`;
+      alertType = 'critical';
+      break;
+    case 'FAILED_LOGIN':
+      message = `**❌ 登录失败**\nIP: ${ip}\n用户名: ${details.username || '未知'}\n密码尝试: ${details.password ? '已输入' : '未知'}`;
+      alertType = 'warning';
+      break;
+    case 'SUCCESS_LOGIN':
+      message = `**✅ 登录成功**\nIP: ${ip}\n用户: ${userId}\n设备: ${userAgent.substring(0, 80)}`;
+      alertType = 'info';
+      break;
+    case 'PASSWORD_CHANGE':
+      message = `**🔑 密码修改**\n用户: ${userId}\nIP: ${ip}`;
+      alertType = 'info';
+      break;
+    case 'ACCOUNT_DELETE':
+      message = `**🗑️ 账户删除**\n用户: ${userId}\nIP: ${ip}`;
+      alertType = 'critical';
+      break;
+    case 'INVITE_CREATE':
+      message = `**🎫 邀请码创建**\n用户: ${userId}\nIP: ${ip}\n类型: ${details.type || 'user'}`;
+      alertType = 'info';
+      break;
+    case 'BLACKLISTED_ACCESS':
+      message = `**🚫 黑名单IP访问**\nIP: ${ip}\n用户: ${userId}\nURL: ${req.url}`;
+      alertType = 'warning';
+      break;
+    case 'PATH_TRAVERSAL':
+      message = `**📁 路径遍历攻击**\nIP: ${ip}\n用户: ${userId}\n路径: ${details.path}`;
+      alertType = 'critical';
+      break;
+    case 'DEBUG_ACCESS':
+      message = `**🔧 调试模式访问**\n用户: ${userId}\nIP: ${ip}`;
+      alertType = 'info';
+      break;
+    default:
+      message = `**⚠️ 未知安全事件**\n类型: ${type}\nIP: ${ip}\n用户: ${userId}`;
+  }
+  
+  logSecurityEvent(type, req, details);
+  await sendDiscordAlert(message, alertType);
+}
+
+// ========== 中间件 ==========
 function isDeveloper(req) {
   const ip = getClientIp(req);
   const devIps = (process.env.DEV_IPS || '127.0.0.1,::1,localhost').split(',');
-  
-  if (devIps.includes(ip)) return true;
-  
-  const devToken = req.headers['x-dev-token'];
-  if (devToken && devToken === process.env.DEV_TOKEN) return true;
-  
-  return false;
+  return devIps.includes(ip);
 }
 
-// ========== 调试授权中间件 ==========
-async function debugAuthMiddleware(req, res, next) {
-  const isDebugRequest = req.headers['x-debug-request'] === 'true' || 
-                         req.query._debug === 'true';
-  
-  if (!isDebugRequest) {
-    return next();
-  }
-  
-  const debugToken = req.headers['x-debug-token'];
-  const debugCode = req.headers['x-debug-code'];
-  
-  // 检查是否有活跃会话
-  if (debugToken && debugSessions.has(debugToken)) {
-    const session = debugSessions.get(debugToken);
-    if (session.expiresAt > Date.now()) {
-      logSecurityEvent('DEBUG_REQUEST', req, { sessionToken: debugToken.substring(0, 10) });
-      return next();
-    } else {
-      debugSessions.delete(debugToken);
-    }
-  }
-  
-  // 需要验证码
-  if (debugCode) {
-    const DebugAuth = require('../models/DebugAuth');
-    const auth = await DebugAuth.findOne({ 
-      code: debugCode,
-      isUsed: false,
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (auth) {
-      auth.isUsed = true;
-      auth.usedAt = new Date();
-      await auth.save();
-      
-      const sessionToken = crypto.randomBytes(32).toString('hex');
-      debugSessions.set(sessionToken, {
-        userId: auth.userId,
-        expiresAt: Date.now() + CONFIG.DEBUG_SESSION_DURATION,
-        createdAt: Date.now()
-      });
-      
-      logSecurityEvent('DEBUG_AUTHORIZED', req, { userId: auth.userId });
-      
-      return res.json({
-        success: true,
-        debugToken: sessionToken,
-        expiresIn: CONFIG.DEBUG_SESSION_DURATION / 1000,
-        expiresAt: new Date(Date.now() + CONFIG.DEBUG_SESSION_DURATION).toISOString()
-      });
-    }
-    
-    logSecurityEvent('DEBUG_AUTH_FAILED', req, { code: debugCode });
-    return res.status(403).json({ error: '验证码无效或已过期' });
-  }
-  
-  return res.status(401).json({
-    error: '调试模式需要授权',
-    code: 'DEBUG_AUTH_REQUIRED'
-  });
-}
-
-// ========== 1. IP 黑名单中间件 ==========
-function ipBlacklistMiddleware(req, res, next) {
-  if (isDeveloper(req)) {
-    return next();
-  }
+async function ipBlacklistMiddleware(req, res, next) {
+  if (isDeveloper(req)) return next();
   
   const ip = getClientIp(req);
   const record = blacklist.get(ip);
@@ -247,7 +155,7 @@ function ipBlacklistMiddleware(req, res, next) {
       return next();
     }
     
-    logSecurityEvent('BLACKLISTED_ACCESS', req, { reason: record.reason });
+    await triggerAlert('BLACKLISTED_ACCESS', req, { reason: record.reason });
     return res.status(403).json({
       error: '您的 IP 已被限制访问，请联系管理员',
       code: 'IP_BANNED'
@@ -257,12 +165,9 @@ function ipBlacklistMiddleware(req, res, next) {
   next();
 }
 
-// ========== 2. 频率限制中间件 ==========
 function rateLimitMiddleware(limit = CONFIG.RATE_LIMIT_MAX, windowMs = CONFIG.RATE_LIMIT_WINDOW) {
-  return (req, res, next) => {
-    if (isDeveloper(req)) {
-      return next();
-    }
+  return async (req, res, next) => {
+    if (isDeveloper(req)) return next();
     
     const ip = getClientIp(req);
     const now = Date.now();
@@ -272,12 +177,12 @@ function rateLimitMiddleware(limit = CONFIG.RATE_LIMIT_MAX, windowMs = CONFIG.RA
     timestamps = timestamps.filter(t => t > windowStart);
     
     if (timestamps.length >= limit) {
-      logSecurityEvent('RATE_LIMIT_EXCEEDED', req, { limit, windowMs });
-      
-      const failRecord = failedAttempts.get(ip) || { count: 0 };
+      const failRecord = failedAttempts.get(ip) || { count: 0, firstAttempt: now };
       failRecord.count++;
       failRecord.lastAttempt = now;
       failedAttempts.set(ip, failRecord);
+      
+      await triggerAlert('RATE_LIMIT_EXCEEDED', req, { attempts: failRecord.count });
       
       if (failRecord.count >= CONFIG.SUSPICIOUS_THRESHOLD) {
         blacklist.set(ip, {
@@ -286,7 +191,7 @@ function rateLimitMiddleware(limit = CONFIG.RATE_LIMIT_MAX, windowMs = CONFIG.RA
           attempts: failRecord.count
         });
         saveBlacklist();
-        logSecurityEvent('AUTO_BANNED', req, { reason: 'RATE_LIMIT_ABUSE' });
+        await triggerAlert('AUTO_BANNED', req, { reason: 'RATE_LIMIT_ABUSE', attempts: failRecord.count });
       }
       
       return res.status(429).json({
@@ -302,7 +207,6 @@ function rateLimitMiddleware(limit = CONFIG.RATE_LIMIT_MAX, windowMs = CONFIG.RA
   };
 }
 
-// ========== 3. 恶意 User-Agent 检测 ==========
 const MALICIOUS_PATTERNS = [
   /curl/i, /wget/i, /python/i, /java/i, /perl/i, /ruby/i,
   /go-http-client/i, /php/i, /scrapy/i, /sqlmap/i, /nmap/i,
@@ -310,16 +214,14 @@ const MALICIOUS_PATTERNS = [
   /zmap/i, /burp/i, /postman/i, /insomnia/i
 ];
 
-function detectMaliciousUA(req, res, next) {
-  if (isDeveloper(req)) {
-    return next();
-  }
+async function detectMaliciousUA(req, res, next) {
+  if (isDeveloper(req)) return next();
   
   const ua = req.headers['user-agent'] || '';
   
   for (const pattern of MALICIOUS_PATTERNS) {
     if (pattern.test(ua)) {
-      logSecurityEvent('MALICIOUS_UA_DETECTED', req, { userAgent: ua });
+      await triggerAlert('MALICIOUS_UA', req, { ua: ua.substring(0, 100) });
       return res.status(403).json({ error: '访问被拒绝', code: 'UA_BLOCKED' });
     }
   }
@@ -327,14 +229,9 @@ function detectMaliciousUA(req, res, next) {
   next();
 }
 
-// ========== 4. Token 黑名单 ==========
 function addToTokenBlacklist(token) {
   if (token && typeof token === 'string') {
     tokenBlacklist.set(token, Date.now() + CONFIG.TOKEN_BLACKLIST_DURATION);
-    const now = Date.now();
-    for (const [t, expires] of tokenBlacklist) {
-      if (expires < now) tokenBlacklist.delete(t);
-    }
   }
 }
 
@@ -343,14 +240,12 @@ function tokenBlacklistMiddleware(req, res, next) {
   const token = authHeader?.split(' ')[1];
   
   if (token && tokenBlacklist.has(token)) {
-    logSecurityEvent('REVOKED_TOKEN_USED', req);
     return res.status(401).json({ error: 'Token 已失效，请重新登录', code: 'TOKEN_REVOKED' });
   }
   
   next();
 }
 
-// ========== 5. SQL注入/XSS检测 ==========
 const INJECTION_PATTERNS = [
   /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,
   /(union|select|insert|update|delete|drop|create|alter|exec|execute|script|javascript)/i,
@@ -359,7 +254,7 @@ const INJECTION_PATTERNS = [
   /(eval\(|document\.|window\.|alert\()/i
 ];
 
-function detectInjection(req, res, next) {
+async function detectInjection(req, res, next) {
   const checkValue = (value) => {
     if (typeof value !== 'string') return false;
     for (const pattern of INJECTION_PATTERNS) {
@@ -370,7 +265,7 @@ function detectInjection(req, res, next) {
   
   for (const key in req.query) {
     if (checkValue(req.query[key])) {
-      logSecurityEvent('INJECTION_ATTEMPT', req, { parameter: key });
+      await triggerAlert('INJECTION_ATTEMPT', req, { parameter: key, value: req.query[key] });
       return res.status(400).json({ error: '无效的请求参数', code: 'INVALID_INPUT' });
     }
   }
@@ -379,7 +274,7 @@ function detectInjection(req, res, next) {
     for (const key in req.body) {
       const value = req.body[key];
       if (typeof value === 'string' && checkValue(value)) {
-        logSecurityEvent('INJECTION_ATTEMPT', req, { parameter: key });
+        await triggerAlert('INJECTION_ATTEMPT', req, { parameter: key, value });
         return res.status(400).json({ error: '无效的请求参数', code: 'INVALID_INPUT' });
       }
     }
@@ -388,37 +283,29 @@ function detectInjection(req, res, next) {
   next();
 }
 
-// ========== 6. 路径遍历防护 ==========
-function preventPathTraversal(req, res, next) {
+async function preventPathTraversal(req, res, next) {
   const url = req.url;
   if (url && (url.includes('../') || url.includes('..\\') || url.includes('/etc/') || url.includes('passwd'))) {
-    logSecurityEvent('PATH_TRAVERSAL_ATTEMPT', req, { path: url });
+    await triggerAlert('PATH_TRAVERSAL', req, { path: url });
     return res.status(403).json({ error: '访问被拒绝', code: 'PATH_DENIED' });
   }
   next();
 }
 
-// ========== 7. 安全响应头 ==========
 function securityHeaders(req, res, next) {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   next();
 }
 
-// ========== 8. 获取安全报告 ==========
 function getSecurityReport() {
-  let report = '';
-  
-  report += '='.repeat(60) + '\n';
-  report += 'RP Chat 安全报告\n';
-  report += '='.repeat(60) + '\n\n';
+  let report = '========== 安全报告 ==========\n\n';
+  report += `报告时间: ${new Date().toLocaleString()}\n\n`;
   
   report += '【IP 黑名单】\n';
-  report += '-'.repeat(40) + '\n';
   for (const [ip, entry] of blacklist) {
     if (entry.bannedAt) {
       report += `IP: ${ip}\n`;
@@ -428,19 +315,6 @@ function getSecurityReport() {
     }
   }
   if (blacklist.size === 0) report += '暂无封禁 IP\n\n';
-  
-  report += '【活跃调试会话】\n';
-  report += '-'.repeat(40) + '\n';
-  for (const [token, session] of debugSessions) {
-    report += `会话: ${token.substring(0, 10)}...\n`;
-    report += `  用户ID: ${session.userId}\n`;
-    report += `  创建时间: ${new Date(session.createdAt).toLocaleString()}\n`;
-    report += `  过期时间: ${new Date(session.expiresAt).toLocaleString()}\n\n`;
-  }
-  if (debugSessions.size === 0) report += '暂无活跃调试会话\n\n';
-  
-  report += '='.repeat(60) + '\n';
-  report += `报告生成时间: ${new Date().toLocaleString()}\n`;
   
   return report;
 }
@@ -454,13 +328,11 @@ module.exports = {
   detectInjection,
   preventPathTraversal,
   securityHeaders,
-  debugAuthMiddleware,
   addToTokenBlacklist,
   logSecurityEvent,
   getSecurityReport,
   getClientIp,
   isDeveloper,
-  sendDebugCodeEmail,
-  debugSessions,
+  triggerAlert,        // ✅ 导出告警函数
   CONFIG
 };

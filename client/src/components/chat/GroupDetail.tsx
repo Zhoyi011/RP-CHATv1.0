@@ -142,7 +142,7 @@ const GroupDetail = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/chat')} className="p-1 hover:bg-gray-100 rounded-lg transition">
+          <button onClick={() => navigate('-1')} className="p-1 hover:bg-gray-100 rounded-lg transition">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
           <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">群资料</h1>

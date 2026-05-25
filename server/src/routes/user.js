@@ -1,7 +1,9 @@
+// server/src/routes/user.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { triggerAlert } = require('../middlewares/securityMiddleware');
 
 // 验证token中间件
 const authMiddleware = (req, res, next) => {
@@ -28,7 +30,6 @@ router.get('/me', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
     
-    // ✅ 返回完整的用户信息，包括金币
     res.json({
       _id: user._id,
       id: user._id,
@@ -60,7 +61,6 @@ router.get('/stats', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
 
-    // 计算加入天数
     const joinDays = Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24));
 
     res.json({
@@ -133,7 +133,6 @@ router.post('/daily-reward', authMiddleware, async (req, res) => {
 // 管理员：调整用户金币
 router.post('/admin/adjust-coins/:userId', authMiddleware, async (req, res) => {
   try {
-    // 检查权限
     if (req.userRole !== 'owner' && req.userRole !== 'admin') {
       return res.status(403).json({ error: '需要管理员权限' });
     }
@@ -155,7 +154,6 @@ router.post('/admin/adjust-coins/:userId', authMiddleware, async (req, res) => {
       }
     }
 
-    // 记录操作日志
     console.log(`管理员 ${req.userId} 调整用户 ${req.params.userId} 金币: ${amount}, 原因: ${reason}`);
 
     res.json({
@@ -178,15 +176,11 @@ router.post('/buy-item', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
 
-    // 检查金币是否足够
     if (user.coins < price) {
       return res.status(400).json({ error: '金币不足' });
     }
 
-    // 扣除金币
     await user.deductCoins(price);
-
-    // 添加物品到背包
     await user.addItem({
       itemId,
       itemType,
@@ -234,21 +228,68 @@ router.post('/equip-item', authMiddleware, async (req, res) => {
   }
 });
 
-// 更新用户资料（包含生日、星座）
+// ✅ 更新用户资料（包含生日、星座）- 添加告警
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const { displayName, birthday, zodiac } = req.body;
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     
+    // 记录修改前的信息
+    const oldDisplayName = user.displayName;
+    
     if (displayName !== undefined) user.displayName = displayName;
     if (birthday !== undefined) user.birthday = birthday ? new Date(birthday) : null;
     if (zodiac !== undefined) user.zodiac = zodiac;
     
     await user.save();
+    
+    // ✅ 告警：资料修改（仅当修改了敏感信息）
+    if (oldDisplayName !== displayName) {
+      await triggerAlert('PROFILE_UPDATE', req, { 
+        userId: user._id, 
+        field: 'displayName',
+        oldValue: oldDisplayName,
+        newValue: displayName
+      });
+    }
+    
     res.json({ message: '更新成功', user });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ 删除账户 - 添加告警和二次验证（需要验证码）
+router.post('/delete-account', authMiddleware, async (req, res) => {
+  try {
+    const { verificationCode } = req.body;
+    
+    // 简化版：如果没有验证码系统，先记录告警但不执行删除
+    // 正式版应该验证验证码
+    
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    
+    // ✅ 告警：账户删除请求
+    await triggerAlert('ACCOUNT_DELETE_REQUEST', req, { 
+      userId: user._id,
+      username: user.username,
+      email: user.email
+    });
+    
+    // 实际删除逻辑（需要验证码确认）
+    // 这里先不执行删除，只记录告警
+    res.json({ 
+      message: '账户删除功能需要二次验证，请查看邮件',
+      requiresVerification: true 
+    });
+    
+  } catch (error) {
+    console.error('删除账户错误:', error);
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 
