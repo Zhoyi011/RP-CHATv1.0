@@ -108,8 +108,8 @@ router.get('/achievements', authMiddleware, async (req, res) => {
   }
 });
 
-// 每日登录领取金币
-router/post('/daily-reward', authMiddleware, async (req, res) => {
+// ✅ 修复：使用 router.post（不是 router/post）
+router.post('/daily-reward', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) {
