@@ -566,27 +566,55 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
 // ========== 群成员列表 ==========
 router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
-    const personaRooms = await PersonaRoom.find({ roomId: req.params.roomId })
-      .populate('personaId', 'name displayName avatar sameNameNumber globalNumber');
+    const { roomId } = req.params;
     
-    const members = personaRooms.map(pr => ({
-      _id: pr._id,
-      personaId: pr.personaId ? {
-        _id: pr.personaId._id,
-        name: pr.personaId.name,
-        displayName: pr.personaId.displayName,
-        avatar: pr.personaId.avatar,
-        sameNameNumber: pr.personaId.sameNameNumber,
-        globalNumber: pr.personaId.globalNumber
-      } : null,
-      role: pr.role,
-      title: pr.title,
-      joinedAt: pr.joinedAt
-    }));
+    // 验证房间是否存在
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return res.status(404).json({ error: '房间不存在' });
+    }
     
+    // 获取所有 PersonaRoom 记录
+    const personaRooms = await PersonaRoom.find({ roomId });
+    
+    // 收集所有 personaId
+    const personaIds = personaRooms.map(pr => pr.personaId).filter(id => id);
+    
+    // 批量查询 Persona 信息
+    const personas = await Persona.find({ _id: { $in: personaIds } });
+    
+    // 创建映射以便快速查找
+    const personaMap = new Map();
+    personas.forEach(p => {
+      personaMap.set(p._id.toString(), p);
+    });
+    
+    // 构建成员列表
+    const members = personaRooms
+      .filter(pr => pr.personaId && personaMap.has(pr.personaId.toString()))
+      .map(pr => {
+        const persona = personaMap.get(pr.personaId.toString());
+        return {
+          _id: pr._id,
+          personaId: {
+            _id: persona._id,
+            name: persona.name,
+            displayName: persona.displayName || persona.name,
+            avatar: persona.avatar,
+            sameNameNumber: persona.sameNameNumber,
+            globalNumber: persona.globalNumber
+          },
+          role: pr.role,
+          title: pr.title || '',
+          joinedAt: pr.joinedAt
+        };
+      });
+    
+    console.log(`✅ 成功获取房间 ${roomId} 的成员列表，共 ${members.length} 人`);
     res.json(members);
   } catch (error) {
-    res.status(500).json({ error: '服务器错误' });
+    console.error('获取成员列表失败:', error);
+    res.status(500).json({ error: error.message || '服务器错误' });
   }
 });
 
