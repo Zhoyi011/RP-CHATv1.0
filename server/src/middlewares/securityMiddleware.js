@@ -136,8 +136,27 @@ async function triggerAlert(type, req, details = {}) {
 }
 
 // ========== 中间件 ==========
+// 检查 IP 是否属于 Google Cloud 网段（允许其通过）
+function isGoogleCloudIp(ip) {
+  // 解析 IP 为数字进行比较
+  const ipToNumber = (ip) => {
+    const parts = ip.split('.');
+    return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + +parts[3];
+  };
+  const num = ipToNumber(ip);
+  // Google Cloud 常用网段：34.0.0.0/15, 34.16.0.0/16, 34.19.0.0/17 等
+  // 这里简单判断 34.16.0.0 - 34.19.255.255 范围
+  const min = ipToNumber('34.16.0.0');
+  const max = ipToNumber('34.19.255.255');
+  return num >= min && num <= max;
+}
+
 function isDeveloper(req) {
   const ip = getClientIp(req);
+  // 检查是否是 Google Cloud IP
+  if (isGoogleCloudIp(ip)) {
+    return true;
+  }
   const devIps = (process.env.DEV_IPS || '127.0.0.1,::1,localhost').split(',');
   return devIps.includes(ip);
 }
