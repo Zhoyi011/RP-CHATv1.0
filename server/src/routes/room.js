@@ -1100,7 +1100,7 @@ router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
     }
     
     const personaRooms = await PersonaRoom.find({ roomId })
-      .populate('personaId', 'name displayName avatar sameNameNumber');
+      .populate('personaId', 'name displayName avatar');
     
     const members = personaRooms
       .filter(pr => pr.personaId && pr.personaId._id.toString() !== currentPersona._id.toString())
@@ -1112,12 +1112,16 @@ router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
         role: pr.role
       }));
     
-    // 添加特殊选项
-    const specialOptions = [
-      { _id: '@all', displayName: '所有人', avatar: null, title: 'at-all', role: 'special' }
-    ];
+    // 添加 @所有人 选项
+    members.unshift({
+      _id: '@all',
+      displayName: '所有人',
+      avatar: null,
+      title: null,
+      role: 'all'
+    });
     
-    res.json([...specialOptions, ...members]);
+    res.json(members);
   } catch (error) {
     console.error('获取可提及成员失败:', error);
     res.status(500).json({ error: '服务器错误' });

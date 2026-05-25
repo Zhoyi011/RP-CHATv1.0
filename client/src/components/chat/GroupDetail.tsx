@@ -1,277 +1,316 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// client/src/components/chat/GroupDetail.tsx
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useResponsive } from '../../hooks/useResponsive';
+import { useGroupPermission } from '../../hooks/useGroupPermission';
+import toast from 'react-hot-toast';
 
-interface Member {
-  _id: string;
-  personaId: {
-    _id: string;
-    name: string;
-    displayName: string;
-    avatar?: string;
-    sameNameNumber?: number;
-    globalNumber?: number;
-  } | null;
-  role: 'owner' | 'admin' | 'member';
-  title: string;
-  joinedAt: string;
-}
-
-interface RoomData {
-  _id: string;
-  name: string;
-  description: string;
-  announcement: string;
-  avatar: string;
-  createdAt: string;
-  memberCount: number;
-  creatorName: string;
-}
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 const GroupDetail = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
-  const [room, setRoom] = useState<RoomData | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isLoading, members, creatorName, userRole, isOwner, isAdmin, refresh, currentPersonaId } = useGroupPermission(roomId);
+  const [room, setRoom] = useState<any>(null);
   const [showAllMembers, setShowAllMembers] = useState(false);
-  const [currentUserRole, setCurrentUserRole] = useState<string>('');
-  const [currentUserTitle, setCurrentUserTitle] = useState<string>('');
   const [pendingCount, setPendingCount] = useState(0);
+  const [activeTab, setActiveTab] = useState<'info' | 'members' | 'announcement'>('info');
 
-  const isOwner = currentUserRole === 'owner';
-  const isAdmin = currentUserRole === 'admin' || isOwner;
-
-  const fetchPendingCount = useCallback(async () => {
-    if (!roomId || !isAdmin) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/pending`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setPendingCount(Array.isArray(data) ? data.length : 0);
-    } catch (error) { console.error('获取待审核数量失败:', error); }
-  }, [roomId, isAdmin]);
-
+  // 加载房间信息
   useEffect(() => {
-    if (roomId && isAdmin) {
-      fetchPendingCount();
-      const interval = setInterval(fetchPendingCount, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [roomId, isAdmin, fetchPendingCount]);
-
-  useEffect(() => {
-    loadRoomData();
-    loadMembers();
-  }, [roomId]);
-
-  const loadRoomData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setRoom(data);
-    } catch (error) { console.error('加载房间失败:', error); }
-  };
-
-  const loadMembers = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/members`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setMembers(Array.isArray(data) ? data : []);
-    } catch (error) { console.error('加载成员失败:', error); } finally { setLoading(false); }
-  };
-
-  // ✅ 通过 Persona 权限检查
-  useEffect(() => {
-    const checkPermission = async () => {
+    const loadRoom = async () => {
       try {
         const token = localStorage.getItem('token');
-        // 获取当前激活 Persona
-        const activeRes = await fetch(`https://rp-chatv1-0.onrender.com/api/room/active-persona`, {
+        const res = await fetch(`${API_BASE}/room/${roomId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const activeData = await activeRes.json();
-        const currentPersonaId = activeData.activePersona?.personaId?._id;
-        
-        if (currentPersonaId) {
-          const currentMember = members.find(m => m.personaId?._id === currentPersonaId);
-          setCurrentUserRole(currentMember?.role || '');
-          setCurrentUserTitle(currentMember?.title || '');
-        }
-      } catch (error) { console.error('权限检查失败:', error); }
+        const data = await res.json();
+        setRoom(data);
+      } catch (error) {
+        console.error('加载失败:', error);
+      }
     };
-    if (members.length > 0) checkPermission();
-  }, [members]);
+    if (roomId) loadRoom();
+  }, [roomId]);
 
-  const getRoleBadge = (role: string) => {
-    if (role === 'owner') return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">👑 群主</span>;
-    if (role === 'admin') return <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">🛡️ 管理员</span>;
-    return null;
-  };
-
-  const getDisplayName = (member: Member) => {
-    return member.personaId?.displayName || member.personaId?.name || '未知角色';
-  };
-
-  const getAvatarChar = (member: Member) => {
-    return getDisplayName(member).charAt(0).toUpperCase();
-  };
+  // 获取待审核数量
+  useEffect(() => {
+    const fetchPending = async () => {
+      if (!roomId || (!isOwner && !isAdmin)) return;
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE}/room/${roomId}/pending`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        setPendingCount(Array.isArray(data) ? data.length : 0);
+      } catch (error) {
+        console.error('获取待审核失败:', error);
+      }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 30000);
+    return () => clearInterval(interval);
+  }, [roomId, isOwner, isAdmin]);
 
   const owners = members.filter(m => m.role === 'owner');
   const admins = members.filter(m => m.role === 'admin');
   const normalMembers = members.filter(m => m.role === 'member');
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-gray-400">加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('-1')} className="p-1 hover:bg-gray-100 rounded-lg transition">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* 头部 */}
+      <div className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white sticky top-0 z-10 shadow-md">
+        <div className="px-4 py-3 flex items-center">
+          <button onClick={() => navigate('/chat')} className="mr-3 p-1 hover:bg-white/20 rounded-full transition">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <h1 className="text-xl font-bold flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">群资料</h1>
-          
-          <div className="flex items-center gap-2">
-            {(isOwner || isAdmin) && (
-              <button onClick={() => navigate(`/room/${roomId}/pending`)} className="p-2 hover:bg-gray-100 rounded-full transition relative" title="待审核申请">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                {pendingCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>}
-              </button>
-            )}
-            {(isOwner || isAdmin) && (
-              <button onClick={() => navigate(`/group/${roomId}/settings`)} className="p-2 hover:bg-gray-100 rounded-full transition" title="群管理">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
-              </button>
-            )}
-          </div>
+          <h1 className="text-xl font-bold flex-1">群资料</h1>
+          {(isOwner || isAdmin) && (
+            <button
+              onClick={() => navigate(`/group/${roomId}/settings`)}
+              className="p-1.5 hover:bg-white/20 rounded-full transition"
+              title="群管理"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Tab 切换 */}
+        <div className="flex px-4 gap-1 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'info' ? 'bg-white text-blue-600' : 'text-white hover:bg-white/10'}`}
+          >
+            📋 群信息
+          </button>
+          <button
+            onClick={() => setActiveTab('members')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'members' ? 'bg-white text-blue-600' : 'text-white hover:bg-white/10'}`}
+          >
+            👥 成员 ({members.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('announcement')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'announcement' ? 'bg-white text-blue-600' : 'text-white hover:bg-white/10'}`}
+          >
+            📢 群公告
+            {room?.announcement && <span className="ml-1 text-xs">●</span>}
+          </button>
+          {(isOwner || isAdmin) && pendingCount > 0 && (
+            <button
+              onClick={() => navigate(`/room/${roomId}/pending`)}
+              className="relative px-4 py-2 text-sm font-medium rounded-t-lg transition text-white hover:bg-white/10"
+            >
+              ⏳ 待审
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">{pendingCount}</span>
+            </button>
+          )}
         </div>
       </div>
 
-      <div className={`${isMobile ? 'p-3' : 'p-4'} max-w-2xl mx-auto space-y-4`}>
-        {/* 群头像和名称 */}
-        <div className="bg-white rounded-2xl shadow p-5">
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-3xl shadow-lg">
-              {room?.name?.charAt(0) || '?'}
+      <div className={`${isMobile ? 'p-3' : 'p-4'} max-w-2xl mx-auto`}>
+        {/* 群信息 Tab */}
+        {activeTab === 'info' && (
+          <div className="space-y-4">
+            {/* 群头像和名称 */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-3xl shadow-lg">
+                  {room?.name?.charAt(0) || '?'}
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">{room?.name}</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    创建于 {room?.createdAt ? new Date(room.createdAt).toLocaleDateString() : '未知'}
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    {members.length} 位成员 · 群主: {creatorName}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold text-gray-800">{room?.name}</h2>
-              <p className="text-sm text-gray-500 mt-1">创建于 {new Date(room?.createdAt || '').toLocaleDateString()}</p>
-              <p className="text-xs text-blue-600 mt-1">{members.length} 位成员 · 群主: {room?.creatorName || '?'}</p>
-            </div>
-          </div>
-        </div>
 
-        {room?.description && (
-          <div className="bg-white rounded-2xl shadow p-5">
-            <h3 className="font-medium text-gray-800 mb-2">群简介</h3>
-            <p className="text-gray-600 whitespace-pre-wrap">{room.description}</p>
+            {/* 群简介 */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200">群简介</h3>
+              </div>
+              <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                {room?.description || '这个群还没有简介'}
+              </p>
+            </div>
+
+            {/* 我的头衔 */}
+            {(() => {
+              const currentMember = members.find(m => m.personaId?._id === currentPersonaId);
+              if (currentMember?.title) {
+                return (
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl p-5 border border-purple-100 dark:border-purple-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🏷️</span>
+                      <span className="text-sm font-medium text-purple-600 dark:text-purple-400">我的头衔</span>
+                    </div>
+                    <p className="text-gray-800 dark:text-gray-200 font-medium">{currentMember.title}</p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* 快捷操作 */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setActiveTab('members')}
+                className="flex items-center justify-center gap-2 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-100 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span>查看成员</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('announcement')}
+                className="flex items-center justify-center gap-2 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-100 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6 3 3 0 000 6z" />
+                </svg>
+                <span>查看公告</span>
+              </button>
+            </div>
           </div>
         )}
 
-        {room?.announcement && (
-          <div className="bg-amber-50 rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6 3 3 0 000 6z" /></svg>
-              <span className="text-sm font-medium text-amber-700">群公告</span>
+        {/* 成员列表 Tab */}
+        {activeTab === 'members' && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
+              <h3 className="font-semibold text-gray-800 dark:text-gray-200">成员列表</h3>
+              <span className="text-xs text-gray-500">{members.length} 人</span>
             </div>
-            <p className="text-gray-700 whitespace-pre-wrap">{room.announcement}</p>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[500px] overflow-y-auto">
+              {/* 群主 */}
+              {owners.map(member => (
+                <div key={member._id} className="p-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold">
+                    {(member.personaId?.displayName || member.personaId?.name || '?').charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
+                        {member.personaId?.displayName || member.personaId?.name}
+                      </span>
+                      <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">群主</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      #{member.personaId?.sameNameNumber || '?'} · {new Date(member.joinedAt).toLocaleDateString()} 加入
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {/* 管理员 */}
+              {admins.map(member => (
+                <div key={member._id} className="p-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold">
+                    {(member.personaId?.displayName || member.personaId?.name || '?').charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
+                        {member.personaId?.displayName || member.personaId?.name}
+                      </span>
+                      <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">管理员</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      #{member.personaId?.sameNameNumber || '?'} · {new Date(member.joinedAt).toLocaleDateString()} 加入
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {/* 普通成员 */}
+              {(showAllMembers ? normalMembers : normalMembers.slice(0, 10)).map(member => (
+                <div key={member._id} className="p-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold">
+                    {(member.personaId?.displayName || member.personaId?.name || '?').charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-800 dark:text-gray-200">
+                      {member.personaId?.displayName || member.personaId?.name}
+                    </span>
+                    <p className="text-xs text-gray-400">
+                      #{member.personaId?.sameNameNumber || '?'} · {new Date(member.joinedAt).toLocaleDateString()} 加入
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {normalMembers.length > 10 && !showAllMembers && (
+                <div className="p-3 text-center">
+                  <button
+                    onClick={() => setShowAllMembers(true)}
+                    className="text-sm text-blue-500 hover:text-blue-600"
+                  >
+                    查看更多成员 ({normalMembers.length - 10} 人)
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {currentUserTitle && (
-          <div className="bg-gray-50 rounded-2xl p-5">
-            <p className="text-xs text-gray-500 mb-1">我的头衔</p>
-            <p className="text-lg font-medium text-gray-700">{currentUserTitle}</p>
-          </div>
-        )}
-
-        {/* ✅ 成员列表 - 只显示 Persona 名 */}
-        <div className="bg-white rounded-2xl shadow p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-800">成员列表 ({members.length})</h3>
-            {members.length > 5 && !showAllMembers && (
-              <button onClick={() => setShowAllMembers(true)} className="text-sm text-blue-600 hover:text-blue-700">查看全部</button>
+        {/* 群公告 Tab */}
+        {activeTab === 'announcement' && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">群公告</h3>
+            </div>
+            {room?.announcement ? (
+              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4">
+                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                  {room.announcement}
+                </p>
+                <p className="text-xs text-gray-400 mt-3 text-right">
+                  最后更新: {room.updatedAt ? new Date(room.updatedAt).toLocaleDateString() : '未知'}
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6 3 3 0 000 6z" />
+                </svg>
+                <p>暂无群公告</p>
+                {(isOwner || isAdmin) && (
+                  <button
+                    onClick={() => navigate(`/group/${roomId}/settings`)}
+                    className="mt-2 text-sm text-blue-500 hover:text-blue-600"
+                  >
+                    去添加公告 →
+                  </button>
+                )}
+              </div>
             )}
-            {showAllMembers && (
-              <button onClick={() => setShowAllMembers(false)} className="text-sm text-gray-400 hover:text-gray-500">收起</button>
-            )}
           </div>
-          
-          <div className="space-y-3">
-            {/* 群主 */}
-            {owners.map(member => (
-              <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold">{getAvatarChar(member)}</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{getDisplayName(member)}</span>
-                    {getRoleBadge(member.role)}
-                    {member.title && <span className="text-xs text-gray-400">· {member.title}</span>}
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {member.personaId?.sameNameNumber ? `#${member.personaId.sameNameNumber}` : ''}
-                    {member.personaId?.globalNumber ? ` · 全局 #${member.personaId.globalNumber}` : ''}
-                    {' · '}{new Date(member.joinedAt).toLocaleDateString()} 加入
-                  </p>
-                </div>
-              </div>
-            ))}
-            
-            {/* 管理员 */}
-            {admins.map(member => (
-              <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold">{getAvatarChar(member)}</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{getDisplayName(member)}</span>
-                    {getRoleBadge(member.role)}
-                    {member.title && <span className="text-xs text-gray-400">· {member.title}</span>}
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {member.personaId?.sameNameNumber ? `#${member.personaId.sameNameNumber}` : ''}
-                    {member.personaId?.globalNumber ? ` · 全局 #${member.personaId.globalNumber}` : ''}
-                    {' · '}{new Date(member.joinedAt).toLocaleDateString()} 加入
-                  </p>
-                </div>
-              </div>
-            ))}
-            
-            {/* 普通成员 */}
-            {(showAllMembers ? normalMembers : normalMembers.slice(0, 5)).map(member => (
-              <div key={member._id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white font-bold">{getAvatarChar(member)}</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{getDisplayName(member)}</span>
-                    {member.title && <span className="text-xs text-gray-400">· {member.title}</span>}
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {member.personaId?.sameNameNumber ? `#${member.personaId.sameNameNumber}` : ''}
-                    {member.personaId?.globalNumber ? ` · 全局 #${member.personaId.globalNumber}` : ''}
-                    {' · '}{new Date(member.joinedAt).toLocaleDateString()} 加入
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

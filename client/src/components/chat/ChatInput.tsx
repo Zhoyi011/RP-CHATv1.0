@@ -1,3 +1,4 @@
+// client/src/components/chat/ChatInput.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker from '../common/EmojiPicker';
@@ -6,7 +7,7 @@ import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import type { Persona } from '../../services/api';
 import AvatarFrame from '../common/AvatarFrame';
 
-console.log('🔧 [ChatInput] 组件加载（原生键盘版 - 完美贴合）');
+console.log('🔧 [ChatInput] 组件加载');
 
 interface ChatInputProps {
   onSendMessage: (content: string, isAction: boolean, personaId?: string) => void;
@@ -19,7 +20,14 @@ interface ChatInputProps {
   onLoadRoomPersonas?: () => void;
 }
 
-// 辅助函数：从 URL 中提取头像框文件名
+interface MentionableMember {
+  _id: string;
+  displayName: string;
+  avatar?: string;
+  title?: string;
+  role?: string;
+}
+
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
@@ -37,84 +45,131 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSwitchPersona,
   onLoadRoomPersonas,
 }) => {
-  console.log(`🎨 [ChatInput] 渲染, roomId=${roomId}, disabled=${disabled}, persona=${selectedPersona?.displayName || selectedPersona?.name}`);
-
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [sendAnimation, setSendAnimation] = useState(false);
   const [showPersonaSwitch, setShowPersonaSwitch] = useState(false);
+  
+  // @ 提及相关状态
+  const [showMentionPanel, setShowMentionPanel] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [mentionList, setMentionList] = useState<MentionableMember[]>([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiContainerRef = useRef<HTMLDivElement>(null);
   const personaSwitchRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mentionPanelRef = useRef<HTMLDivElement>(null);
   const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
 
-  console.log(`📊 [ChatInput] 状态: inputLength=${inputValue.length}, isFocused=${isFocused}, isKeyboardOpen=${isKeyboardOpen}`);
-
-  // 键盘弹出时滚动输入框到可视区域
-  const scrollInputToVisible = () => {
-    if (!inputRef.current) return;
-    setTimeout(() => {
-      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      console.log('📱 [ChatInput] 键盘弹出，输入框已滚动到贴合位置');
-    }, 100);
+  // 获取可提及的成员
+  const fetchMentionableMembers = async (search: string) => {
+    if (!roomId) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`https://rp-chatv1-0.onrender.com/api/room/${roomId}/mentionable`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const filtered = data.filter((m: MentionableMember) => 
+          m.displayName.toLowerCase().includes(search.toLowerCase()) ||
+          (m.title && m.title.toLowerCase().includes(search.toLowerCase()))
+        );
+        setMentionList(filtered);
+        setSelectedMentionIndex(0);
+      }
+    } catch (error) {
+      console.error('获取提及列表失败:', error);
+    }
   };
 
-  // 监听键盘打开/关闭
-  useEffect(() => {
-    if (isKeyboardOpen && isFocused && inputRef.current) {
-      scrollInputToVisible();
-      console.log('📱 [ChatInput] 检测到键盘打开，触发滚动');
+  // 检测 @ 符号
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    setInputValue(value);
+    setCursorPosition(cursorPos);
+    
+    // 查找最近输入的 @
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/@([^\s@]*)$/);
+    
+    if (atMatch) {
+      const searchTerm = atMatch[1];
+      setMentionSearch(searchTerm);
+      setShowMentionPanel(true);
+      fetchMentionableMembers(searchTerm);
+    } else {
+      setShowMentionPanel(false);
     }
-  }, [isKeyboardOpen, isFocused]);
+  };
 
-  // iOS 下额外监听 resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (isFocused && inputRef.current && isIOS) {
-        console.log('📱 [ChatInput] iOS resize 事件触发，滚动输入框');
-        scrollInputToVisible();
+  // 插入提及
+  const insertMention = (member: MentionableMember) => {
+    const textBeforeCursor = inputValue.slice(0, cursorPosition);
+    const textAfterCursor = inputValue.slice(cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    const newText = textBeforeCursor.slice(0, lastAtIndex) + 
+      `@${member.displayName} ` + textAfterCursor;
+    
+    setInputValue(newText);
+    setShowMentionPanel(false);
+    setMentionSearch('');
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
+
+  // 键盘事件（支持上下键选择提及）
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMentionPanel && mentionList.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => (prev + 1) % mentionList.length);
+        return;
       }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      console.log('🧹 [ChatInput] 移除 resize 监听');
-    };
-  }, [isFocused, isIOS]);
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => (prev - 1 + mentionList.length) % mentionList.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionList[selectedMentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowMentionPanel(false);
+        return;
+      }
+    }
+    
+    if (e.key === 'Enter' && !e.shiftKey && !showMentionPanel) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
-  // 点击外部关闭面板
+  // 点击外部关闭提及面板
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (emojiContainerRef.current && !emojiContainerRef.current.contains(e.target as Node)) {
-        setShowEmojiPicker(false);
-        console.log('🔽 [ChatInput] 关闭表情面板');
-      }
-      if (personaSwitchRef.current && !personaSwitchRef.current.contains(e.target as Node)) {
-        setShowPersonaSwitch(false);
-        console.log('🔽 [ChatInput] 关闭角色切换面板');
+      if (mentionPanelRef.current && !mentionPanelRef.current.contains(e.target as Node)) {
+        setShowMentionPanel(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      console.log('🧹 [ChatInput] 清理点击外部监听');
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // 加载群内 Persona
-  useEffect(() => {
-    if (showPersonaSwitch && onLoadRoomPersonas) {
-      console.log('🔄 [ChatInput] 加载群内角色列表');
-      onLoadRoomPersonas();
-    }
-  }, [showPersonaSwitch, onLoadRoomPersonas]);
 
   // 简繁转换
   const handleTranslate = async () => {
-    console.log(`🌐 [ChatInput] 开始简繁转换, 内容长度: ${inputValue.length}`);
     if (!inputValue.trim() || isTranslating) return;
     setIsTranslating(true);
     try {
@@ -122,27 +177,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (simplified === inputValue) {
         const traditional = await simplifiedToTraditional(inputValue);
         setInputValue(traditional);
-        console.log(`✅ [ChatInput] 转换为繁体: ${traditional.substring(0, 30)}...`);
       } else {
         setInputValue(simplified);
-        console.log(`✅ [ChatInput] 转换为简体: ${simplified.substring(0, 30)}...`);
       }
     } catch (error) {
-      console.error('❌ [ChatInput] 简繁转换失败:', error);
+      console.error('简繁转换失败:', error);
     } finally {
       setIsTranslating(false);
     }
   };
 
-  // 发送消息
   const handleSend = () => {
-    console.log(`📤 [ChatInput] 尝试发送消息, 内容: "${inputValue.substring(0, 30)}", hasContent=${!!inputValue.trim()}, disabled=${disabled}`);
     if (!inputValue.trim() || disabled) return;
     
     const isAction = inputValue.startsWith('/me ');
     const content = isAction ? inputValue.slice(4) : inputValue;
-    
-    console.log(`✅ [ChatInput] 发送消息, isAction=${isAction}, 角色=${selectedPersona?.displayName || selectedPersona?.name}`);
     
     setSendAnimation(true);
     setTimeout(() => setSendAnimation(false), 400);
@@ -152,35 +201,27 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
     setTimeout(() => {
       inputRef.current?.focus();
-      console.log('📱 [ChatInput] 发送后重新聚焦输入框');
     }, 50);
   };
 
-  // PC 端键盘事件
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      console.log('⌨️ [ChatInput] Enter 键发送');
-      handleSend();
-    }
-  };
-
-  // 选择表情
   const handleSelectEmoji = (emoji: string) => {
-    console.log(`😊 [ChatInput] 选择表情: ${emoji}`);
     setInputValue(prev => prev + emoji);
     inputRef.current?.focus();
   };
 
-  // 切换角色
   const handleSwitchPersona = (persona: Persona) => {
-    console.log(`🔄 [ChatInput] 切换角色: ${persona.displayName || persona.name}`);
     onSwitchPersona?.(persona);
     setShowPersonaSwitch(false);
   };
 
   const hasContent = inputValue.trim().length > 0;
   const canSwitchPersona = roomPersonas.length > 1;
+
+  // 渲染提及高亮
+  const renderInputWithHighlight = () => {
+    // 这个函数用于预览，不是必须的
+    return inputValue;
+  };
 
   return (
     <motion.div 
@@ -213,19 +254,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
         )}
       </AnimatePresence>
 
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 relative">
         {/* 角色切换按钮 */}
         {canSwitchPersona && (
           <div className="relative flex-shrink-0 pb-0.5" ref={personaSwitchRef}>
             <motion.button
               type="button"
-              onClick={() => {
-                setShowPersonaSwitch(!showPersonaSwitch);
-                console.log(`🔘 [ChatInput] 点击角色切换按钮, 展开=${!showPersonaSwitch}`);
-              }}
+              onClick={() => setShowPersonaSwitch(!showPersonaSwitch)}
               whileTap={{ scale: 0.9 }}
               whileHover={{ scale: 1.05 }}
-              animate={{ rotate: showPersonaSwitch ? 12 : 0, scale: showPersonaSwitch ? 1.05 : 1 }}
               className={`
                 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200
                 ${showPersonaSwitch 
@@ -240,14 +277,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
               </svg>
             </motion.button>
 
-            {/* 角色切换下拉菜单 */}
             <AnimatePresence>
               {showPersonaSwitch && (
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
                   className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 overflow-hidden"
                 >
                   <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
@@ -256,7 +291,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   <div className="max-h-60 overflow-y-auto">
                     {roomPersonas.map(persona => {
                       const isActive = selectedPersona?._id === persona._id;
-                      // 获取头像框文件名
                       const frameName = getFrameNameFromUrl(persona.avatarFrame || persona.equipped?.avatarFrame);
                       return (
                         <motion.button
@@ -264,35 +298,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
                           onClick={() => handleSwitchPersona(persona)}
                           whileHover={{ backgroundColor: '#f9fafb' }}
                           whileTap={{ scale: 0.98 }}
-                          className={`
-                            w-full px-3 py-2.5 flex items-center gap-3 transition-all duration-150 text-left
-                            ${isActive ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}
-                          `}
+                          className={`w-full px-3 py-2.5 flex items-center gap-3 transition-all duration-150 text-left ${isActive ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                         >
-                          <AvatarFrame
-                            avatarUrl={persona.avatar || ''}
-                            frameName={frameName}
-                            size="sm"
-                            className="chat-input-menu flex-shrink-0"
-                          />
+                          <AvatarFrame avatarUrl={persona.avatar || ''} frameName={frameName} size="sm" className="chat-input-menu flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                              {persona.displayName || persona.name}
-                            </p>
-                            <p className="text-[10px] text-gray-400">
-                              #{persona.sameNameNumber || '?'}
-                            </p>
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{persona.displayName || persona.name}</p>
+                            <p className="text-[10px] text-gray-400">#{persona.sameNameNumber || '?'}</p>
                           </div>
-                          {isActive && (
-                            <motion.svg 
-                              initial={{ scale: 0 }} 
-                              animate={{ scale: 1 }} 
-                              className="w-4 h-4 text-blue-500 flex-shrink-0" 
-                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </motion.svg>
-                          )}
+                          {isActive && <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                         </motion.button>
                       );
                     })}
@@ -307,20 +320,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
         <div className="relative flex-shrink-0 pb-0.5" ref={emojiContainerRef}>
           <motion.button
             type="button"
-            onClick={() => {
-              setShowEmojiPicker(!showEmojiPicker);
-              console.log(`😊 [ChatInput] 点击表情按钮, 展开=${!showEmojiPicker}`);
-            }}
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             whileTap={{ scale: 0.9 }}
             whileHover={{ scale: 1.05 }}
-            animate={{ rotate: showEmojiPicker ? 12 : 0, scale: showEmojiPicker ? 1.05 : 1 }}
-            className={`
-              w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200
-              ${showEmojiPicker 
-                ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-sm' 
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }
-            `}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${showEmojiPicker ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
             title="表情"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,13 +333,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
           <AnimatePresence>
             {showEmojiPicker && (
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-                className="absolute bottom-full left-0 mb-2 z-50"
-              >
+              <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }} className="absolute bottom-full left-0 mb-2 z-50">
                 <EmojiPicker onSelect={handleSelectEmoji} onClose={() => setShowEmojiPicker(false)} />
               </motion.div>
             )}
@@ -350,62 +347,29 @@ const ChatInput: React.FC<ChatInputProps> = ({
           disabled={!hasContent || isTranslating}
           whileTap={hasContent && !isTranslating ? { scale: 0.9 } : {}}
           whileHover={hasContent && !isTranslating ? { scale: 1.05 } : {}}
-          className={`
-            flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-200
-            ${hasContent && !isTranslating 
-              ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30' 
-              : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-            }
-          `}
+          className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-200 ${hasContent && !isTranslating ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}`}
           title="简繁转换"
         >
-          {isTranslating ? (
-            <motion.svg 
-              animate={{ rotate: 360 }} 
-              transition={{ repeat: Infinity, duration: 1, ease: "linear" }} 
-              className="w-4 h-4" 
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </motion.svg>
-          ) : (
-            <span className="text-sm tracking-wide">简⇄繁</span>
-          )}
+          {isTranslating ? <motion.svg animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></motion.svg> : <span className="text-sm tracking-wide">简⇄繁</span>}
         </motion.button>
 
-        {/* 原生输入框 */}
-        <div className="flex-1 min-w-0">
+        {/* 输入框容器 */}
+        <div className="flex-1 min-w-0 relative">
           <input 
             ref={inputRef}
             type="text" 
             value={inputValue}
-            onChange={(e) => {
-              setInputValue(e.target.value);
-              console.log(`⌨️ [ChatInput] 输入变化: ${e.target.value.substring(0, 30)}`);
-            }}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               setIsFocused(true);
-              console.log('🔍 [ChatInput] 输入框获得焦点');
               setTimeout(() => {
                 inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                console.log('📱 [ChatInput] 聚焦后滚动输入框');
               }, 150);
             }}
-            onBlur={() => {
-              setIsFocused(false);
-              console.log('🔍 [ChatInput] 输入框失去焦点');
-            }}
+            onBlur={() => setIsFocused(false)}
             placeholder={placeholder}
-            className={`
-              w-full rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none
-              bg-gray-100 dark:bg-gray-800
-              ${isFocused 
-                ? 'bg-white dark:bg-gray-700 ring-2 ring-blue-500/50 shadow-md' 
-                : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-              }
-              ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
+            className={`w-full rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none bg-gray-100 dark:bg-gray-800 ${isFocused ? 'bg-white dark:bg-gray-700 ring-2 ring-blue-500/50 shadow-md' : 'hover:bg-gray-50 dark:hover:bg-gray-700'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             disabled={disabled}
             maxLength={2000}
             autoComplete="off"
@@ -414,6 +378,50 @@ const ChatInput: React.FC<ChatInputProps> = ({
             spellCheck={false}
             enterKeyHint="send"
           />
+          
+          {/* @ 提及面板 */}
+          <AnimatePresence>
+            {showMentionPanel && mentionList.length > 0 && (
+              <motion.div
+                ref={mentionPanelRef}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50 overflow-hidden"
+              >
+                <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                  提及成员
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {mentionList.map((member, index) => (
+                    <button
+                      key={member._id}
+                      onClick={() => insertMention(member)}
+                      onMouseEnter={() => setSelectedMentionIndex(index)}
+                      className={`w-full px-3 py-2 text-left flex items-center gap-2 transition ${index === selectedMentionIndex ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white text-xs font-bold">
+                        {member.displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                          {member.displayName}
+                        </div>
+                        {member.title && (
+                          <div className="text-xs text-gray-400 truncate">
+                            {member.title}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="px-3 py-1.5 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                  按 ↑ ↓ 选择，Enter 确认
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* 发送按钮 */}
@@ -424,19 +432,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
           whileHover={hasContent && !disabled ? { scale: 1.05 } : {}}
           animate={sendAnimation ? { scale: [1, 0.8, 1], rotate: [0, -15, 0] } : {}}
           transition={{ duration: 0.3 }}
-          className={`
-            flex-shrink-0 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200
-            flex items-center justify-center gap-1.5
-            ${hasContent && !disabled
-              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md hover:shadow-lg active:shadow-sm'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-            }
-          `}
+          className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${hasContent && !disabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md hover:shadow-lg active:shadow-sm' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'}`}
         >
-          <motion.span
-            animate={sendAnimation ? { scale: [1, 1.3, 1] } : {}}
-            transition={{ duration: 0.3 }}
-          >
+          <motion.span animate={sendAnimation ? { scale: [1, 1.3, 1] } : {}} transition={{ duration: 0.3 }}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
