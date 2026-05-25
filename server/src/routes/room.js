@@ -8,6 +8,7 @@ const PersonaRoom = require('../models/PersonaRoom');
 const UserReadRecord = require('../models/UserReadRecord');
 const jwt = require('jsonwebtoken');
 const { logAction } = require('../middlewares/auditLog');
+const { processMentions, sendMentionNotifications, sendMentionDiscordAlert } = require('../middlewares/mentionHandler');
 
 console.log('🔧 [room.js] 加载路由模块');
 
@@ -93,6 +94,8 @@ router.post('/create', authMiddleware, async (req, res) => {
       role: 'owner',
       joinedAt: new Date()
     });
+    
+    await logAction(req, 'CREATE_ROOM', { roomId: room._id, roomName: room.name });
     
     console.log(`✅ 房间创建: ${room.name}，群主: ${persona.displayName}`);
     
@@ -348,7 +351,6 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
     let messages = await query.exec();
     messages = messages.reverse();
     
-    // 过滤当前用户软删除的消息
     const filteredMessages = messages.filter(msg => {
       if (msg.isDeleted && msg.deletedBy === req.userId) {
         return false;
@@ -371,7 +373,6 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       const persona = msg.personaId;
       const senderName = persona ? (persona.displayName || persona.name) : '用户';
       
-      // ✅ 获取头像框 URL（如果有装备）
       let avatarFrameUrl = null;
       if (persona && persona.equipped && persona.equipped.avatarFrame) {
         avatarFrameUrl = persona.equipped.avatarFrame.image;
@@ -391,7 +392,6 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
           displayName: persona.displayName,
           avatar: persona.avatar,
           sameNameNumber: persona.sameNameNumber,
-          // ✅ 新增头像框字段
           avatarFrame: avatarFrameUrl,
           equipped: persona.equipped ? {
             avatarFrame: avatarFrameUrl
@@ -408,7 +408,7 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 发送消息（支持回复）==========
+// ========== 发送消息（支持回复和@提及）==========
 router.post('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -440,7 +440,15 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
     
     await message.save();
     
-    // 填充回复消息信息
+    // ✅ 处理@提及
+    const io = req.app.get('io');
+    const mentionedUsers = await processMentions(content, roomId, persona._id, persona);
+    
+    if (mentionedUsers.length > 0) {
+      sendMentionNotifications(io, mentionedUsers, message, persona, roomId, room.name);
+      await sendMentionDiscordAlert(mentionedUsers, persona, room.name);
+    }
+    
     let populatedMessage = await Message.findById(message._id)
       .populate({
         path: 'personaId',
@@ -463,14 +471,12 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
       };
     }
     
-    // ✅ 获取头像框 URL
     const personaData = populatedMessage.personaId;
     let avatarFrameUrl = null;
     if (personaData && personaData.equipped && personaData.equipped.avatarFrame) {
       avatarFrameUrl = personaData.equipped.avatarFrame.image;
     }
     
-    const io = req.app.get('io');
     if (io) {
       io.to(roomId).emit('new-message', {
         _id: message._id,
@@ -486,7 +492,6 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
           displayName: persona.displayName,
           avatar: persona.avatar,
           sameNameNumber: persona.sameNameNumber,
-          // ✅ 新增头像框字段
           avatarFrame: avatarFrameUrl,
           equipped: { avatarFrame: avatarFrameUrl }
         },
@@ -501,6 +506,7 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
   }
 });
 
+// ========== 未读消息数 ==========
 router.get('/:roomId/unread', authMiddleware, async (req, res) => {
   try {
     const lastRead = await UserReadRecord.findOne({ userId: req.userId, roomId: req.params.roomId });
@@ -531,7 +537,7 @@ router.post('/:roomId/mark-read', authMiddleware, async (req, res) => {
 // ========== 加入群组 ==========
 router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   try {
-    const { personaId, message } = req.body;
+    const { personaId, message: joinMessage } = req.body;
     const room = await Room.findById(req.params.roomId);
     
     if (!room) return res.status(404).json({ error: '聊天室不存在' });
@@ -547,7 +553,7 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
     if (pendingExists) return res.status(400).json({ error: '已有待审核申请' });
     
     if (!room.pendingMembers) room.pendingMembers = [];
-    room.pendingMembers.push({ userId: req.userId, personaId, message: message || '', appliedAt: new Date() });
+    room.pendingMembers.push({ userId: req.userId, personaId, message: joinMessage || '', appliedAt: new Date() });
     await room.save();
     
     console.log(`📋 ${persona.displayName} 申请加入 ${room.name}`);
@@ -667,7 +673,6 @@ router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
       { role: isAdmin ? 'admin' : 'member' }
     );
     
-    // ✅ 审计日志
     await logAction(req, isAdmin ? 'SET_ADMIN' : 'REMOVE_ADMIN', { 
       roomId: req.params.roomId, 
       targetPersonaId: personaId 
@@ -694,7 +699,6 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
     
     await PersonaRoom.deleteOne({ personaId, roomId: req.params.roomId });
     
-    // ✅ 审计日志
     await logAction(req, 'KICK_MEMBER', { 
       roomId: req.params.roomId, 
       targetPersonaId: personaId,
@@ -772,6 +776,12 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
       { personaId, roomId: req.params.roomId },
       { title: title || '' }
     );
+    
+    await logAction(req, 'SET_TITLE', { 
+      roomId: req.params.roomId, 
+      targetPersonaId: personaId,
+      title 
+    });
     
     res.json({ message: '头衔已更新' });
   } catch (error) {
@@ -894,6 +904,11 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
     message.recalledAt = new Date();
     await message.save();
     
+    await logAction(req, 'RECALL_MESSAGE', { 
+      messageId: message._id,
+      roomId: message.roomId
+    });
+    
     const persona = await Persona.findById(message.personaId);
     const senderName = persona ? (persona.displayName || persona.name) : '用户';
     
@@ -909,13 +924,6 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
       });
     }
     
-      // ✅ 审计日志
-  await logAction(req, 'RECALL_MESSAGE', { 
-    messageId: message._id,
-    roomId: message.roomId,
-    contentLength: message.content?.length
-  });
-  
     res.json({ success: true, message: '撤回成功' });
   } catch (error) {
     console.error('❌ [API] 撤回失败:', error);
@@ -924,7 +932,7 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
 });
 
 // ========== 删除消息（软删除 - 仅自己不可见）==========
-router.post('/message/delete', authMiddleware, async (req, res) => {
+router/post('/message/delete', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
   console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}`);
   
@@ -1030,6 +1038,12 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
     room.creatorName = newOwnerPersona?.displayName || newOwnerPersona?.name || '?';
     await room.save();
     
+    await logAction(req, 'TRANSFER_OWNER', { 
+      roomId, 
+      newOwnerId,
+      oldOwnerId: currentPersona._id
+    });
+    
     console.log(`✅ [API] 群主转让成功`);
     
     const io = req.app.get('io');
@@ -1040,13 +1054,6 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
       });
     }
     
-    // ✅ 审计日志
-    await logAction(req, 'TRANSFER_OWNER', { 
-      roomId: req.params.roomId, 
-      newOwnerId,
-      oldOwnerId: currentPersona._id
-    });
-
     res.json({ success: true, message: '群主转让成功', newOwnerId });
   } catch (error) {
     console.error('❌ [API] 转让群主失败:', error);
@@ -1054,6 +1061,41 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
   }
 });
 
-module.exports = router;
+// ========== 获取可提及的成员列表 ==========
+router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    
+    const currentPersona = await getActivePersona(req.userId);
+    if (!currentPersona) {
+      return res.status(403).json({ error: '请先选择一个角色' });
+    }
+    
+    const personaRooms = await PersonaRoom.find({ roomId })
+      .populate('personaId', 'name displayName avatar sameNameNumber');
+    
+    const members = personaRooms
+      .filter(pr => pr.personaId && pr.personaId._id.toString() !== currentPersona._id.toString())
+      .map(pr => ({
+        _id: pr.personaId._id,
+        displayName: pr.personaId.displayName || pr.personaId.name,
+        avatar: pr.personaId.avatar,
+        title: pr.title || null,
+        role: pr.role
+      }));
+    
+    // 添加特殊选项
+    const specialOptions = [
+      { _id: '@all', displayName: '所有人', avatar: null, title: 'at-all', role: 'special' }
+    ];
+    
+    res.json([...specialOptions, ...members]);
+  } catch (error) {
+    console.error('获取可提及成员失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
 
 console.log('✅ [room.js] 路由模块加载完成');
+
+module.exports = router;

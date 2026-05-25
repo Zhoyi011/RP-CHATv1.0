@@ -54,8 +54,16 @@ const messageSchema = new mongoose.Schema({
   createdAt: { 
     type: Date, 
     default: Date.now 
-  }
+  },
+  mentions: [{
+    type: { type: String, enum: ['persona', 'role', 'title'], default: 'persona' },
+    targetId: { type: mongoose.Schema.Types.ObjectId, refPath: 'mentions.targetModel' },
+    targetModel: { type: String },
+    targetName: { type: String }
+  }],
+  mentionAll: { type: Boolean, default: false }
 });
+
 
 // 索引优化查询性能
 messageSchema.index({ roomId: 1, createdAt: -1 });
