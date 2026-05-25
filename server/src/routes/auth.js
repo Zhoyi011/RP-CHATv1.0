@@ -482,7 +482,7 @@ router.delete('/admin/invite-codes/:codeId', authMiddleware, adminMiddleware, as
 });
 
 // ========== 管理员：用户管理 ==========
-router/get('/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
+router.get('/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     res.json(users);
