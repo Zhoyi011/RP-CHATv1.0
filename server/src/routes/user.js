@@ -4,6 +4,7 @@ const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { triggerAlert } = require('../middlewares/securityMiddleware');
+const { logAction } = require('../middlewares/auditLog');
 
 // 验证token中间件
 const authMiddleware = (req, res, next) => {
@@ -108,7 +109,7 @@ router.get('/achievements', authMiddleware, async (req, res) => {
 });
 
 // 每日登录领取金币
-router.post('/daily-reward', authMiddleware, async (req, res) => {
+router/post('/daily-reward', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) {
@@ -117,6 +118,12 @@ router.post('/daily-reward', authMiddleware, async (req, res) => {
 
     const result = user.claimDailyReward();
     await user.save();
+
+    // ✅ 审计日志
+    await logAction(req, 'CLAIM_DAILY_REWARD', { 
+      coins: result.coins, 
+      streak: result.streak 
+    });
 
     res.json({
       message: '领取成功',
@@ -156,6 +163,14 @@ router.post('/admin/adjust-coins/:userId', authMiddleware, async (req, res) => {
 
     console.log(`管理员 ${req.userId} 调整用户 ${req.params.userId} 金币: ${amount}, 原因: ${reason}`);
 
+    // ✅ 审计日志
+    await logAction(req, 'ADMIN_ADJUST_COINS', { 
+      targetUserId: req.params.userId,
+      amount,
+      reason,
+      newBalance: targetUser.coins
+    });
+
     res.json({
       message: '金币调整成功',
       coins: targetUser.coins
@@ -189,6 +204,15 @@ router.post('/buy-item', authMiddleware, async (req, res) => {
       quantity: 1
     });
 
+    // ✅ 审计日志
+    await logAction(req, 'BUY_ITEM', { 
+      itemId, 
+      itemType, 
+      name, 
+      price,
+      newBalance: user.coins
+    });
+
     res.json({
       message: '购买成功',
       coins: user.coins,
@@ -218,6 +242,9 @@ router.post('/equip-item', authMiddleware, async (req, res) => {
     await user.equipItem(itemId);
     await user.save();
 
+    // ✅ 审计日志
+    await logAction(req, 'EQUIP_ITEM', { itemId });
+
     res.json({
       message: '装备成功',
       equippedItems: user.equippedItems
@@ -228,15 +255,15 @@ router.post('/equip-item', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 更新用户资料（包含生日、星座）- 添加告警
+// ✅ 更新用户资料（包含生日、星座）
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const { displayName, birthday, zodiac } = req.body;
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     
-    // 记录修改前的信息
     const oldDisplayName = user.displayName;
+    const oldBirthday = user.birthday;
     
     if (displayName !== undefined) user.displayName = displayName;
     if (birthday !== undefined) user.birthday = birthday ? new Date(birthday) : null;
@@ -244,7 +271,24 @@ router.put('/profile', authMiddleware, async (req, res) => {
     
     await user.save();
     
-    // ✅ 告警：资料修改（仅当修改了敏感信息）
+    // ✅ 审计日志
+    if (oldDisplayName !== displayName) {
+      await logAction(req, 'UPDATE_PROFILE', { 
+        field: 'displayName',
+        oldValue: oldDisplayName,
+        newValue: displayName
+      });
+    }
+    
+    if (oldBirthday !== birthday) {
+      await logAction(req, 'UPDATE_PROFILE', { 
+        field: 'birthday',
+        oldValue: oldBirthday,
+        newValue: birthday
+      });
+    }
+    
+    // ✅ 告警：资料修改
     if (oldDisplayName !== displayName) {
       await triggerAlert('PROFILE_UPDATE', req, { 
         userId: user._id, 
@@ -260,18 +304,23 @@ router.put('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 删除账户 - 添加告警和二次验证（需要验证码）
+// ✅ 删除账户
 router.post('/delete-account', authMiddleware, async (req, res) => {
   try {
     const { verificationCode } = req.body;
-    
-    // 简化版：如果没有验证码系统，先记录告警但不执行删除
-    // 正式版应该验证验证码
     
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
+    
+    // ✅ 审计日志：账户删除请求
+    await logAction(req, 'DELETE_ACCOUNT_REQUEST', { 
+      userId: user._id,
+      username: user.username,
+      email: user.email,
+      hasVerificationCode: !!verificationCode
+    });
     
     // ✅ 告警：账户删除请求
     await triggerAlert('ACCOUNT_DELETE_REQUEST', req, { 
@@ -281,7 +330,6 @@ router.post('/delete-account', authMiddleware, async (req, res) => {
     });
     
     // 实际删除逻辑（需要验证码确认）
-    // 这里先不执行删除，只记录告警
     res.json({ 
       message: '账户删除功能需要二次验证，请查看邮件',
       requiresVerification: true 

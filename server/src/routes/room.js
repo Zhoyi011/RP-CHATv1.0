@@ -7,6 +7,7 @@ const Persona = require('../models/Persona');
 const PersonaRoom = require('../models/PersonaRoom');
 const UserReadRecord = require('../models/UserReadRecord');
 const jwt = require('jsonwebtoken');
+const { logAction } = require('../middlewares/auditLog');
 
 console.log('🔧 [room.js] 加载路由模块');
 
@@ -666,6 +667,12 @@ router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
       { role: isAdmin ? 'admin' : 'member' }
     );
     
+    // ✅ 审计日志
+    await logAction(req, isAdmin ? 'SET_ADMIN' : 'REMOVE_ADMIN', { 
+      roomId: req.params.roomId, 
+      targetPersonaId: personaId 
+    });
+    
     res.json({ message: isAdmin ? '已设为管理员' : '已取消管理员' });
   } catch (error) {
     res.status(500).json({ error: '服务器错误' });
@@ -686,6 +693,13 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
     if (targetRole.role === 'admin' && currentRole !== 'owner') return res.status(403).json({ error: '只有群主可以踢出管理员' });
     
     await PersonaRoom.deleteOne({ personaId, roomId: req.params.roomId });
+    
+    // ✅ 审计日志
+    await logAction(req, 'KICK_MEMBER', { 
+      roomId: req.params.roomId, 
+      targetPersonaId: personaId,
+      targetRole: targetRole.role
+    });
     
     res.json({ message: '已踢出群聊' });
   } catch (error) {
@@ -895,6 +909,13 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
       });
     }
     
+      // ✅ 审计日志
+  await logAction(req, 'RECALL_MESSAGE', { 
+    messageId: message._id,
+    roomId: message.roomId,
+    contentLength: message.content?.length
+  });
+  
     res.json({ success: true, message: '撤回成功' });
   } catch (error) {
     console.error('❌ [API] 撤回失败:', error);
@@ -1019,6 +1040,13 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
       });
     }
     
+    // ✅ 审计日志
+    await logAction(req, 'TRANSFER_OWNER', { 
+      roomId: req.params.roomId, 
+      newOwnerId,
+      oldOwnerId: currentPersona._id
+    });
+
     res.json({ success: true, message: '群主转让成功', newOwnerId });
   } catch (error) {
     console.error('❌ [API] 转让群主失败:', error);

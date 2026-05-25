@@ -1,0 +1,36 @@
+name: 数据库自动备份
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 每天凌晨3点执行
+  workflow_dispatch:      # 也可以手动触发
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: 安装依赖
+        run: npm install mongoose dotenv
+        working-directory: server
+      
+      - name: 运行备份脚本
+        run: node scripts/backup.js
+        working-directory: server
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      
+      - name: 上传备份文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup
+          path: server/backups/*.json
+          retention-days: 7
