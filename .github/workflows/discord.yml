@@ -14,26 +14,62 @@ jobs:
           COMMIT_MSG="${{ github.event.head_commit.message }}"
           COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
           COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          COMMIT_DATE=$(date '+%Y-%m-%d %H:%M:%S')
           
-          # 选择 emoji
+          # 选择 emoji 和颜色
           if echo "$COMMIT_MSG" | grep -qE "^(更新|新增|添加)"; then
             EMOJI="🔄"
+            COLOR="0x3498db"
+            TYPE="更新"
           elif echo "$COMMIT_MSG" | grep -q "^修复"; then
             EMOJI="🔧"
+            COLOR="0xe67e22"
+            TYPE="修复"
           elif echo "$COMMIT_MSG" | grep -q "^新版本"; then
             EMOJI="📦"
+            COLOR="0x2ecc71"
+            TYPE="版本发布"
           elif echo "$COMMIT_MSG" | grep -q "^新功能"; then
             EMOJI="✨"
+            COLOR="0x9b59b6"
+            TYPE="新功能"
           elif echo "$COMMIT_MSG" | grep -q "^优化"; then
             EMOJI="⚡"
+            COLOR="0x1abc9c"
+            TYPE="优化"
           elif echo "$COMMIT_MSG" | grep -q "^美化"; then
             EMOJI="🎨"
+            COLOR="0xff69b4"
+            TYPE="美化"
           elif echo "$COMMIT_MSG" | grep -q "^删除"; then
             EMOJI="🗑️"
+            COLOR="0xe74c3c"
+            TYPE="移除"
           else
             EMOJI="📝"
+            COLOR="0x95a5a6"
+            TYPE="其他"
           fi
           
+          # 构建嵌入消息
           curl -s -X POST "${{ secrets.UPDATES_DISCORD_WEBHOOK }}" \
             -H "Content-Type: application/json" \
-            -d "{\"content\":\"${EMOJI} **RP Chat 更新**\\n\\n**${COMMIT_MSG}**\\n\\n👤 ${COMMIT_AUTHOR}\\n🔗 ${COMMIT_URL}\"}"
+            -d "{
+              \"username\": \"RP Chat 更新机器人\",
+              \"avatar_url\": \"https://rp-chat-v1-0.vercel.app/favicon.svg\",
+              \"embeds\": [{
+                \"title\": \"${EMOJI} RP Chat 更新公告\",
+                \"description\": \"${COMMIT_MSG}\",
+                \"color\": ${COLOR},
+                \"fields\": [
+                  {\"name\": \"📝 类型\", \"value\": \"${TYPE}\", \"inline\": true},
+                  {\"name\": \"👤 作者\", \"value\": \"${COMMIT_AUTHOR}\", \"inline\": true},
+                  {\"name\": \"📅 时间\", \"value\": \"${COMMIT_DATE}\", \"inline\": true}
+                ],
+                \"footer\": {
+                  \"text\": \"RP Chat 持续更新中\",
+                  \"icon_url\": \"https://rp-chat-v1-0.vercel.app/favicon.svg\"
+                },
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }"
