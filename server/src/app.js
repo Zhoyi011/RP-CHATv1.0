@@ -117,6 +117,7 @@ const postRoutes = require('./routes/post');
 const uploadRoutes = require('./routes/upload');
 const securityRoutes = require('./routes/security');
 const adminRoutes = require('./routes/admin');
+const redeemRoutes = require('./routes/redeem');
 console.log('  ✅ 主要路由加载完成');
 // 可选路由
 let voiceRoutes, linkPreviewRoutes;
