@@ -11,7 +11,6 @@ const InviteCode = () => {
   const [checking, setChecking] = useState(true);
   const navigate = useNavigate();
 
-  
   // 自动检测登录状态
   useEffect(() => {
     const checkAuth = async () => {
