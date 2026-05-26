@@ -1,130 +1,214 @@
+// client/src/components/feed/MobileFeed.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../contexts/ThemeContext';
 
-interface FeedItem {
-  id: string;
-  userId: string;
-  userName: string;
-  userAvatar: string;
-  personaName: string;
+interface Post {
+  _id: string;
   content: string;
-  images?: string[];
-  likes: number;
-  comments: number;
-  isLiked: boolean;
+  images: string[];
+  likes: string[];
+  likeCount: number;
+  comments: any[];
   createdAt: string;
+  personaId: {
+    _id: string;
+    name: string;
+    displayName: string;
+    avatar?: string;
+  };
 }
 
-const MobileFeed: React.FC = () => {
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
+
+const MobileFeed = () => {
   const navigate = useNavigate();
-  const [feeds, setFeeds] = useState<FeedItem[]>([]);
+  const { theme } = useTheme();
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
+  // 获取动态列表
   useEffect(() => {
-    loadFeeds();
-  }, []);
+    fetchPosts();
+  }, [page]);
 
-  const loadFeeds = async () => {
+  const fetchPosts = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      // TODO: 替换为真实 API
-      const response = await fetch('https://rp-chatv1-0.onrender.com/api/feed/friends', {
+      const response = await fetch(`${API_BASE}/post/feed?page=${page}&limit=10`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
       if (response.ok) {
         const data = await response.json();
-        setFeeds(data);
-      } else {
-        // 模拟数据
-        setFeeds([]);
+        if (page === 1) {
+          setPosts(data.posts || []);
+        } else {
+          setPosts(prev => [...prev, ...(data.posts || [])]);
+        }
+        setHasMore(data.posts?.length === 10);
       }
     } catch (error) {
       console.error('加载动态失败:', error);
-      setFeeds([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLike = async (feedId: string) => {
-    // TODO: 实现点赞功能
-    setFeeds(prev => prev.map(feed => 
-      feed.id === feedId 
-        ? { ...feed, isLiked: !feed.isLiked, likes: feed.isLiked ? feed.likes - 1 : feed.likes + 1 }
-        : feed
-    ));
+  const handleLike = async (postId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/post/${postId}/like`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPosts(prev => prev.map(post => 
+          post._id === postId 
+            ? { ...post, likes: data.isLiked ? [...post.likes, 'user'] : post.likes.filter(l => l !== 'user'), likeCount: data.likeCount }
+            : post
+        ));
+      }
+    } catch (error) {
+      console.error('点赞失败:', error);
+    }
   };
 
-  const formatTime = (dateStr: string) => {
+  const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
-    const diff = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
-    if (diff < 1) return '刚刚';
-    if (diff < 60) return `${diff}分钟前`;
-    if (diff < 1440) return `${Math.floor(diff / 60)}小时前`;
-    return `${Math.floor(diff / 1440)}天前`;
+    const diff = now.getTime() - date.getTime();
+    const hours = diff / (1000 * 60 * 60);
+    
+    if (hours < 1) return '刚刚';
+    if (hours < 24) return `${Math.floor(hours)}小时前`;
+    if (hours < 48) return '昨天';
+    return `${Math.floor(hours / 24)}天前`;
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <div className="text-gray-400">加载中...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-4 space-y-4 pb-20">
-      {feeds.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <div className="text-6xl mb-4">📭</div>
-          <p>暂无好友动态</p>
-          <p className="text-xs mt-2">添加好友后，他们的动态会显示在这里</p>
-        </div>
-      ) : (
-        feeds.map(feed => (
-          <div key={feed.id} className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold">
-                {feed.userName.charAt(0)}
-              </div>
-              <div>
-                <p className="font-medium text-gray-800">{feed.userName}</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">🎭 {feed.personaName}</span>
-                  <span className="text-xs text-gray-400">{formatTime(feed.createdAt)}</span>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* 头部 - 带返回按钮 */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3">
+        <button
+          onClick={() => navigate('/chat')}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
+        >
+          <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-200 flex-1">动态</h1>
+        <button
+          onClick={() => navigate('/search')}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
+        >
+          <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* 动态列表 */}
+      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+        {loading && page === 1 ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📝</div>
+            <p className="text-gray-400 dark:text-gray-500">暂无动态</p>
+            <p className="text-xs text-gray-400 mt-2">发布角色动态后会显示在这里</p>
+          </div>
+        ) : (
+          <>
+            {posts.map(post => (
+              <div key={post._id} className="p-4 bg-white dark:bg-gray-800">
+                {/* 发布者信息 */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div 
+                    onClick={() => navigate(`/persona/${post.personaId?._id}`)}
+                    className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold cursor-pointer hover:scale-105 transition"
+                  >
+                    {(post.personaId?.displayName || post.personaId?.name || '?').charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <div 
+                      onClick={() => navigate(`/persona/${post.personaId?._id}`)}
+                      className="font-medium text-gray-800 dark:text-gray-200 cursor-pointer hover:text-blue-500"
+                    >
+                      {post.personaId?.displayName || post.personaId?.name}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {formatDate(post.createdAt)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 内容 */}
+                <div className="mb-3">
+                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                    {post.content}
+                  </p>
+                </div>
+                
+                {/* 图片 */}
+                {post.images && post.images.length > 0 && (
+                  <div className={`grid gap-1 mb-3 ${post.images.length === 1 ? 'grid-cols-1' : post.images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                    {post.images.map((img, idx) => (
+                      <img
+                        key={idx}
+                        src={img}
+                        alt=""
+                        className="rounded-lg aspect-square object-cover w-full cursor-pointer hover:opacity-90 transition"
+                        onClick={() => window.open(img, '_blank')}
+                      />
+                    ))}
+                  </div>
+                )}
+                
+                {/* 操作按钮 */}
+                <div className="flex items-center gap-6 pt-2">
+                  <button
+                    onClick={() => handleLike(post._id)}
+                    className={`flex items-center gap-1.5 transition ${post.likes.includes('user') ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+                  >
+                    <svg className="w-5 h-5" fill={post.likes.includes('user') ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    <span className="text-sm">{post.likeCount || 0}</span>
+                  </button>
+                  <button className="flex items-center gap-1.5 text-gray-400 hover:text-blue-500 transition">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span className="text-sm">{post.comments?.length || 0}</span>
+                  </button>
                 </div>
               </div>
-            </div>
-            <p className="text-gray-700 mb-3 leading-relaxed">{feed.content}</p>
-            {feed.images && feed.images.length > 0 && (
-              <div className="flex gap-2 mb-3">
-                {feed.images.map((img, i) => (
-                  <img key={i} src={img} className="w-24 h-24 object-cover rounded-xl" />
-                ))}
+            ))}
+            
+            {/* 加载更多 */}
+            {hasMore && (
+              <div className="p-4 text-center">
+                <button
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={loading}
+                  className="text-sm text-blue-500 hover:text-blue-600 disabled:opacity-50"
+                >
+                  {loading ? '加载中...' : '加载更多'}
+                </button>
               </div>
             )}
-            <div className="flex gap-4 pt-2 border-t border-gray-100">
-              <button 
-                onClick={() => handleLike(feed.id)}
-                className={`flex items-center gap-1 text-sm transition ${feed.isLiked ? 'text-red-500' : 'text-gray-400'}`}
-              >
-                <svg className="w-5 h-5" fill={feed.isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                <span>{feed.likes}</span>
-              </button>
-              <button className="flex items-center gap-1 text-sm text-gray-400">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span>{feed.comments}</span>
-              </button>
-            </div>
-          </div>
-        ))
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
