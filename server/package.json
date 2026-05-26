@@ -24,7 +24,7 @@
     "express-rate-limit": "^6.10.0",
     "framer-motion": "^12.38.0",
     "helmet": "^7.0.0",
-    "jsonwebtoken": "^9.0.2",
+    "jsonwebtoken": "^9.0.3",
     "livekit-server-sdk": "^2.15.3",
     "markdown-it": "^14.1.1",
     "mongodb": "^7.2.0",

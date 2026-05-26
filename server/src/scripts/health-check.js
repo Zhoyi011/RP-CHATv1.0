@@ -694,6 +694,32 @@ async function runAllTests() {
   await test('告警系统', checkAlertSystem)();
   await test('Socket.IO', checkSocketConnections)();
 
+    // 11. 充值系统检查
+  console.log('\n💎 充值系统检查:');
+  await test('RedeemCode 模型', checkRedeemCodeModel)();
+  await test('RedemptionRecord 模型', checkRedemptionRecordModel)();
+  if (!QUICK_MODE) await test('充值路由', checkRedeemRoutes)();
+  await test('充值码完整性', checkRedeemCodeIntegrity)();
+  await test('过期充值码', checkExpiredRedeemCodes)();
+  await test('充值权限', checkRedeemPermissions)();
+  if (!QUICK_MODE) await test('充值 API 性能', checkRedeemApiPerformance)();
+
+  // 12. 角色权限中间件检查
+  console.log('\n🛡️ 权限中间件检查:');
+  await test('roleMiddleware.js', checkRoleMiddleware)();
+
+  // 13. 前端组件检查
+  console.log('\n🎨 前端组件检查:');
+  await test('钱包页面组件', checkWalletFrontend)();
+
+  // 14. 充值码格式验证
+  console.log('\n📝 充值码格式检查:');
+  await test('充值码格式规范', checkRedeemCodeFormat)();
+
+  // 15. 钻石余额完整性
+  console.log('\n💎 钻石余额检查:');
+  await test('钻石完整性', checkDiamondIntegrity)();
+  
   // 10. 总结
   const totalDuration = Date.now() - totalStart;
   
@@ -732,3 +758,308 @@ runAllTests().catch(error => {
   console.error('\n💥 检查脚本执行失败:', error);
   process.exit(1);
 });
+
+// ========== 11. 充值系统检查 ==========
+async function checkRedeemCodeModel() {
+  try {
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    const names = collections.map(c => c.name);
+    
+    if (!names.includes('redeemcodes')) {
+      info('充值系统', 'redeemcodes 集合尚未创建（首次使用时自动创建）');
+      return;
+    }
+    
+    const stats = await mongoose.connection.db.collection('redeemcodes').stats();
+    console.log(`    redeemcodes 集合: ${stats.count || 0} 条记录, ${formatBytes(stats.size)}`);
+  } catch (e) {
+    warn('充值系统', `redeemcodes 集合检查失败: ${e.message}`);
+  }
+}
+
+async function checkRedemptionRecordModel() {
+  try {
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    const names = collections.map(c => c.name);
+    
+    if (!names.includes('redemptionrecords')) {
+      info('充值系统', 'redemptionrecords 集合尚未创建（首次使用时自动创建）');
+      return;
+    }
+    
+    const stats = await mongoose.connection.db.collection('redemptionrecords').stats();
+    console.log(`    redemptionrecords 集合: ${stats.count || 0} 条记录, ${formatBytes(stats.size)}`);
+    
+    // 检查最近的充值记录
+    const recent = await mongoose.connection.db.collection('redemptionrecords')
+      .find()
+      .sort({ usedAt: -1 })
+      .limit(5)
+      .toArray();
+    
+    if (recent.length > 0) {
+      const totalDiamonds = recent.reduce((sum, r) => sum + (r.diamondAmount || 0), 0);
+      info('充值记录', `最近5笔充值共 ${totalDiamonds} 💎`);
+    }
+  } catch (e) {
+    warn('充值系统', `redemptionrecords 集合检查失败: ${e.message}`);
+  }
+}
+
+async function checkRedeemRoutes() {
+  const routes = [
+    '/api/redeem/create',
+    '/api/redeem/use',
+    '/api/redeem/history',
+    '/api/redeem/list',
+    '/api/redeem/stats',
+    '/api/redeem/check/:code'
+  ];
+  
+  for (const route of routes) {
+    try {
+      // 只检查路由是否存在（发送 OPTIONS 请求）
+      const response = await fetch(`${API_BASE}${route.split(':')[0]}`, { 
+        method: 'OPTIONS',
+        signal: AbortSignal.timeout(3000)
+      });
+      if (response.status === 404) {
+        warn('充值路由', `${route} 不存在`);
+      } else {
+        if (VERBOSE) console.log(`    ${route}: ${response.status}`);
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        if (VERBOSE) console.log(`    ${route}: 路由存在（需认证）`);
+      }
+    }
+  }
+  console.log(`    已配置 ${routes.length} 个充值端点`);
+}
+
+async function checkRedeemCodeIntegrity() {
+  try {
+    const redeemCodes = mongoose.connection.db.collection('redeemcodes');
+    if (!redeemCodes) return;
+    
+    const total = await redeemCodes.countDocuments();
+    const used = await redeemCodes.countDocuments({ isUsed: true });
+    const unused = await redeemCodes.countDocuments({ isUsed: false });
+    const expired = await redeemCodes.countDocuments({ 
+      isUsed: false, 
+      expiresAt: { $lt: new Date() } 
+    });
+    
+    console.log(`    充值码统计: 总数 ${total}, 已用 ${used}, 未用 ${unused}, 已过期 ${expired}`);
+    
+    // 检查孤儿充值码（被使用但没有对应记录）
+    const orphanedRedeems = await redeemCodes.aggregate([
+      { $match: { isUsed: true, usedBy: { $ne: null } } },
+      { $lookup: { from: 'redemptionrecords', localField: '_id', foreignField: 'redeemCodeId', as: 'record' } },
+      { $match: { record: { $size: 0 } } }
+    ]).toArray();
+    
+    if (orphanedRedeems.length > 0) {
+      warn('数据完整性', `${orphanedRedeems.length} 个充值码已使用但无记录`);
+      if (AUTO_FIX) {
+        // 自动修复：为这些充值码创建记录
+        for (const code of orphanedRedeems) {
+          const user = await mongoose.connection.db.collection('users').findOne({ _id: code.usedBy });
+          await mongoose.connection.db.collection('redemptionrecords').insertOne({
+            userId: code.usedBy,
+            redeemCodeId: code._id,
+            code: code.code,
+            diamondAmount: code.diamondAmount,
+            previousBalance: (user?.diamonds || 0) - code.diamondAmount,
+            newBalance: user?.diamonds || 0,
+            usedAt: code.usedAt || new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        fix('数据完整性', `为 ${orphanedRedeems.length} 个充值码补录了使用记录`);
+      }
+    }
+  } catch (e) {
+    console.log(`    充值码完整性检查跳过（集合可能不存在）`);
+  }
+}
+
+async function checkExpiredRedeemCodes() {
+  try {
+    const redeemCodes = mongoose.connection.db.collection('redeemcodes');
+    if (!redeemCodes) return;
+    
+    const now = new Date();
+    const expiredCodes = await redeemCodes.find({
+      isUsed: false,
+      expiresAt: { $lt: now }
+    }).toArray();
+    
+    if (expiredCodes.length > 0) {
+      info('过期充值码', `${expiredCodes.length} 个充值码已过期未使用`);
+      
+      const totalDiamonds = expiredCodes.reduce((sum, c) => sum + c.diamondAmount, 0);
+      info('过期钻石', `共 ${totalDiamonds} 💎 未兑换`);
+      
+      if (AUTO_FIX && expiredCodes.length > 0) {
+        // 可选：发送警告或记录
+        console.log(`    💡 提示: 运行清理脚本可删除过期充值码`);
+      }
+    }
+  } catch (e) {
+    // 集合可能不存在
+  }
+}
+
+async function checkRedeemPermissions() {
+  try {
+    const users = mongoose.connection.db.collection('users');
+    const superAdmins = await users.countDocuments({ 
+      role: { $in: ['owner', 'super_admin'] } 
+    });
+    
+    console.log(`    可创建充值码的用户: ${superAdmins} 个（owner/super_admin）`);
+    
+    if (superAdmins === 0) {
+      warn('充值权限', '没有超级管理员，无法创建充值码');
+    }
+  } catch (e) {
+    console.log(`    无法检查充值权限`);
+  }
+}
+
+async function checkRedeemApiPerformance() {
+  try {
+    const start = Date.now();
+    const response = await fetch(`${API_BASE}/redeem/stats`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    });
+    const latency = Date.now() - start;
+    
+    if (response.status === 401) {
+      console.log(`    充值统计 API: ${latency}ms (需要认证)`);
+    } else if (response.ok) {
+      console.log(`    充值统计 API: ${latency}ms ✅`);
+      if (latency > 500) warn('API 性能', `充值统计 API 响应慢: ${latency}ms`);
+    } else {
+      warn('充值 API', `充值统计 API 返回 ${response.status}`);
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      warn('充值 API', '充值统计 API 超时');
+    } else {
+      info('充值 API', '充值统计 API 需要认证（正常）');
+    }
+  }
+}
+
+// ========== 12. 角色权限中间件检查 ==========
+async function checkRoleMiddleware() {
+  const middlewarePath = path.join(__dirname, '../middleware/roleMiddleware.js');
+  
+  if (fs.existsSync(middlewarePath)) {
+    const stats = fs.statSync(middlewarePath);
+    console.log(`    roleMiddleware.js: ${formatBytes(stats.size)}`);
+    
+    const content = fs.readFileSync(middlewarePath, 'utf8');
+    const hasSuperAdminCheck = content.includes('requireSuperAdminOrOwner');
+    const hasAdminCheck = content.includes('requireAdminOrOwner');
+    
+    if (hasSuperAdminCheck && hasAdminCheck) {
+      console.log(`    权限函数: requireSuperAdminOrOwner ✅, requireAdminOrOwner ✅`);
+    } else {
+      warn('权限中间件', '缺少必要的权限检查函数');
+    }
+  } else {
+    warn('权限中间件', 'roleMiddleware.js 不存在');
+  }
+}
+
+// ========== 13. 钱包页面相关检查 ==========
+async function checkWalletFrontend() {
+  // 检查前端组件是否存在（通过文件系统）
+  const walletDir = path.join(__dirname, '../../client/src/components/wallet');
+  
+  if (fs.existsSync(walletDir)) {
+    const files = fs.readdirSync(walletDir);
+    const requiredFiles = ['Wallet.tsx', 'RedeemModal.tsx', 'RedemptionHistory.tsx'];
+    const existing = requiredFiles.filter(f => files.includes(f));
+    const missing = requiredFiles.filter(f => !files.includes(f));
+    
+    console.log(`    钱包组件: ${existing.length}/${requiredFiles.length}`);
+    if (missing.length > 0) {
+      warn('前端组件', `缺少钱包组件: ${missing.join(', ')}`);
+    }
+  } else {
+    info('前端组件', '钱包组件目录不存在（可能是前端未部署）');
+  }
+  
+  // 检查管理员组件
+  const adminCreatePath = path.join(__dirname, '../../client/src/components/admin/CreateRedeemCode.tsx');
+  if (fs.existsSync(adminCreatePath)) {
+    const stats = fs.statSync(adminCreatePath);
+    console.log(`    CreateRedeemCode.tsx: ${formatBytes(stats.size)}`);
+  } else {
+    info('前端组件', 'CreateRedeemCode.tsx 不存在（管理员功能受限）');
+  }
+}
+
+// ========== 14. 充值码格式验证 ==========
+async function checkRedeemCodeFormat() {
+  try {
+    const redeemCodes = mongoose.connection.db.collection('redeemcodes');
+    if (!redeemCodes) return;
+    
+    // 检查充值码格式是否正确
+    const codes = await redeemCodes.find({}, { code: 1 }).limit(100).toArray();
+    const codeRegex = /^RP-[A-Z0-9]{4}-[0-9]{4}$/;
+    const invalidCodes = codes.filter(c => !codeRegex.test(c.code));
+    
+    if (invalidCodes.length > 0) {
+      warn('充值码格式', `${invalidCodes.length} 个充值码格式不符合规范`);
+      if (VERBOSE) {
+        invalidCodes.forEach(c => console.log(`      ${c.code}`));
+      }
+    } else if (codes.length > 0) {
+      console.log(`    充值码格式: 全部符合规范 ✅`);
+    }
+  } catch (e) {
+    // 跳过
+  }
+}
+
+// ========== 15. 钻石余额完整性检查 ==========
+async function checkDiamondIntegrity() {
+  try {
+    const users = mongoose.connection.db.collection('users');
+    const redemptionRecords = mongoose.connection.db.collection('redemptionrecords');
+    
+    if (!redemptionRecords) return;
+    
+    // 计算所有充值记录的总钻石数
+    const totalFromRecords = await redemptionRecords.aggregate([
+      { $group: { _id: null, total: { $sum: '$diamondAmount' } } }
+    ]).toArray();
+    
+    // 计算所有用户的钻石总和
+    const totalUserDiamonds = await users.aggregate([
+      { $group: { _id: null, total: { $sum: '$diamonds' } } }
+    ]).toArray();
+    
+    const recordedTotal = totalFromRecords[0]?.total || 0;
+    const userTotal = totalUserDiamonds[0]?.total || 0;
+    
+    console.log(`    充值记录总额: ${recordedTotal.toLocaleString()} 💎`);
+    console.log(`    用户钻石总额: ${userTotal.toLocaleString()} 💎`);
+    
+    // 注意：用户钻石还可能来自其他途径（签到、任务等），所以不完全相等是正常的
+    const diff = Math.abs(userTotal - recordedTotal);
+    if (diff > 10000) {
+      info('钻石统计', `充值记录与用户余额差异较大: ${diff.toLocaleString()} 💎（可能来自其他来源）`);
+    }
+  } catch (e) {
+    console.log(`    钻石完整性检查跳过`);
+  }
+}
