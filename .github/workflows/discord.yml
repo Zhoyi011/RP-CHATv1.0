@@ -53,28 +53,36 @@ jobs:
             TYPE="其他"
           fi
           
-          # 发送美观的嵌入消息
-          curl -s -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"username\": \"RP Chat 更新机器人\",
-              \"avatar_url\": \"https://rp-chat-v1-0.vercel.app/favicon.svg\",
-              \"embeds\": [{
-                \"title\": \"${EMOJI} RP Chat 更新公告\",
-                \"description\": \"**${COMMIT_MSG}**\",
-                \"color\": ${COLOR},
-                \"fields\": [
-                  {\"name\": \"📝 类型\", \"value\": \"${TYPE}\", \"inline\": true},
-                  {\"name\": \"👤 作者\", \"value\": \"${COMMIT_AUTHOR}\", \"inline\": true},
-                  {\"name\": \"📅 时间\", \"value\": \"${COMMIT_DATE}\", \"inline\": true},
-                  {\"name\": \"🔗 详情\", \"value\": \"[点击查看](${COMMIT_URL})\", \"inline\": false}
+          # 使用 jq 构建 JSON（避免编码问题）
+          JSON_DATA=$(jq -n \
+            --arg msg "${COMMIT_MSG}" \
+            --arg type "${TYPE}" \
+            --arg author "${COMMIT_AUTHOR}" \
+            --arg date "${COMMIT_DATE}" \
+            --arg url "${COMMIT_URL}" \
+            --arg emoji "${EMOJI}" \
+            --argjson color "${COLOR}" \
+            '{
+              username: "RP Chat 更新机器人",
+              avatar_url: "https://rp-chat-v1-0.vercel.app/favicon.svg",
+              embeds: [{
+                title: "\($emoji) RP Chat 更新公告",
+                description: "**\($msg)**",
+                color: $color,
+                fields: [
+                  {name: "📝 类型", value: $type, inline: true},
+                  {name: "👤 作者", value: $author, inline: true},
+                  {name: "📅 时间", value: $date, inline: true},
+                  {name: "🔗 详情", value: "[点击查看](" + $url + ")", inline: false}
                 ],
-                \"footer\": {
-                  \"text\": \"RP Chat · 角色扮演聊天室\",
-                  \"icon_url\": \"https://rp-chat-v1-0.vercel.app/favicon.svg\"
+                footer: {
+                  text: "RP Chat · 角色扮演聊天室",
+                  icon_url: "https://rp-chat-v1-0.vercel.app/favicon.svg"
                 },
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+                timestamp: (new Date()).toISOString()
               }]
-            }"
+            }')
           
-          echo "✅ Discord 通知已发送"
+          curl -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$JSON_DATA"
