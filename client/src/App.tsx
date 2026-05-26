@@ -25,6 +25,7 @@ import RoomMembers from './components/chat/RoomMembers';
 import PendingRequests from './components/chat/PendingRequests';
 import MaintenancePage from './components/common/MaintenancePage';
 import { auth } from './firebase/config';
+import Wallet from './components/wallet/Wallet';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -295,6 +296,12 @@ function AppContent() {
         <Route path="/inventory" element={
           <ProtectedRoute>
             <Inventory />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/wallet" element={
+          <ProtectedRoute>
+            <Wallet />
           </ProtectedRoute>
         } />
 

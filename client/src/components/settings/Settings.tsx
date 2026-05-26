@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTheme } from '../../contexts/ThemeContext';
 import NotificationSettings from '../common/NotificationSettings';
+import CreateRedeemCode from '../admin/CreateRedeemCode';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -737,6 +738,23 @@ const Settings: React.FC = () => {
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+            
+            {/* 充值码管理（仅超级管理员可见） */}
+            {isSuperAdmin && (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow overflow-hidden">
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                    <span>💎</span> 充值码管理
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    创建用于外部销售的充值码，用户可在钱包页面兑换钻石
+                  </p>
+                </div>
+                <div className="p-5">
+                  <CreateRedeemCode />
                 </div>
               </div>
             )}

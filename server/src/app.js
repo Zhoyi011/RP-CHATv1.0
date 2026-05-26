@@ -239,7 +239,7 @@ app.use('/api/post', standardLimit, postRoutes);
 app.use('/api/upload', uploadLimit, uploadRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/admin', adminRoutes);
-
+app.use('/api/redeem', redeemRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 

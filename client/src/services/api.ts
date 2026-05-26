@@ -434,3 +434,207 @@ export const adminApi = {
       method: 'DELETE',
     }),
 };
+
+// ========== 充值码 API ==========
+export interface RedeemCode {
+  _id: string;
+  code: string;
+  diamondAmount: number;
+  createdBy: {
+    _id: string;
+    username: string;
+    email: string;
+    role: string;
+  };
+  usedBy?: {
+    _id: string;
+    username: string;
+    email: string;
+  };
+  isUsed: boolean;
+  usedAt?: string;
+  expiresAt: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+  isExpired?: boolean;
+  isAvailable?: boolean;
+}
+
+export interface RedeemCodeListResponse {
+  success: boolean;
+  data: {
+    codes: RedeemCode[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  };
+}
+
+export interface CreateRedeemCodeRequest {
+  diamondAmount: number;
+  customCode?: string;
+  note?: string;
+  presetAmount?: number;
+}
+
+export interface CreateRedeemCodeResponse {
+  success: boolean;
+  message: string;
+  data: {
+    code: string;
+    diamondAmount: number;
+    expiresAt: string;
+    note: string;
+    createdAt: string;
+  };
+}
+
+export interface BatchCreateRedeemCodeRequest {
+  diamondAmount: number;
+  count: number;
+  note?: string;
+}
+
+export interface BatchCreateRedeemCodeResponse {
+  success: boolean;
+  message: string;
+  data: {
+    created: number;
+    failed: number;
+    codes: Array<{
+      code: string;
+      diamondAmount: number;
+      expiresAt: string;
+    }>;
+    errors?: Array<{ index: number; error: string }>;
+  };
+}
+
+export interface UseRedeemCodeResponse {
+  success: boolean;
+  message: string;
+  data: {
+    diamondAmount: number;
+    newBalance: number;
+  };
+}
+
+export interface RedemptionRecord {
+  _id: string;
+  userId: string;
+  redeemCodeId: {
+    _id: string;
+    code: string;
+    diamondAmount: number;
+    createdBy: string;
+    note: string;
+  };
+  code: string;
+  diamondAmount: number;
+  previousBalance: number;
+  newBalance: number;
+  usedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RedemptionHistoryResponse {
+  success: boolean;
+  data: {
+    records: RedemptionRecord[];
+    totalDiamondsReceived: number;
+  };
+}
+
+export interface RedeemStatsResponse {
+  success: boolean;
+  data: {
+    totalCodes: number;
+    usedCodes: number;
+    unusedCodes: number;
+    expiredCodes: number;
+    totalDiamondsGiven: number;
+    usedDiamondsGiven: number;
+  };
+}
+
+export interface CheckRedeemCodeResponse {
+  valid: boolean;
+  error?: string;
+  data?: {
+    diamondAmount: number;
+    expiresAt: string;
+  };
+}
+
+export const redeemApi = {
+  /**
+   * 创建充值码（仅 super_admin/owner）
+   */
+  create: (data: CreateRedeemCodeRequest): Promise<CreateRedeemCodeResponse> =>
+    request('/redeem/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * 批量创建充值码（仅 super_admin/owner）
+   */
+  batchCreate: (data: BatchCreateRedeemCodeRequest): Promise<BatchCreateRedeemCodeResponse> =>
+    request('/redeem/batch-create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * 获取充值码列表（仅 super_admin/owner）
+   * @param page 页码
+   * @param limit 每页数量
+   * @param filters 筛选条件 { isUsed?: boolean, isExpired?: boolean }
+   */
+  getList: (page = 1, limit = 20, filters?: { isUsed?: boolean; isExpired?: boolean }): Promise<RedeemCodeListResponse> => {
+    let url = `/redeem/list?page=${page}&limit=${limit}`;
+    if (filters?.isUsed !== undefined) url += `&isUsed=${filters.isUsed}`;
+    if (filters?.isExpired !== undefined) url += `&isExpired=${filters.isExpired}`;
+    return request(url);
+  },
+
+  /**
+   * 删除充值码（仅 super_admin/owner）
+   */
+  delete: (codeId: string): Promise<{ success: boolean; message: string }> =>
+    request(`/redeem/${codeId}`, {
+      method: 'DELETE',
+    }),
+
+  /**
+   * 使用充值码（普通用户）
+   */
+  use: (code: string): Promise<UseRedeemCodeResponse> =>
+    request('/redeem/use', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  /**
+   * 获取当前用户的充值记录
+   */
+  getHistory: (limit = 20): Promise<RedemptionHistoryResponse> =>
+    request(`/redeem/history?limit=${limit}`),
+
+  /**
+   * 获取充值统计（仅 super_admin/owner）
+   */
+  getStats: (): Promise<RedeemStatsResponse> =>
+    request('/redeem/stats'),
+
+  /**
+   * 检查充值码有效性（不消耗）
+   */
+  check: (code: string): Promise<CheckRedeemCodeResponse> =>
+    request(`/redeem/check/${encodeURIComponent(code)}`),
+};

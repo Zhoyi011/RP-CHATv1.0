@@ -34,6 +34,7 @@ const MobileHome: React.FC = () => {
 
   const menuItems = [
     { name: '角色管理', icon: '🎭', path: '/persona', color: 'from-purple-500 to-pink-500', desc: '管理你的角色' },
+    { name: '钱包', icon: '💎', path: '/wallet', color: 'from-blue-500 to-cyan-500', desc: '充值钻石' },
     { name: '商城', icon: '🛒', path: '/shop', color: 'from-orange-500 to-red-500', desc: '购买头像框' },
     { name: '背包', icon: '🎒', path: '/inventory', color: 'from-emerald-500 to-teal-500', desc: '查看你的物品' },
     { name: '账号设置', icon: '⚙️', path: '/settings', color: 'from-gray-500 to-gray-600', desc: '个人资料设置' },
