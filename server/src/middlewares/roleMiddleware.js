@@ -1,10 +1,7 @@
-// ==================== 角色权限中间件 ====================
+// server/src/middleware/roleMiddleware.js
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-/**
- * 获取当前用户信息（从 token）
- */
 const getCurrentUser = async (req) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return null;
@@ -21,9 +18,6 @@ const getCurrentUser = async (req) => {
   }
 };
 
-/**
- * 检查是否为 super_admin 或 owner
- */
 const requireSuperAdminOrOwner = async (req, res, next) => {
   try {
     const user = await getCurrentUser(req);
@@ -45,9 +39,6 @@ const requireSuperAdminOrOwner = async (req, res, next) => {
   }
 };
 
-/**
- * 检查是否为 admin、super_admin 或 owner
- */
 const requireAdminOrOwner = async (req, res, next) => {
   try {
     const user = await getCurrentUser(req);
@@ -69,10 +60,6 @@ const requireAdminOrOwner = async (req, res, next) => {
   }
 };
 
-/**
- * 检查特定角色（灵活版本）
- * @param {string[]} allowedRoles - 允许的角色列表
- */
 const requireRole = (allowedRoles) => {
   return async (req, res, next) => {
     try {
