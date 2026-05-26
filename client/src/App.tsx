@@ -1,5 +1,4 @@
-// App.tsx - 完整修复版
-
+// client/src/App.tsx
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -20,17 +19,72 @@ import MobileFeed from './components/feed/MobileFeed';
 import MobileHome from './components/home/MobileHome';
 import Shop from './components/shop/Shop';
 import Inventory from './components/inventory/Inventory';
-// ✅ 导入群组相关组件
 import GroupDetail from './components/chat/GroupDetail';
 import GroupSettings from './components/chat/GroupSettings';
 import RoomMembers from './components/chat/RoomMembers';
 import PendingRequests from './components/chat/PendingRequests';
+import MaintenancePage from './components/common/MaintenancePage';
 import { auth } from './firebase/config';
-import LoginNew from './components/auth/LoginNew';
 
-console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
-// ✅ 增强版受保护路由组件
+// 维护模式检测 Hook
+const useMaintenanceCheck = () => {
+  const [isMaintenance, setIsMaintenance] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  const [maintenanceEndTime, setMaintenanceEndTime] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkMaintenance = async () => {
+      try {
+        // 获取维护状态
+        const res = await fetch(`${API_BASE}/admin/maintenance/status`);
+        const data = await res.json();
+        
+        // 获取当前用户角色
+        const token = localStorage.getItem('token');
+        let role = null;
+        if (token) {
+          try {
+            const userRes = await fetch(`${API_BASE}/auth/me`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (userRes.ok) {
+              const userData = await userRes.json();
+              role = userData.role;
+              setUserRole(role);
+            }
+          } catch (e) {}
+        }
+        
+        // 判断是否需要显示维护页面
+        // 超级管理员（owner/super_admin）不受维护模式影响
+        const isSuperAdmin = role === 'owner' || role === 'super_admin';
+        
+        if (data.maintenanceMode && !isSuperAdmin) {
+          setIsMaintenance(true);
+          setMaintenanceMessage(data.message);
+          setMaintenanceEndTime(data.endTime);
+        } else {
+          setIsMaintenance(false);
+        }
+      } catch (error) {
+        console.error('检查维护状态失败:', error);
+        setIsMaintenance(false);
+      } finally {
+        setChecking(false);
+      }
+    };
+    
+    checkMaintenance();
+  }, []);
+
+  return { isMaintenance, maintenanceMessage, maintenanceEndTime, checking, userRole };
+};
+
+// 受保护路由组件（带维护模式检测）
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
@@ -49,11 +103,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           return;
         }
 
-        const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
         const response = await fetch(`${API_BASE}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (!response.ok) {
@@ -110,10 +161,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 function AppContent() {
+  const { isMaintenance, maintenanceMessage, maintenanceEndTime, checking, userRole } = useMaintenanceCheck();
   const [theme, setTheme] = React.useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light';
   });
 
   useEffect(() => {
@@ -133,7 +185,19 @@ function AppContent() {
     return () => window.removeEventListener('showToast', handleShowToast as EventListener);
   }, []);
 
-  console.log(`🎨 [AppContent] 当前主题: ${theme}`);
+  // 正在检查维护状态
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-white/60 text-lg animate-pulse">加载中...</div>
+      </div>
+    );
+  }
+
+  // 维护模式且不是超级管理员
+  if (isMaintenance) {
+    return <MaintenancePage message={maintenanceMessage} endTime={maintenanceEndTime} />;
+  }
 
   return (
     <>
@@ -161,17 +225,13 @@ function AppContent() {
         }}
       />
       <Routes>
-        {/* 公开路由 */}
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/invite" element={<InviteCode />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
-        <Route path="/" element={<LoginNew />} />
-        <Route path="/login" element={<LoginNew />} />
 
-        {/* 需要登录的路由 */}
         <Route path="/chat" element={
           <ProtectedRoute>
             <ChatHome />
@@ -214,7 +274,6 @@ function AppContent() {
           </ProtectedRoute>
         } />
         
-        {/* 手机端专用页面 */}
         <Route path="/feed" element={
           <ProtectedRoute>
             <MobileFeed />
@@ -239,7 +298,6 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
-        {/* ✅ 群组相关路由（新增） */}
         <Route path="/group/:roomId" element={
           <ProtectedRoute>
             <GroupDetail />
@@ -264,7 +322,6 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
-        {/* 404 重定向 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

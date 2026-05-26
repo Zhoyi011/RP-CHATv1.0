@@ -116,7 +116,8 @@ const shopRoutes = require('./routes/shop');
 const postRoutes = require('./routes/post');
 const uploadRoutes = require('./routes/upload');
 const securityRoutes = require('./routes/security');
-
+const adminRoutes = require('./routes/admin');
+console.log('  ✅ 主要路由加载完成');
 // 可选路由
 let voiceRoutes, linkPreviewRoutes;
 try { voiceRoutes = require('./routes/voice'); console.log('  ✅ 语音房路由加载完成'); } catch (err) {}
@@ -237,6 +238,8 @@ app.use('/api/shop', standardLimit, shopRoutes);
 app.use('/api/post', standardLimit, postRoutes);
 app.use('/api/upload', uploadLimit, uploadRoutes);
 app.use('/api/security', securityRoutes);
+app.use('/api/admin', adminRoutes);
+
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 
