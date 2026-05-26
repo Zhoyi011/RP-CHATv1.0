@@ -5,7 +5,7 @@ const router = express.Router();
 const RedeemCode = require('../models/RedeemCode');
 const RedemptionRecord = require('../models/RedemptionRecord');
 const User = require('../models/User');
-const { requireSuperAdminOrOwner, getCurrentUser } = require('../middleware/roleMiddleware');
+const { requireSuperAdminOrOwner, getCurrentUser } = require('../middlewares/roleMiddleware');
 
 // ========== 工具函数 ==========
 

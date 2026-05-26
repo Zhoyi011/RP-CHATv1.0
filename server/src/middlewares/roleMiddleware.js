@@ -18,6 +18,7 @@ const getCurrentUser = async (req) => {
   }
 };
 
+
 const requireSuperAdminOrOwner = async (req, res, next) => {
   try {
     const user = await getCurrentUser(req);
