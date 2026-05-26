@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const { triggerAlert } = require('../middlewares/securityMiddleware');
 const { logAction } = require('../middlewares/auditLog');
 
@@ -108,7 +109,7 @@ router.get('/achievements', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 修复：使用 router.post（不是 router/post）
+// 每日登录领取金币
 router.post('/daily-reward', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -119,11 +120,7 @@ router.post('/daily-reward', authMiddleware, async (req, res) => {
     const result = user.claimDailyReward();
     await user.save();
 
-    // ✅ 审计日志
-    await logAction(req, 'CLAIM_DAILY_REWARD', { 
-      coins: result.coins, 
-      streak: result.streak 
-    });
+    await logAction(req, 'CLAIM_DAILY_REWARD', { coins: result.coins, streak: result.streak });
 
     res.json({
       message: '领取成功',
@@ -134,6 +131,48 @@ router.post('/daily-reward', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('领取每日奖励错误:', error);
     res.status(500).json({ error: error.message || '服务器错误' });
+  }
+});
+
+// 修改密码
+router.post('/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    
+    // 检查用户是否有密码（Google 登录用户）
+    if (!user.password) {
+      return res.status(400).json({ error: '此账号使用第三方登录，无法修改密码' });
+    }
+    
+    // 验证旧密码
+    const isValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isValid) {
+      await triggerAlert('PASSWORD_CHANGE_FAILED', req, { userId: user._id });
+      return res.status(401).json({ error: '原密码错误' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: '新密码至少需要6个字符' });
+    }
+    
+    // 加密新密码
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    user.password = hashedPassword;
+    await user.save();
+    
+    await logAction(req, 'CHANGE_PASSWORD', { userId: user._id });
+    await triggerAlert('PASSWORD_CHANGE', req, { userId: user._id });
+    
+    res.json({ message: '密码修改成功' });
+  } catch (error) {
+    console.error('修改密码错误:', error);
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 
@@ -161,15 +200,7 @@ router.post('/admin/adjust-coins/:userId', authMiddleware, async (req, res) => {
       }
     }
 
-    console.log(`管理员 ${req.userId} 调整用户 ${req.params.userId} 金币: ${amount}, 原因: ${reason}`);
-
-    // ✅ 审计日志
-    await logAction(req, 'ADMIN_ADJUST_COINS', { 
-      targetUserId: req.params.userId,
-      amount,
-      reason,
-      newBalance: targetUser.coins
-    });
+    await logAction(req, 'ADMIN_ADJUST_COINS', { targetUserId: req.params.userId, amount, reason });
 
     res.json({
       message: '金币调整成功',
@@ -204,14 +235,7 @@ router.post('/buy-item', authMiddleware, async (req, res) => {
       quantity: 1
     });
 
-    // ✅ 审计日志
-    await logAction(req, 'BUY_ITEM', { 
-      itemId, 
-      itemType, 
-      name, 
-      price,
-      newBalance: user.coins
-    });
+    await logAction(req, 'BUY_ITEM', { itemId, itemType, name, price });
 
     res.json({
       message: '购买成功',
@@ -242,7 +266,6 @@ router.post('/equip-item', authMiddleware, async (req, res) => {
     await user.equipItem(itemId);
     await user.save();
 
-    // ✅ 审计日志
     await logAction(req, 'EQUIP_ITEM', { itemId });
 
     res.json({
@@ -255,7 +278,7 @@ router.post('/equip-item', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 更新用户资料（包含生日、星座）
+// 更新用户资料（包含生日、星座）
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const { displayName, birthday, zodiac } = req.body;
@@ -271,31 +294,9 @@ router.put('/profile', authMiddleware, async (req, res) => {
     
     await user.save();
     
-    // ✅ 审计日志
     if (oldDisplayName !== displayName) {
-      await logAction(req, 'UPDATE_PROFILE', { 
-        field: 'displayName',
-        oldValue: oldDisplayName,
-        newValue: displayName
-      });
-    }
-    
-    if (oldBirthday !== birthday) {
-      await logAction(req, 'UPDATE_PROFILE', { 
-        field: 'birthday',
-        oldValue: oldBirthday,
-        newValue: birthday
-      });
-    }
-    
-    // ✅ 告警：资料修改
-    if (oldDisplayName !== displayName) {
-      await triggerAlert('PROFILE_UPDATE', req, { 
-        userId: user._id, 
-        field: 'displayName',
-        oldValue: oldDisplayName,
-        newValue: displayName
-      });
+      await logAction(req, 'UPDATE_PROFILE', { field: 'displayName', oldValue: oldDisplayName, newValue: displayName });
+      await triggerAlert('PROFILE_UPDATE', req, { userId: user._id, field: 'displayName' });
     }
     
     res.json({ message: '更新成功', user });
@@ -304,36 +305,33 @@ router.put('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ 删除账户
+// 删除账户
 router.post('/delete-account', authMiddleware, async (req, res) => {
   try {
-    const { verificationCode } = req.body;
-    
+    const { password } = req.body;
     const user = await User.findById(req.userId);
+    
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
     
-    // ✅ 审计日志：账户删除请求
-    await logAction(req, 'DELETE_ACCOUNT_REQUEST', { 
-      userId: user._id,
-      username: user.username,
-      email: user.email,
-      hasVerificationCode: !!verificationCode
-    });
+    // 如果有密码（邮箱注册用户），需要验证密码
+    if (user.password) {
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        await triggerAlert('DELETE_ACCOUNT_FAILED', req, { userId: user._id });
+        return res.status(401).json({ error: '密码错误' });
+      }
+    }
     
-    // ✅ 告警：账户删除请求
-    await triggerAlert('ACCOUNT_DELETE_REQUEST', req, { 
-      userId: user._id,
-      username: user.username,
-      email: user.email
-    });
+    // 审计日志
+    await logAction(req, 'DELETE_ACCOUNT', { userId: user._id, username: user.username, email: user.email });
+    await triggerAlert('ACCOUNT_DELETED', req, { userId: user._id, username: user.username });
     
-    // 实际删除逻辑（需要验证码确认）
-    res.json({ 
-      message: '账户删除功能需要二次验证，请查看邮件',
-      requiresVerification: true 
-    });
+    // 执行删除
+    await User.findByIdAndDelete(req.userId);
+    
+    res.json({ message: '账户已删除' });
     
   } catch (error) {
     console.error('删除账户错误:', error);

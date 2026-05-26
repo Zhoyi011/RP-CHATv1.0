@@ -156,13 +156,28 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       });
       const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
       
+      // ✅ 修复：从 PersonaRoom 中查找群主（role === 'owner'）
       let creatorName = '?';
-      if (room.creatorName) {
-        creatorName = room.creatorName;
-      } else if (room.createdBy) {
-        const creatorPersona = await Persona.findById(room.createdBy);
-        if (creatorPersona) {
-          creatorName = creatorPersona.displayName || creatorPersona.name;
+      try {
+        const ownerRecord = await PersonaRoom.findOne({ roomId: room._id, role: 'owner' })
+          .populate('personaId', 'displayName name');
+        
+        if (ownerRecord && ownerRecord.personaId) {
+          creatorName = ownerRecord.personaId.displayName || ownerRecord.personaId.name;
+        }
+      } catch (err) {
+        console.error('获取群主失败:', err);
+      }
+      
+      // 备用方案：如果没找到，使用原来的方式
+      if (creatorName === '?') {
+        if (room.creatorName) {
+          creatorName = room.creatorName;
+        } else if (room.createdBy) {
+          const creatorPersona = await Persona.findById(room.createdBy);
+          if (creatorPersona) {
+            creatorName = creatorPersona.displayName || creatorPersona.name;
+          }
         }
       }
       
@@ -186,7 +201,7 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         unreadCount,
         memberCount,
         onlineCount: 0,
-        creatorName,
+        creatorName,  // ✅ 修复后的群主名称
         createdAt: room.createdAt,
         lastMessage: formattedLastMessage
       };

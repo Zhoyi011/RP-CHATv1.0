@@ -26,6 +26,7 @@ import GroupSettings from './components/chat/GroupSettings';
 import RoomMembers from './components/chat/RoomMembers';
 import PendingRequests from './components/chat/PendingRequests';
 import { auth } from './firebase/config';
+import LoginNew from './components/auth/LoginNew';
 
 console.log('🚀 [App] 启动应用，包裹 ThemeProvider');
 
@@ -167,6 +168,8 @@ function AppContent() {
         <Route path="/invite" element={<InviteCode />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/" element={<LoginNew />} />
+        <Route path="/login" element={<LoginNew />} />
 
         {/* 需要登录的路由 */}
         <Route path="/chat" element={
