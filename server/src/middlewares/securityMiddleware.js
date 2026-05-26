@@ -1,7 +1,7 @@
 // server/src/middlewares/securityMiddleware.js
 const fs = require('fs');
 const crypto = require('crypto');
-const { sendDiscordAlert } = require('../services/discordAlert');
+const { sendSecurityAlert } = require('../services/discordAlert');
 
 // ========== 配置 ==========
 const CONFIG = {
@@ -65,11 +65,13 @@ function logSecurityEvent(type, req, details = {}) {
     method: req.method,
     ...details
   };
-  fs.appendFileSync(SECURITY_LOG_FILE, JSON.stringify(event) + '\n');
+  try {
+    fs.appendFileSync(SECURITY_LOG_FILE, JSON.stringify(event) + '\n');
+  } catch (e) {}
   return event;
 }
 
-// ========== 核心告警函数 ==========
+// ========== 核心告警函数（修复版）==========
 async function triggerAlert(type, req, details = {}) {
   const ip = getClientIp(req);
   const userId = req.userId || '未登录';
@@ -96,7 +98,7 @@ async function triggerAlert(type, req, details = {}) {
       alertType = 'critical';
       break;
     case 'FAILED_LOGIN':
-      message = `**❌ 登录失败**\nIP: ${ip}\n用户名: ${details.username || '未知'}\n密码尝试: ${details.password ? '已输入' : '未知'}`;
+      message = `**❌ 登录失败**\nIP: ${ip}\n用户名: ${details.username || '未知'}`;
       alertType = 'warning';
       break;
     case 'SUCCESS_LOGIN':
@@ -132,20 +134,23 @@ async function triggerAlert(type, req, details = {}) {
   }
   
   logSecurityEvent(type, req, details);
-  await sendDiscordAlert(message, alertType);
+  
+  // 发送到 Discord 安全频道
+  try {
+    await sendSecurityAlert(message, alertType);
+  } catch (error) {
+    console.error('发送安全告警失败:', error);
+  }
 }
 
 // ========== 中间件 ==========
 // 检查 IP 是否属于 Google Cloud 网段（允许其通过）
 function isGoogleCloudIp(ip) {
-  // 解析 IP 为数字进行比较
   const ipToNumber = (ip) => {
     const parts = ip.split('.');
     return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + +parts[3];
   };
   const num = ipToNumber(ip);
-  // Google Cloud 常用网段：34.0.0.0/15, 34.16.0.0/16, 34.19.0.0/17 等
-  // 这里简单判断 34.16.0.0 - 34.19.255.255 范围
   const min = ipToNumber('34.16.0.0');
   const max = ipToNumber('34.19.255.255');
   return num >= min && num <= max;
@@ -153,7 +158,6 @@ function isGoogleCloudIp(ip) {
 
 function isDeveloper(req) {
   const ip = getClientIp(req);
-  // 检查是否是 Google Cloud IP
   if (isGoogleCloudIp(ip)) {
     return true;
   }
@@ -352,6 +356,6 @@ module.exports = {
   getSecurityReport,
   getClientIp,
   isDeveloper,
-  triggerAlert,        // ✅ 导出告警函数
+  triggerAlert,
   CONFIG
 };

@@ -1,7 +1,7 @@
 // server/src/middlewares/mentionHandler.js
 const Persona = require('../models/Persona');
 const PersonaRoom = require('../models/PersonaRoom');
-const { sendDiscordAlert } = require('../services/discordAlert');
+const { sendSecurityAlert } = require('../services/discordAlert');
 
 // 解析消息中的 @ 提及
 function parseMentions(content) {
@@ -30,7 +30,6 @@ async function processMentions(content, roomId, senderPersonaId, senderPersona) 
     
     // 1. 检查是否是 @所有人
     if (mentionName === '所有人' || mentionName === 'everyone' || mentionName === 'all') {
-      // 获取房间内所有成员
       const allMembers = await PersonaRoom.find({ roomId }).populate('personaId');
       for (const member of allMembers) {
         if (member.personaId && member.personaId._id.toString() !== senderPersonaId) {
@@ -68,7 +67,6 @@ async function processMentions(content, roomId, senderPersonaId, senderPersona) 
     });
     
     if (targetPersona) {
-      // 检查该角色是否在房间内
       const isInRoom = await PersonaRoom.findOne({ 
         personaId: targetPersona._id, 
         roomId 
@@ -100,7 +98,6 @@ async function processMentions(content, roomId, senderPersonaId, senderPersona) 
 // 发送提及通知（通过 Socket.IO）
 function sendMentionNotifications(io, mentionedUsers, message, senderPersona, roomId, roomName) {
   for (const user of mentionedUsers) {
-    // 发送到用户个人的 Socket 房间
     io.to(`user_${user.personaId}`).emit('mention', {
       from: senderPersona.displayName || senderPersona.name,
       fromId: senderPersona._id,
@@ -115,20 +112,19 @@ function sendMentionNotifications(io, mentionedUsers, message, senderPersona, ro
   }
 }
 
-// 发送 Discord 告警（提及通知）
+// 发送 Discord 告警（提及通知）- 使用安全频道
 async function sendMentionDiscordAlert(mentionedUsers, senderPersona, roomName) {
   if (mentionedUsers.length === 0) return;
   
   const mentionNames = mentionedUsers.map(u => u.displayName).join(', ');
   const message = `🔔 **@提及通知**\n\n**${senderPersona.displayName || senderPersona.name}** 在房间 **${roomName}** 中提到了：\n${mentionNames}`;
   
-  await sendDiscordAlert(message, 'info');
+  // 使用安全频道告警
+  await sendSecurityAlert(message, 'info');
 }
 
 // 渲染带有高亮的消息内容（前端用）
 function renderMentions(content, currentUserId) {
-  // 这个函数在前端使用，用于高亮显示 @提及
-  // 返回 React 组件或 HTML
   return content.replace(/@(\w+)/g, (match, name) => {
     return `<span class="mention" data-mention="${name}">@${name}</span>`;
   });

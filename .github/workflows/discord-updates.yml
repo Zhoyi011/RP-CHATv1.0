@@ -1,0 +1,38 @@
+# .github/workflows/discord-updates.yml
+name: 发送更新公告到 Discord
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - 'README.md'
+  workflow_dispatch:
+
+jobs:
+  send-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 获取最近提交
+        id: commits
+        run: |
+          # 获取最近5条提交
+          COMMITS=$(git log -5 --pretty=format:'{"hash":"%h","message":"%s","author":"%an","date":"%ad"},' --date=iso)
+          echo "commits=[${COMMITS%,}]" >> $GITHUB_OUTPUT
+
+      - name: 发送 Discord 通知
+        uses: tsickert/discord-webhook@v5.0.0
+        with:
+          webhook-url: ${{ secrets.UPDATES_DISCORD_WEBHOOK }}
+          content: |
+            🎉 **RP Chat 更新公告**
+            
+            ${{ github.event.head_commit.message }}
+            
+            🔗 查看详情: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
