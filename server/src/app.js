@@ -491,18 +491,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// 在服务器启动成功时发送通知
-server.listen(PORT, async () => {
-  console.log(`🚀 [HTTP] 服务器运行在 http://localhost:${PORT}`);
-  
-  // 发送部署成功通知（仅生产环境）
-  if (process.env.NODE_ENV === 'production') {
-    await sendDeploymentNotification('success', {
-      message: '服务器已成功启动',
-      version: process.env.npm_package_version || '1.0.0'
-    });
-  }
-});
 
 console.log('✅ [app] 所有初始化完成，等待请求...');
 
