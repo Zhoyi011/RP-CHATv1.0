@@ -84,6 +84,68 @@ app.use(detectInjection);                   // 6. 注入攻击检测
 app.use(securityLogger);                    // 7. 安全日志（全局中间件）
 console.log('  ✅ 安全中间件注册完成');
 
+// ========== 维护模式拦截中间件 ==========
+// 必须在路由注册之前，在安全中间件之后
+const SystemSettings = require('./models/SystemSettings');
+
+const maintenanceInterceptor = async (req, res, next) => {
+  // 跳过公开端点（登录、注册、维护状态检查）
+  const publicPaths = [
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/verify-invite',
+    '/api/admin/maintenance/status',
+    '/api/test'
+  ];
+  
+  if (publicPaths.some(path => req.path.startsWith(path))) {
+    return next();
+  }
+  
+  try {
+    const maintenanceMode = await SystemSettings.findOne({ key: 'maintenance_mode' });
+    
+    if (maintenanceMode?.value === true) {
+      // 获取当前用户（如果有 token）
+      let isSuperAdmin = false;
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(' ')[1];
+      
+      if (token) {
+        try {
+          const jwt = require('jsonwebtoken');
+          const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+          const decoded = jwt.verify(token, secret);
+          const User = require('./models/User');
+          const user = await User.findById(decoded.userId);
+          isSuperAdmin = user?.role === 'owner' || user?.role === 'super_admin';
+        } catch (e) {
+          // token 无效，继续按普通用户处理
+        }
+      }
+      
+      // 非超级管理员 → 返回 503 维护中
+      if (!isSuperAdmin) {
+        const maintenanceMessage = await SystemSettings.findOne({ key: 'maintenance_message' });
+        const maintenanceEndTime = await SystemSettings.findOne({ key: 'maintenance_end_time' });
+        return res.status(503).json({
+          error: '服务正在维护中',
+          maintenanceMode: true,
+          message: maintenanceMessage?.value || '服务器正在维护中，请稍后再试。',
+          endTime: maintenanceEndTime?.value || null
+        });
+      }
+    }
+    next();
+  } catch (error) {
+    console.error('维护模式检查失败:', error);
+    next();
+  }
+};
+
+app.use(maintenanceInterceptor);
+console.log('  ✅ 维护模式拦截中间件注册完成');
+
 // ===== 数据库连接 =====
 console.log('📡 [app] 正在连接 MongoDB...');
 
@@ -321,6 +383,37 @@ const onlineUsers = new Map();
 const roomOnlineCount = new Map();
 const voiceRooms = new Map();
 
+// Socket.IO 维护模式中间件
+const socketMaintenanceMiddleware = async (socket, next) => {
+  try {
+    const maintenanceMode = await SystemSettings.findOne({ key: 'maintenance_mode' });
+    if (maintenanceMode?.value === true) {
+      // 检查是否为超级管理员
+      let isSuperAdmin = false;
+      const token = socket.handshake.auth.token;
+      if (token) {
+        try {
+          const jwt = require('jsonwebtoken');
+          const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+          const decoded = jwt.verify(token, secret);
+          const User = require('./models/User');
+          const user = await User.findById(decoded.userId);
+          isSuperAdmin = user?.role === 'owner' || user?.role === 'super_admin';
+        } catch (e) {}
+      }
+      if (!isSuperAdmin) {
+        socket.emit('maintenance', { message: '服务器正在维护中' });
+        return next(new Error('服务器正在维护中'));
+      }
+    }
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
+io.use(socketMaintenanceMiddleware);
+
 io.on('connection', (socket) => {
   console.log(`🟢 [Socket] 新客户端连接: ${socket.id}`);
   
@@ -491,7 +584,6 @@ io.on('connection', (socket) => {
     }
   });
 });
-
 
 console.log('✅ [app] 所有初始化完成，等待请求...');
 
