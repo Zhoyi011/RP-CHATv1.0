@@ -17,33 +17,26 @@ jobs:
           COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
           COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
           
+          # 选择 emoji
           if echo "$COMMIT_MSG" | grep -qE "^(更新|新增|添加)"; then
             EMOJI="🔄"
-            COLOR="3498db"
           elif echo "$COMMIT_MSG" | grep -q "^修复"; then
             EMOJI="🔧"
-            COLOR="e67e22"
           elif echo "$COMMIT_MSG" | grep -q "^新版本"; then
             EMOJI="📦"
-            COLOR="2ecc71"
           elif echo "$COMMIT_MSG" | grep -q "^新功能"; then
             EMOJI="✨"
-            COLOR="9b59b6"
           elif echo "$COMMIT_MSG" | grep -q "^优化"; then
             EMOJI="⚡"
-            COLOR="1abc9c"
           elif echo "$COMMIT_MSG" | grep -q "^美化"; then
             EMOJI="🎨"
-            COLOR="ff69b4"
           elif echo "$COMMIT_MSG" | grep -q "^删除"; then
             EMOJI="🗑️"
-            COLOR="e74c3c"
           else
             EMOJI="📝"
-            COLOR="95a5a6"
           fi
           
-          # 使用 printf 和 jq 构建 JSON
-          printf '{"username":"RP Chat 更新机器人","avatar_url":"https://rp-chat-v1-0.vercel.app/favicon.svg","embeds":[{"title":"%s RP Chat 更新公告","description":"**%s**","color":%s,"fields":[{"name":"👤 作者","value":"%s","inline":true},{"name":"🔗 详情","value":"[点击查看](%s)","inline":true}],"footer":{"text":"RP Chat · 角色扮演聊天室","icon_url":"https://rp-chat-v1-0.vercel.app/favicon.svg"},"timestamp":"%s"}]}' \
-            "${EMOJI}" "${COMMIT_MSG}" "${COLOR}" "${COMMIT_AUTHOR}" "${COMMIT_URL}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | \
-          curl -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
+          # 发送纯文本
+          curl -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"${EMOJI} RP Chat 更新: ${COMMIT_MSG}\n\n👤 ${COMMIT_AUTHOR}\n🔗 ${COMMIT_URL}\"}"
