@@ -242,6 +242,11 @@ async function detectMaliciousUA(req, res, next) {
   
   const ua = req.headers['user-agent'] || '';
   
+    // ✅ 放行 Render 健康检查
+  if (ua.includes('Go-http-client')) {
+    return next();
+  }
+
   for (const pattern of MALICIOUS_PATTERNS) {
     if (pattern.test(ua)) {
       await triggerAlert('MALICIOUS_UA', req, { ua: ua.substring(0, 100) });
