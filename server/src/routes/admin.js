@@ -301,4 +301,29 @@ router.post('/maintenance/check-schedules', async (req, res) => {
   }
 });
 
+// 获取维护模式豁免设置
+router.get('/maintenance/exempt-admin', async (req, res) => {
+  try {
+    const exemptAdmin = await SystemSettings.findOne({ key: 'maintenance_exempt_admin' });
+    res.json({ exemptAdmin: exemptAdmin?.value === true });
+  } catch (error) {
+    res.status(500).json({ error: '获取设置失败' });
+  }
+});
+
+// 设置维护模式豁免
+router.post('/maintenance/exempt-admin', superAdminMiddleware, async (req, res) => {
+  try {
+    const { exemptAdmin } = req.body;
+    await SystemSettings.findOneAndUpdate(
+      { key: 'maintenance_exempt_admin' },
+      { value: exemptAdmin === true, updatedBy: req.userId, updatedAt: new Date() },
+      { upsert: true }
+    );
+    res.json({ success: true, exemptAdmin: exemptAdmin === true });
+  } catch (error) {
+    res.status(500).json({ error: '设置失败' });
+  }
+});
+
 module.exports = router;

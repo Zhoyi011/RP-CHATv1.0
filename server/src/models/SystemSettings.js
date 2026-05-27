@@ -13,7 +13,8 @@ const systemSettingsSchema = new mongoose.Schema({
 const defaultSettings = [
   { key: 'maintenance_mode', value: false, description: '维护模式开关' },
   { key: 'maintenance_message', value: '服务器正在维护中，请稍后再试。', description: '维护模式提示信息' },
-  { key: 'maintenance_end_time', value: null, description: '预计维护结束时间' }
+  { key: 'maintenance_end_time', value: null, description: '预计维护结束时间' },
+  { key: 'maintenance_exempt_admin', value: false, description: '管理员是否豁免维护模式（true=管理员不受影响，false=管理员受影响）' }  // 👈 新增
 ];
 
 systemSettingsSchema.statics.initDefaultSettings = async function() {

@@ -44,7 +44,6 @@ interface InviteCode {
   usesCount: number;
 }
 
-// 目录项类型
 interface NavItem {
   id: string;
   label: string;
@@ -62,13 +61,11 @@ const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string>('maintenance');
   const contentRef = useRef<HTMLDivElement>(null);
   
-  // 账号信息
   const [displayName, setDisplayName] = useState('');
   const [birthday, setBirthday] = useState<Date | null>(null);
   const [zodiac, setZodiac] = useState('');
   const [editing, setEditing] = useState(false);
   
-  // 偏好设置
   const [settings, setSettings] = useState<UserSettings>({
     theme: 'light',
     notifications: true,
@@ -77,7 +74,6 @@ const Settings: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
 
-  // 邀请码相关
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [inviteType, setInviteType] = useState<'user' | 'admin' | 'super_admin'>('user');
@@ -86,17 +82,18 @@ const Settings: React.FC = () => {
   const [customCode, setCustomCode] = useState('');
   const [loadingInvites, setLoadingInvites] = useState(false);
 
-  // 维护模式相关
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
   const [maintenanceEndTime, setMaintenanceEndTime] = useState<Date | null>(null);
   const [togglingMaintenance, setTogglingMaintenance] = useState(false);
+  
+  const [exemptAdmin, setExemptAdmin] = useState(false);
+  const [togglingExempt, setTogglingExempt] = useState(false);
 
   const canCreateAdmin = user?.role === 'owner' || user?.role === 'super_admin';
   const canCreateSuperAdmin = user?.role === 'owner';
   const isSuperAdmin = user?.role === 'owner' || user?.role === 'super_admin';
 
-  // 管理面板目录项
   const adminNavItems: NavItem[] = [
     { id: 'maintenance', label: '维护模式', icon: '🔧', color: 'from-blue-500 to-cyan-500' },
     { id: 'schedule', label: '定时维护', icon: '📅', color: 'from-purple-500 to-pink-500' },
@@ -105,12 +102,48 @@ const Settings: React.FC = () => {
     { id: 'inviteList', label: '邀请码列表', icon: '📋', color: 'from-indigo-500 to-purple-500' },
   ];
 
-  // 滚动到指定区域
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId);
     const element = document.getElementById(`admin-section-${sectionId}`);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const loadExemptSetting = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/admin/maintenance/exempt-admin`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setExemptAdmin(data.exemptAdmin);
+    } catch (error) {
+      console.error('加载豁免设置失败:', error);
+    }
+  };
+
+  const toggleExemptAdmin = async () => {
+    setTogglingExempt(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/admin/maintenance/exempt-admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ exemptAdmin: !exemptAdmin })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExemptAdmin(!exemptAdmin);
+        toast.success(exemptAdmin ? '管理员将受维护模式影响' : '管理员将不受维护模式影响');
+      }
+    } catch (error) {
+      toast.error('操作失败');
+    } finally {
+      setTogglingExempt(false);
     }
   };
 
@@ -121,6 +154,7 @@ const Settings: React.FC = () => {
     }
     if (isSuperAdmin) {
       loadMaintenanceStatus();
+      loadExemptSetting();
     }
   }, [isAdmin, isOwner, isSuperAdmin]);
 
@@ -398,10 +432,36 @@ const Settings: React.FC = () => {
     }
   };
 
+  // 修复后的动画变体
+  const pageVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, y: -20, transition: { duration: 0.2 } }
+  };
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 30, scale: 0.98 },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      scale: 1, 
+      transition: { duration: 0.4, type: 'spring' as const, stiffness: 100 } 
+    },
+    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.3 } }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-gray-400 dark:text-gray-500 animate-pulse">加载中...</div>
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 dark:text-gray-500">加载中...</p>
+        </div>
       </div>
     );
   }
@@ -419,7 +479,6 @@ const Settings: React.FC = () => {
           <h1 className="text-xl font-bold flex-1">设置</h1>
         </div>
         
-        {/* Tab 切换 */}
         <div className="flex px-4 gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('account')}
@@ -458,10 +517,7 @@ const Settings: React.FC = () => {
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">账号信息</h2>
                 {!editing ? (
-                  <button
-                    onClick={() => setEditing(true)}
-                    className="text-sm text-blue-500 hover:text-blue-600 transition"
-                  >
+                  <button onClick={() => setEditing(true)} className="text-sm text-blue-500 hover:text-blue-600 transition">
                     编辑
                   </button>
                 ) : (
@@ -476,11 +532,7 @@ const Settings: React.FC = () => {
                     >
                       取消
                     </button>
-                    <button
-                      onClick={handleSaveAccount}
-                      disabled={saving}
-                      className="text-sm text-blue-500 hover:text-blue-600 transition disabled:opacity-50"
-                    >
+                    <button onClick={handleSaveAccount} disabled={saving} className="text-sm text-blue-500 hover:text-blue-600 transition disabled:opacity-50">
                       {saving ? '保存中...' : '保存'}
                     </button>
                   </div>
@@ -614,30 +666,21 @@ const Settings: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-700 dark:text-gray-300">🌙 深色模式</span>
-                  <button
-                    onClick={handleThemeToggle}
-                    className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  >
+                  <button onClick={handleThemeToggle} className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                     <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${currentTheme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
                 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-700 dark:text-gray-300">🔔 消息通知</span>
-                  <button
-                    onClick={() => setSettings({ ...settings, notifications: !settings.notifications })}
-                    className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  >
+                  <button onClick={() => setSettings({ ...settings, notifications: !settings.notifications })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                     <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
                 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-700 dark:text-gray-300">🎵 音效</span>
-                  <button
-                    onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })}
-                    className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  >
+                  <button onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                     <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
@@ -656,19 +699,13 @@ const Settings: React.FC = () => {
                 </div>
               </div>
               
-              <button
-                onClick={handleSaveSettings}
-                disabled={saving}
-                className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md"
-              >
+              <button onClick={handleSaveSettings} disabled={saving} className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md">
                 {saving ? '保存中...' : '保存设置'}
               </button>
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                🔔 通知设置
-              </h2>
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🔔 通知设置</h2>
               <NotificationSettings />
             </div>
           </div>
@@ -677,7 +714,7 @@ const Settings: React.FC = () => {
         {/* 管理面板 */}
         {(isAdmin || isOwner) && activeTab === 'admin' && (
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* 左侧目录导航 - 桌面端 */}
+            {/* 左侧目录导航 */}
             <div className="hidden lg:block w-64 flex-shrink-0 sticky top-24 h-fit">
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2 mb-4 px-2 pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -685,7 +722,7 @@ const Settings: React.FC = () => {
                   <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">快速导航</h3>
                 </div>
                 <div className="space-y-1.5">
-                  {adminNavItems.map((item) => (
+                  {adminNavItems.map((item, idx) => (
                     <button
                       key={item.id}
                       onClick={() => scrollToSection(item.id)}
@@ -697,9 +734,7 @@ const Settings: React.FC = () => {
                     >
                       <span className="text-lg">{item.icon}</span>
                       <span className="font-medium">{item.label}</span>
-                      {activeSection === item.id && (
-                        <span className="ml-auto text-xs opacity-70">●</span>
-                      )}
+                      {activeSection === item.id && <span className="ml-auto text-xs opacity-70">●</span>}
                     </button>
                   ))}
                 </div>
@@ -717,9 +752,7 @@ const Settings: React.FC = () => {
                         <span className="text-2xl">🔧</span>
                         <h2 className="text-lg font-semibold text-white">维护模式</h2>
                         {maintenanceEnabled && (
-                          <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full animate-pulse">
-                            已开启
-                          </span>
+                          <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full animate-pulse">已开启</span>
                         )}
                       </div>
                     </div>
@@ -738,6 +771,21 @@ const Settings: React.FC = () => {
                           <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-all duration-200 ${maintenanceEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
                       </div>
+
+                      {/* 管理员豁免开关 */}
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <div>
+                          <span className="text-gray-700 dark:text-gray-300 font-medium">👑 管理员豁免</span>
+                          <p className="text-xs text-gray-400">开启后，管理员也不受维护模式影响</p>
+                        </div>
+                        <button
+                          onClick={toggleExemptAdmin}
+                          disabled={togglingExempt}
+                          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-200 ${exemptAdmin ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                        >
+                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-all duration-200 ${exemptAdmin ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                      </div>
                       
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">📝 提示消息</label>
@@ -752,9 +800,7 @@ const Settings: React.FC = () => {
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          ⏰ 预计恢复时间 <span className="text-xs text-gray-400">（可选）</span>
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">⏰ 预计恢复时间 <span className="text-xs text-gray-400">（可选）</span></label>
                         <GlassDatePicker
                           selected={maintenanceEndTime}
                           onChange={setMaintenanceEndTime}
@@ -792,9 +838,7 @@ const Settings: React.FC = () => {
                       {maintenanceEnabled && (
                         <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                           <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                            <span>💡</span>
-                            维护模式已开启，普通用户访问时会看到维护页面。
-                            如有设置恢复时间，用户将看到倒计时。
+                            <span>💡</span>维护模式已开启，普通用户访问时会看到维护页面。如有设置恢复时间，用户将看到倒计时。
                           </p>
                         </div>
                       )}
@@ -948,12 +992,7 @@ const Settings: React.FC = () => {
                         <span className="text-2xl">📋</span>
                         <h2 className="text-lg font-semibold text-white">邀请码列表</h2>
                       </div>
-                      <button 
-                        onClick={loadInviteCodes} 
-                        className="text-sm bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition text-white"
-                      >
-                        🔄 刷新
-                      </button>
+                      <button onClick={loadInviteCodes} className="text-sm bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition text-white">🔄 刷新</button>
                     </div>
                     <p className="text-white/80 text-sm mt-1">管理已生成的邀请码</p>
                   </div>
@@ -978,27 +1017,20 @@ const Settings: React.FC = () => {
                           const isUsed = !!code.usedBy;
                           
                           return (
-                            <div
-                              key={code._id}
-                              className={`p-4 rounded-xl border transition-all hover:shadow-md ${
-                                isUsed || isFullyUsed
-                                  ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 opacity-70'
-                                  : isExpired
-                                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-emerald-300'
-                              }`}
-                            >
+                            <div key={code._id} className={`p-4 rounded-xl border transition-all hover:shadow-md ${
+                              isUsed || isFullyUsed
+                                ? 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 opacity-70'
+                                : isExpired
+                                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-emerald-300'
+                            }`}>
                               <div className="flex items-center justify-between flex-wrap gap-2">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <code className={`text-sm font-mono font-bold px-2 py-1 rounded ${
                                     code.type === 'super_admin' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
                                     code.type === 'admin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                                  }`}>
-                                    {code.code}
-                                  </code>
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${typeInfo.color}`}>
-                                    {typeInfo.icon} {typeInfo.text}
-                                  </span>
+                                  }`}>{code.code}</code>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${typeInfo.color}`}>{typeInfo.icon} {typeInfo.text}</span>
                                   {isUsed && <span className="text-xs bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">✅ 已使用</span>}
                                   {!isUsed && isFullyUsed && <span className="text-xs bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 px-2 py-0.5 rounded-full">📊 已达上限</span>}
                                   {!isUsed && !isFullyUsed && isExpired && <span className="text-xs bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">⏰ 已过期</span>}
@@ -1006,12 +1038,7 @@ const Settings: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                   <span className="text-xs text-gray-400">📊 {code.usesCount}/{code.maxUses} 次</span>
                                   {!isUsed && !isFullyUsed && !isExpired && (
-                                    <button 
-                                      onClick={() => handleDeleteInviteCode(code._id)} 
-                                      className="text-xs text-red-400 hover:text-red-600 transition px-2 py-1 rounded hover:bg-red-50"
-                                    >
-                                      🗑️ 删除
-                                    </button>
+                                    <button onClick={() => handleDeleteInviteCode(code._id)} className="text-xs text-red-400 hover:text-red-600 transition px-2 py-1 rounded hover:bg-red-50">🗑️ 删除</button>
                                   )}
                                 </div>
                               </div>
@@ -1020,9 +1047,7 @@ const Settings: React.FC = () => {
                                 <span>📅 有效期至: {new Date(code.expiresAt).toLocaleDateString()}</span>
                               </div>
                               {code.usedBy && (
-                                <div className="mt-1 text-xs text-green-600">
-                                  ✅ 使用者: {code.usedBy.username} {code.usedAt && `于 ${new Date(code.usedAt).toLocaleDateString()}`}
-                                </div>
+                                <div className="mt-1 text-xs text-green-600">✅ 使用者: {code.usedBy.username} {code.usedAt && `于 ${new Date(code.usedAt).toLocaleDateString()}`}</div>
                               )}
                             </div>
                           );

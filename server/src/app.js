@@ -85,8 +85,6 @@ app.use(securityLogger);                    // 7. 安全日志（全局中间件
 console.log('  ✅ 安全中间件注册完成');
 
 // ========== 维护模式拦截中间件 ==========
-const SystemSettings = require('./models/SystemSettings');
-
 const maintenanceInterceptor = async (req, res, next) => {
   const publicPaths = [
     '/api/auth/login',
@@ -94,6 +92,7 @@ const maintenanceInterceptor = async (req, res, next) => {
     '/api/auth/verify-invite',
     '/api/admin/maintenance/status',
     '/api/admin/maintenance/check-schedules',
+    '/api/admin/maintenance/exempt-admin',  
     '/api/test'
   ];
   
@@ -105,7 +104,7 @@ const maintenanceInterceptor = async (req, res, next) => {
     const maintenanceMode = await SystemSettings.findOne({ key: 'maintenance_mode' });
     
     if (maintenanceMode?.value === true) {
-      let isSuperAdmin = false;
+      let isExempt = false;
       const authHeader = req.headers.authorization;
       const token = authHeader?.split(' ')[1];
       
@@ -116,11 +115,26 @@ const maintenanceInterceptor = async (req, res, next) => {
           const decoded = jwt.verify(token, secret);
           const User = require('./models/User');
           const user = await User.findById(decoded.userId);
-          isSuperAdmin = user?.role === 'owner' || user?.role === 'super_admin';
+          
+          if (user) {
+            // 获取豁免设置
+            const exemptAdminSetting = await SystemSettings.findOne({ key: 'maintenance_exempt_admin' });
+            const exemptAdmin = exemptAdminSetting?.value === true;
+            
+            // 判断是否豁免
+            // owner 和 super_admin 永远豁免
+            if (user.role === 'owner' || user.role === 'super_admin') {
+              isExempt = true;
+            }
+            // admin 根据设置决定是否豁免
+            else if (user.role === 'admin' && exemptAdmin) {
+              isExempt = true;
+            }
+          }
         } catch (e) {}
       }
       
-      if (!isSuperAdmin) {
+      if (!isExempt) {
         const maintenanceMessage = await SystemSettings.findOne({ key: 'maintenance_message' });
         const maintenanceEndTime = await SystemSettings.findOne({ key: 'maintenance_end_time' });
         return res.status(503).json({
@@ -274,9 +288,11 @@ app.post('/api/debug/revoke', async (req, res) => {
 // ========== API 路由（应用频率限制）==========
 console.log('🔧 [app] 注册 API 路由...');
 
-const standardLimit = rateLimit({ windowMs: 60 * 1000, max: 100, keyGenerator: (req) => getClientIp(req) });
-const strictLimit = rateLimit({ windowMs: 60 * 1000, max: 30, keyGenerator: (req) => getClientIp(req) });
-const uploadLimit = rateLimit({ windowMs: 60 * 1000, max: 20, keyGenerator: (req) => getClientIp(req) });
+// 调大限制
+const standardLimit = rateLimit({ windowMs: 60 * 1000, max: 200, keyGenerator: (req) => getClientIp(req) });
+const strictLimit = rateLimit({ windowMs: 60 * 1000, max: 60, keyGenerator: (req) => getClientIp(req) });
+const uploadLimit = rateLimit({ windowMs: 60 * 1000, max: 30, keyGenerator: (req) => getClientIp(req) });
+const adminLimit = rateLimit({ windowMs: 60 * 1000, max: 300, keyGenerator: (req) => getClientIp(req) });
 
 app.use('/api/auth', strictLimit, authRoutes);
 app.use('/api/persona', standardLimit, personaRoutes);
@@ -292,8 +308,9 @@ app.use('/api/shop', standardLimit, shopRoutes);
 app.use('/api/post', standardLimit, postRoutes);
 app.use('/api/upload', uploadLimit, uploadRoutes);
 app.use('/api/security', securityRoutes);
-app.use('/api/admin', adminRoutes);
 app.use('/api/redeem', redeemRoutes);
+app.use('/api/admin', adminLimit, adminRoutes);
+app.use('/api/user', adminLimit, userRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 
@@ -391,7 +408,7 @@ const socketMaintenanceMiddleware = async (socket, next) => {
   try {
     const maintenanceMode = await SystemSettings.findOne({ key: 'maintenance_mode' });
     if (maintenanceMode?.value === true) {
-      let isSuperAdmin = false;
+      let isExempt = false;
       const token = socket.handshake.auth.token;
       if (token) {
         try {
@@ -400,10 +417,20 @@ const socketMaintenanceMiddleware = async (socket, next) => {
           const decoded = jwt.verify(token, secret);
           const User = require('./models/User');
           const user = await User.findById(decoded.userId);
-          isSuperAdmin = user?.role === 'owner' || user?.role === 'super_admin';
+          
+          if (user) {
+            const exemptAdminSetting = await SystemSettings.findOne({ key: 'maintenance_exempt_admin' });
+            const exemptAdmin = exemptAdminSetting?.value === true;
+            
+            if (user.role === 'owner' || user.role === 'super_admin') {
+              isExempt = true;
+            } else if (user.role === 'admin' && exemptAdmin) {
+              isExempt = true;
+            }
+          }
         } catch (e) {}
       }
-      if (!isSuperAdmin) {
+      if (!isExempt) {
         socket.emit('maintenance', { message: '服务器正在维护中' });
         return next(new Error('服务器正在维护中'));
       }
