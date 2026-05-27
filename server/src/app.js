@@ -88,6 +88,8 @@ app.use(securityLogger);                    // 7. 安全日志（全局中间件
 console.log('  ✅ 安全中间件注册完成');
 
 // ========== 维护模式拦截中间件 ==========
+const SystemSettings = require('./models/SystemSettings');
+
 const maintenanceInterceptor = async (req, res, next) => {
   const publicPaths = [
     '/api/auth/login',
