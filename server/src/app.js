@@ -47,7 +47,7 @@ console.log('🔧 [app] 配置中间件...');
 
 // Helmet 安全配置
 app.use(helmet({
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  crossOriginOpenerPolicy: false,  // 直接禁用
   contentSecurityPolicy: false,
 }));
 console.log('  ✅ Helmet 安全配置完成');
