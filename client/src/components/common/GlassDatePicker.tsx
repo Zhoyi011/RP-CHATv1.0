@@ -73,7 +73,7 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
   const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
   const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 
-  // 生成年份范围（当前年份前后20年）
+  // 生成年份范围（当前年份前后50年）
   const currentYear = new Date().getFullYear();
   const startYear = currentYear - 50;
   const endYear = currentYear + 20;
@@ -82,12 +82,11 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     years.push(y);
   }
 
-  // 计算弹窗位置
   const updatePosition = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const pickerWidth = 300;
-      const pickerHeight = showYearPicker ? 350 : (showTimeSelect ? 400 : 340);
+      const pickerHeight = showYearPicker ? 350 : (showTimeSelect ? 420 : 390);
       
       let top = rect.bottom + 5;
       let left = rect.left + (rect.width / 2) - (pickerWidth / 2);
@@ -202,7 +201,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     setShowYearPicker(false);
   };
 
-  // 快速选择年份
   const selectYear = (selectedYear: number) => {
     const newDate = new Date(selectedYear, month, 1);
     setViewDate(newDate);
@@ -210,7 +208,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     setTimeout(updatePosition, 10);
   };
 
-  // 快速选择月份
   const selectMonth = (selectedMonth: number) => {
     const newDate = new Date(year, selectedMonth, 1);
     setViewDate(newDate);
@@ -218,6 +215,7 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     setTimeout(updatePosition, 10);
   };
 
+  // 24小时制格式化显示
   const formatDisplayDate = () => {
     if (!selected) return '';
     if (showTimeSelect) {
@@ -250,10 +248,8 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
         >
           <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/20 dark:border-gray-700/50 overflow-hidden">
             
-            {/* 年份/月份快速选择器 */}
             {showYearPicker ? (
               <>
-                {/* 年份选择器头部 */}
                 <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 px-3 py-2.5">
                   <div className="flex items-center justify-between">
                     <button
@@ -269,7 +265,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                     <div className="w-7"></div>
                   </div>
                 </div>
-                {/* 年份网格 */}
                 <div className="grid grid-cols-4 gap-1 p-3 max-h-64 overflow-y-auto">
                   {years.map(y => (
                     <button
@@ -289,7 +284,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
               </>
             ) : (
               <>
-                {/* 头部 - 可点击选择年份/月份 */}
                 <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 px-3 py-2.5">
                   <div className="flex items-center justify-between">
                     <button
@@ -303,7 +297,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                     </button>
                     
                     <div className="flex gap-2">
-                      {/* 年份选择按钮 */}
                       <button
                         type="button"
                         onClick={() => setShowYearPicker(true)}
@@ -311,7 +304,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                       >
                         {year}年 ▼
                       </button>
-                      {/* 月份选择下拉 */}
                       <select
                         value={month}
                         onChange={(e) => selectMonth(parseInt(e.target.value))}
@@ -337,7 +329,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                   </div>
                 </div>
                 
-                {/* 星期 */}
                 <div className="grid grid-cols-7 gap-0.5 px-2 pt-3">
                   {weekDays.map(day => (
                     <div key={day} className="text-center text-[11px] font-medium text-gray-500 dark:text-gray-400 py-1.5">
@@ -346,7 +337,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                   ))}
                 </div>
                 
-                {/* 日期 */}
                 <div className="grid grid-cols-7 gap-0.5 px-2 pb-2">
                   {calendarDays.map((day, index) => {
                     const isCurrentMonth = index >= firstDayOfMonth && index < firstDayOfMonth + daysInMonth;
@@ -379,22 +369,24 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                   })}
                 </div>
                 
-                {/* 时间选择 */}
+                {/* 时间选择器 - 24小时制 */}
                 {showTimeSelect && (
                   <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
+                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">时间（24小时制）</label>
                         <input
                           type="time"
                           value={tempTime}
                           onChange={(e) => setTempTime(e.target.value)}
                           className="w-full px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none"
+                          step="60"
                         />
                       </div>
                       <button
                         type="button"
                         onClick={confirmSelection}
-                        className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-md"
+                        className="mt-4 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-md"
                       >
                         确认
                       </button>
@@ -402,22 +394,43 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
                   </div>
                 )}
                 
-                {/* 底部 */}
-                <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2 flex justify-between">
-                  <button
-                    type="button"
-                    onClick={clearSelection}
-                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 transition"
-                  >
-                    清除
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 transition"
-                  >
-                    取消
-                  </button>
+                {/* 底部按钮 */}
+                <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    {!showTimeSelect && (
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">已选日期</label>
+                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                          {tempSelectedDate 
+                            ? `${tempSelectedDate.getFullYear()}-${String(tempSelectedDate.getMonth() + 1).padStart(2, '0')}-${String(tempSelectedDate.getDate()).padStart(2, '0')}`
+                            : '未选择'}
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={confirmSelection}
+                      className="flex-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-md"
+                    >
+                      确认选择
+                    </button>
+                  </div>
+                  <div className="flex justify-between mt-2">
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 transition"
+                    >
+                      清除
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsOpen(false)}
+                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 transition"
+                    >
+                      取消
+                    </button>
+                  </div>
                 </div>
               </>
             )}

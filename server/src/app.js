@@ -45,11 +45,14 @@ const { securityLogger } = require('./middlewares/securityLogger');
 // ===== 中间件配置 =====
 console.log('🔧 [app] 配置中间件...');
 
-// Helmet 安全配置
+// 简化版 Helmet - 只保留必要的安全头，禁用 COOP
 app.use(helmet({
-  crossOriginOpenerPolicy: false,  // 直接禁用
   contentSecurityPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
 }));
+
 console.log('  ✅ Helmet 安全配置完成');
 
 // CORS 配置

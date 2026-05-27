@@ -1,6 +1,7 @@
 // client/src/components/admin/MaintenanceControl.tsx
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import GlassDatePicker from '../common/GlassDatePicker';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -11,7 +12,7 @@ interface MaintenanceControlProps {
 const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin }) => {
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
-  const [maintenanceEndTime, setMaintenanceEndTime] = useState('');
+  const [maintenanceEndTime, setMaintenanceEndTime] = useState<Date | null>(null);
   const [togglingMaintenance, setTogglingMaintenance] = useState(false);
 
   // 加载维护模式状态
@@ -22,13 +23,7 @@ const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin })
       setMaintenanceEnabled(data.maintenanceMode);
       setMaintenanceMessage(data.message || '服务器正在维护中，请稍后再试。');
       if (data.endTime) {
-        const date = new Date(data.endTime);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        setMaintenanceEndTime(`${year}-${month}-${day}T${hours}:${minutes}`);
+        setMaintenanceEndTime(new Date(data.endTime));
       }
     } catch (error) {
       console.error('加载维护状态失败:', error);
@@ -46,11 +41,6 @@ const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin })
     setTogglingMaintenance(true);
     try {
       const token = localStorage.getItem('token');
-      let formattedEndTime = null;
-      if (maintenanceEndTime) {
-        formattedEndTime = new Date(maintenanceEndTime).toISOString();
-      }
-      
       const res = await fetch(`${API_BASE}/admin/maintenance/toggle`, {
         method: 'POST',
         headers: {
@@ -60,14 +50,13 @@ const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin })
         body: JSON.stringify({
           enabled: !maintenanceEnabled,
           message: maintenanceMessage,
-          endTime: formattedEndTime
+          endTime: maintenanceEndTime ? maintenanceEndTime.toISOString() : null
         })
       });
       const data = await res.json();
       if (res.ok) {
         setMaintenanceEnabled(!maintenanceEnabled);
         toast.success(data.message);
-        // 触发全局事件，让其他组件立即更新
         window.dispatchEvent(new CustomEvent('maintenanceToggled'));
       } else {
         toast.error(data.error || '操作失败');
@@ -84,11 +73,6 @@ const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin })
     setTogglingMaintenance(true);
     try {
       const token = localStorage.getItem('token');
-      let formattedEndTime = null;
-      if (maintenanceEndTime) {
-        formattedEndTime = new Date(maintenanceEndTime).toISOString();
-      }
-      
       const res = await fetch(`${API_BASE}/admin/maintenance/settings`, {
         method: 'PUT',
         headers: {
@@ -97,7 +81,7 @@ const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin })
         },
         body: JSON.stringify({
           message: maintenanceMessage,
-          endTime: formattedEndTime
+          endTime: maintenanceEndTime ? maintenanceEndTime.toISOString() : null
         })
       });
       const data = await res.json();
@@ -155,21 +139,20 @@ const MaintenanceControl: React.FC<MaintenanceControlProps> = ({ isSuperAdmin })
           />
         </div>
         
-        {/* 预计恢复时间 */}
+        {/* 预计恢复时间 - 使用 GlassDatePicker */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            预计恢复时间 <span className="text-xs text-gray-400">（可选）</span>
+            预计恢复时间 <span className="text-xs text-gray-400">（可选，24小时制）</span>
           </label>
-          <input
-            type="datetime-local"
-            value={maintenanceEndTime}
-            onChange={(e) => setMaintenanceEndTime(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition"
+          <GlassDatePicker
+            selected={maintenanceEndTime}
+            onChange={setMaintenanceEndTime}
+            showTimeSelect
+            placeholderText="选择结束时间"
+            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
             disabled={togglingMaintenance}
           />
-          <p className="text-xs text-gray-400 mt-1">
-            设置后用户将看到倒计时
-          </p>
+          <p className="text-xs text-gray-400 mt-1">设置后用户将看到倒计时</p>
         </div>
         
         {/* 按钮 */}

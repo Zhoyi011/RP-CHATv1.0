@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import GlassDatePicker from '../common/GlassDatePicker';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -26,11 +27,11 @@ const MaintenanceScheduler: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // 表单状态
+  // 表单状态 - 使用 Date 对象
   const [formData, setFormData] = useState({
     name: '',
-    startTime: '',
-    endTime: '',
+    startTime: null as Date | null,
+    endTime: null as Date | null,
     message: '服务器正在维护中，请稍后再试。',
     repeatWeekly: false,
     repeatDays: [] as number[],
@@ -79,10 +80,7 @@ const MaintenanceScheduler: React.FC = () => {
       return;
     }
     
-    const start = new Date(formData.startTime);
-    const end = new Date(formData.endTime);
-    
-    if (start >= end) {
+    if (formData.startTime >= formData.endTime) {
       toast.error('结束时间必须晚于开始时间');
       return;
     }
@@ -93,13 +91,23 @@ const MaintenanceScheduler: React.FC = () => {
         ? `${API_BASE}/admin/maintenance/schedules/${editingId}`
         : `${API_BASE}/admin/maintenance/schedules`;
       
+      const bodyData = {
+        name: formData.name,
+        startTime: formData.startTime.toISOString(),
+        endTime: formData.endTime.toISOString(),
+        message: formData.message,
+        repeatWeekly: formData.repeatWeekly,
+        repeatDays: formData.repeatDays,
+        note: formData.note
+      };
+      
       const res = await fetch(url, {
         method: editingId ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(bodyData)
       });
       
       const data = await res.json();
@@ -109,8 +117,8 @@ const MaintenanceScheduler: React.FC = () => {
         setEditingId(null);
         setFormData({
           name: '',
-          startTime: '',
-          endTime: '',
+          startTime: null,
+          endTime: null,
           message: '服务器正在维护中，请稍后再试。',
           repeatWeekly: false,
           repeatDays: [],
@@ -151,8 +159,8 @@ const MaintenanceScheduler: React.FC = () => {
   const handleEdit = (schedule: MaintenanceSchedule) => {
     setFormData({
       name: schedule.name,
-      startTime: schedule.startTime.slice(0, 16),
-      endTime: schedule.endTime.slice(0, 16),
+      startTime: new Date(schedule.startTime),
+      endTime: new Date(schedule.endTime),
       message: schedule.message,
       repeatWeekly: schedule.repeatWeekly,
       repeatDays: schedule.repeatDays,
@@ -172,10 +180,10 @@ const MaintenanceScheduler: React.FC = () => {
     }));
   };
 
-  // 格式化日期时间显示
+  // 格式化日期时间显示（24小时制）
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
-    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   };
 
   // 获取计划状态
@@ -203,8 +211,8 @@ const MaintenanceScheduler: React.FC = () => {
           setEditingId(null);
           setFormData({
             name: '',
-            startTime: '',
-            endTime: '',
+            startTime: null,
+            endTime: null,
             message: '服务器正在维护中，请稍后再试。',
             repeatWeekly: false,
             repeatDays: [],
@@ -264,31 +272,31 @@ const MaintenanceScheduler: React.FC = () => {
                   />
                 </div>
                 
-                {/* 开始时间 */}
+                {/* 开始时间 - 使用 GlassDatePicker */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     开始时间
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={formData.startTime}
-                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                  <GlassDatePicker
+                    selected={formData.startTime}
+                    onChange={(date) => setFormData({ ...formData, startTime: date })}
+                    showTimeSelect
+                    placeholderText="选择开始时间"
                     className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-purple-500 outline-none"
-                    required
                   />
                 </div>
                 
-                {/* 结束时间 */}
+                {/* 结束时间 - 使用 GlassDatePicker */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     结束时间
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={formData.endTime}
-                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                  <GlassDatePicker
+                    selected={formData.endTime}
+                    onChange={(date) => setFormData({ ...formData, endTime: date })}
+                    showTimeSelect
+                    placeholderText="选择结束时间"
                     className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-purple-500 outline-none"
-                    required
                   />
                 </div>
                 
