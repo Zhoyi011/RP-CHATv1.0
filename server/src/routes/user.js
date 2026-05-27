@@ -351,7 +351,7 @@ router.post('/check-username', async (req, res) => {
 });
 
 // 保存引导信息
-router.post('/onboarding', authenticate, async (req, res) => {
+router.post('/onboarding', authMiddleware, async (req, res) => {
   try {
     const { username, displayName, birthday } = req.body;
     const userId = req.userId;
@@ -383,7 +383,7 @@ router.post('/onboarding', authenticate, async (req, res) => {
 });
 
 // 获取引导状态
-router.get('/onboarding-status', authenticate, async (req, res) => {
+router.get('/onboarding-status', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     res.json({ onboarded: user?.onboarded || false });
