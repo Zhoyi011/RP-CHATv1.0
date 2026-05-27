@@ -40,11 +40,9 @@ const useMaintenanceCheck = () => {
 
   const checkMaintenance = useCallback(async () => {
     try {
-      // 获取维护状态
       const res = await fetch(`${API_BASE}/admin/maintenance/status`);
       const data = await res.json();
       
-      // 获取当前用户角色
       const token = localStorage.getItem('token');
       let role = null;
       if (token) {
@@ -60,7 +58,6 @@ const useMaintenanceCheck = () => {
         } catch (e) {}
       }
       
-      // 判断是否需要显示维护页面
       const isSuperAdmin = role === 'owner' || role === 'super_admin';
       
       if (data.maintenanceMode && !isSuperAdmin) {
@@ -80,14 +77,9 @@ const useMaintenanceCheck = () => {
 
   useEffect(() => {
     checkMaintenance();
-    
-    // 每 10 秒轮询一次维护状态（实时生效）
     const interval = setInterval(checkMaintenance, 10000);
-    
-    // 监听自定义事件，当管理员切换维护模式时立即检查
     const handleMaintenanceToggle = () => checkMaintenance();
     window.addEventListener('maintenanceToggled', handleMaintenanceToggle);
-    
     return () => {
       clearInterval(interval);
       window.removeEventListener('maintenanceToggled', handleMaintenanceToggle);
@@ -97,7 +89,7 @@ const useMaintenanceCheck = () => {
   return { isMaintenance, maintenanceMessage, maintenanceEndTime, checking, userRole };
 };
 
-// 受保护路由组件（带维护模式检测）
+// 受保护路由组件
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
@@ -198,7 +190,6 @@ function AppContent() {
     return () => window.removeEventListener('showToast', handleShowToast as EventListener);
   }, []);
 
-  // 正在检查维护状态
   if (checking) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
@@ -207,45 +198,51 @@ function AppContent() {
     );
   }
 
-  // 维护模式且不是超级管理员
   if (isMaintenance) {
     return <MaintenancePage message={maintenanceMessage} endTime={maintenanceEndTime} />;
   }
 
   return (
     <>
+      {/* ========== Toaster 全局配置（一劳永逸）========== */}
       <Toaster 
         position="top-center"
+        reverseOrder={false}
+        gutter={8}
         toastOptions={{
-          duration: 3000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-            borderRadius: '12px',
-          },
+          duration: 3000,           // 默认 3 秒自动消失
           success: {
-            duration: 2000,  // 成功提示2秒
+            duration: 2000,         // 成功提示 2 秒
+            icon: '✅',
             style: {
               background: '#10b981',
               color: '#fff',
             },
           },
           error: {
-            duration: 4000,  // 错误提示4秒
+            duration: 3000,         // 错误提示 3 秒
+            icon: '❌',
             style: {
               background: '#ef4444',
               color: '#fff',
             },
           },
           loading: {
-            duration: Infinity, // 加载提示持续直到手动关闭
-            style: {
-              background: '#2563eb',
-              color: '#fff',
-            },
-          }, // 加载提示持续直到手动关闭
+            duration: Infinity,      // 加载提示不自动消失
+            icon: '⏳',
+          },
+          style: {
+            background: '#363636',
+            color: '#fff',
+            borderRadius: '12px',
+            padding: '12px 20px',
+            fontSize: '14px',
+            fontWeight: '500',
+          },
         }}
       />
+      {/* ============================================= */}
+      
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
@@ -326,6 +323,12 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
+        <Route path="/onboarding" element={
+          <ProtectedRoute>
+            <OnboardingWizard />
+          </ProtectedRoute>
+        } />
+
         <Route path="/group/:roomId" element={
           <ProtectedRoute>
             <GroupDetail />
@@ -347,12 +350,6 @@ function AppContent() {
         <Route path="/room/:roomId/pending" element={
           <ProtectedRoute>
             <PendingRequests />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/onboarding" element={
-          <ProtectedRoute>
-            <OnboardingWizard />
           </ProtectedRoute>
         } />
 
