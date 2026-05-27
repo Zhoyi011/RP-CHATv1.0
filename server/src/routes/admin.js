@@ -228,7 +228,7 @@ router.delete('/maintenance/schedules/:id', superAdminMiddleware, async (req, re
   }
 });
 
-// 检查并执行维护计划（由定时任务调用）
+// 检查并执行维护计划
 router.post('/maintenance/check-schedules', async (req, res) => {
   try {
     const now = new Date();
@@ -265,29 +265,36 @@ router.post('/maintenance/check-schedules', async (req, res) => {
       console.log(`✅ 维护计划已执行: ${schedule.name}`);
     }
     
-    // 查找需要结束的维护（检查是否有已过结束时间的维护）
-    const toEnd = await MaintenanceSchedule.find({
-      isActive: true,
-      endTime: { $lt: now }
-    });
-    
-    // 检查是否还有其他活跃的维护计划
+    // ⚠️ 重要：只有当维护模式是由定时计划开启的，才自动关闭
+    // 检查是否有手动开启的维护模式（没有关联的活跃计划）
     const hasActiveSchedule = await MaintenanceSchedule.findOne({
       isActive: true,
       startTime: { $lte: now },
       endTime: { $gt: now }
     });
     
-    if (!hasActiveSchedule) {
-      // 关闭维护模式
-      await SystemSettings.findOneAndUpdate(
-        { key: 'maintenance_mode' },
-        { value: false, updatedAt: new Date() },
-        { upsert: true }
-      );
+    // 只有当存在活跃计划且计划已结束时，才关闭维护模式
+    // 否则不自动关闭（保留手动开启的维护模式）
+    if (hasActiveSchedule && now > hasActiveSchedule.endTime) {
+      // 检查是否还有其他活跃计划
+      const otherActive = await MaintenanceSchedule.findOne({
+        isActive: true,
+        startTime: { $lte: now },
+        endTime: { $gt: now },
+        _id: { $ne: hasActiveSchedule._id }
+      });
+      
+      if (!otherActive) {
+        await SystemSettings.findOneAndUpdate(
+          { key: 'maintenance_mode' },
+          { value: false, updatedAt: new Date() },
+          { upsert: true }
+        );
+        console.log(`✅ 维护计划已结束，维护模式已关闭: ${hasActiveSchedule.name}`);
+      }
     }
     
-    res.json({ success: true, started: toStart.length, ended: toEnd.length });
+    res.json({ success: true, started: toStart.length });
   } catch (error) {
     console.error('检查维护计划失败:', error);
     res.status(500).json({ error: '检查失败' });
