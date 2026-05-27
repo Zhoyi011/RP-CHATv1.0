@@ -28,21 +28,32 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
 
   // 判断是否需要显示翻译按钮
   const needsTranslation = () => {
-    // 自己的消息不显示翻译按钮
-    if (isOwn) return false;
-    
-    // 如果目标语言是中文，检测内容是否已经是中文
-    if (targetLang === 'zh' || targetLang === 'zh-CN' || targetLang === 'zh-TW') {
-      const hasChinese = /[\u4e00-\u9fa5]/.test(content);
-      if (hasChinese) return false;
+  // 自己的消息不显示
+  if (isOwn) return false;
+  
+  // 如果目标语言是中文
+  if (targetLang === 'zh' || targetLang === 'zh-CN' || targetLang === 'zh-TW') {
+    // 只有当内容中**没有**中文字符时才显示翻译按钮
+    // 注意：日文汉字也会被匹配，所以要用更精确的判断
+    const hasChinese = /[\u4e00-\u9fa5]/.test(content);
+    if (hasChinese) {
+      // 简单判断是不是纯中文（没有日文假名）
+      const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(content);
+      // 如果包含日文假名，说明是日文，需要翻译
+      if (!hasJapaneseKana) {
+        return false;  // 纯中文，不翻译
+      }
     }
-    // 如果目标语言是英文，检测是否已经是英文
-    if (targetLang === 'en') {
-      const isEnglish = /^[a-zA-Z0-9\s\.,!?;:'"()-]+$/.test(content);
-      if (isEnglish && content.length > 0) return false;
-    }
-    return true;
-  };
+  }
+  
+  // 如果目标语言是英文
+  if (targetLang === 'en') {
+    const isEnglish = /^[a-zA-Z0-9\s\.,!?;:'"()-]+$/.test(content);
+    if (isEnglish) return false;
+  }
+  
+  return true;
+};
 
   const handleTranslate = async () => {
     if (isTranslated) {

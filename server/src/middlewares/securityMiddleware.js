@@ -275,14 +275,21 @@ function tokenBlacklistMiddleware(req, res, next) {
 }
 
 const INJECTION_PATTERNS = [
-  /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,
-  /(union|select|insert|update|delete|drop|create|alter|exec|execute|script|javascript)/i,
+  // 只检测真正的 SQL 注入关键词（不检测单引号）
+  /(\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b)/i,
   /(<\s*script|<\/script>)/i,
   /(onload|onerror|onclick|onmouseover)/i,
   /(eval\(|document\.|window\.|alert\()/i
 ];
 
 async function detectInjection(req, res, next) {
+  // ========== 翻译接口白名单（允许各种语言字符）==========
+  const translatePaths = ['/api/translate/lang', '/api/translate/s2t', '/api/translate/t2s', '/api/translate/convert'];
+  if (translatePaths.some(path => req.path === path)) {
+    return next();  // 直接放行，不进行注入检测
+  }
+  // ===================================================
+  
   const checkValue = (value) => {
     if (typeof value !== 'string') return false;
     for (const pattern of INJECTION_PATTERNS) {
