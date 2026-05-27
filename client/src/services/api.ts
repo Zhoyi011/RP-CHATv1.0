@@ -638,3 +638,34 @@ export const redeemApi = {
   check: (code: string): Promise<CheckRedeemCodeResponse> =>
     request(`/redeem/check/${encodeURIComponent(code)}`),
 };
+
+// ========== 翻译 API ==========
+export const translateApi = {
+  // 简体转繁体
+  s2t: (text: string): Promise<{ result: string }> =>
+    request('/translate/s2t', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  // 繁体转简体
+  t2s: (text: string): Promise<{ result: string }> =>
+    request('/translate/t2s', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  // 智能简繁转换
+  convert: (text: string): Promise<{ result: string }> =>
+    request('/translate/convert', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
+  // 多语言翻译
+  lang: (text: string, targetLang: string): Promise<{ result: string; original: string; targetLang: string }> =>
+    request('/translate/lang', {
+      method: 'POST',
+      body: JSON.stringify({ text, targetLang }),
+    }),
+};

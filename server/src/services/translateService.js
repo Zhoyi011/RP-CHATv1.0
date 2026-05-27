@@ -1,14 +1,11 @@
+// server/src/services/translateService.js
 const OpenCC = require('opencc-js');
+const { translate } = require('@vitalets/google-translate-api');
 
-// 初始化转换器
+// ========== 简繁转换 ==========
 const s2tConverter = OpenCC.Converter({ from: 'cn', to: 'twp' });
 const t2sConverter = OpenCC.Converter({ from: 'twp', to: 'cn' });
 
-/**
- * 简体转繁体
- * @param {string} text - 简体中文文本
- * @returns {Promise<string>} 繁体中文文本
- */
 async function simplifiedToTraditional(text) {
   if (!text || typeof text !== 'string') return text;
   try {
@@ -19,11 +16,6 @@ async function simplifiedToTraditional(text) {
   }
 }
 
-/**
- * 繁体转简体
- * @param {string} text - 繁体中文文本
- * @returns {Promise<string>} 简体中文文本
- */
 async function traditionalToSimplified(text) {
   if (!text || typeof text !== 'string') return text;
   try {
@@ -34,17 +26,9 @@ async function traditionalToSimplified(text) {
   }
 }
 
-/**
- * 智能转换（自动检测并转换）
- * @param {string} text - 待转换文本
- * @returns {Promise<string>} 转换后的文本
- */
 async function smartConvert(text) {
   if (!text || typeof text !== 'string') return text;
-  
-  // 检测是否包含繁体字
   const hasTraditional = /[愛國學會書龍對發開關體頭點電飛個過後時間門馬鳥魚貝車長東樂為萬與麼]/.test(text);
-  
   if (hasTraditional) {
     return await traditionalToSimplified(text);
   } else {
@@ -52,8 +36,59 @@ async function smartConvert(text) {
   }
 }
 
+// ========== 翻译功能（纯 Google 免费）==========
+/**
+ * 翻译文本
+ * @param {string} text - 原文
+ * @param {string} targetLang - 目标语言 (zh, en, ja, ko 等)
+ * @returns {Promise<string>}
+ */
+async function translateText(text, targetLang) {
+  if (!text || typeof text !== 'string') return text;
+  if (text.length > 5000) return text;
+  
+  try {
+    const langMap = {
+      'zh': 'zh-CN',
+      'zh-CN': 'zh-CN',
+      'zh-TW': 'zh-TW',
+      'en': 'en',
+      'ja': 'ja',
+      'ko': 'ko',
+      'fr': 'fr',
+      'de': 'de',
+      'es': 'es',
+      'it': 'it',
+      'pt': 'pt',
+      'ru': 'ru'
+    };
+    
+    const to = langMap[targetLang] || targetLang;
+    const result = await translate(text, { to });
+    
+    // 如果需要繁体中文，再转换一下
+    if (targetLang === 'zh-TW') {
+      return await simplifiedToTraditional(result.text);
+    }
+    
+    return result.text;
+  } catch (error) {
+    console.error('翻译失败:', error.message);
+    return text;
+  }
+}
+
+/**
+ * 批量翻译
+ */
+async function translateBatch(texts, targetLang) {
+  return await Promise.all(texts.map(text => translateText(text, targetLang)));
+}
+
 module.exports = {
   simplifiedToTraditional,
   traditionalToSimplified,
-  smartConvert
+  smartConvert,
+  translateText,
+  translateBatch
 };

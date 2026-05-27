@@ -679,64 +679,104 @@ const Settings: React.FC = () => {
           )}
 
           {/* 偏好设置 */}
-          {activeTab === 'preferences' && (
-            <motion.div
-              key="preferences"
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              variants={cardVariants}
-              className="space-y-6"
-            >
-              <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 dark:text-gray-300">🌙 深色模式</span>
-                    <button onClick={handleThemeToggle} className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${currentTheme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 dark:text-gray-300">🔔 消息通知</span>
-                    <button onClick={() => setSettings({ ...settings, notifications: !settings.notifications })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 dark:text-gray-300">🎵 音效</span>
-                    <button onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 dark:text-gray-300">🌐 默认翻译</span>
-                    <select
-                      value={settings.defaultTranslate}
-                      onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
-                      className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    >
-                      <option value="off">不翻译</option>
-                      <option value="simplified">转为简体</option>
-                      <option value="traditional">转为繁体</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <button onClick={handleSaveSettings} disabled={saving} className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md">
-                  {saving ? '保存中...' : '保存设置'}
-                </button>
-              </motion.div>
+{activeTab === 'preferences' && (
+  <motion.div
+    key="preferences"
+    initial="hidden"
+    animate="visible"
+    exit="exit"
+    variants={cardVariants}
+    className="space-y-6"
+  >
+    <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
+      <div className="space-y-4">
+        {/* 深色模式 */}
+        <div className="flex justify-between items-center">
+          <span className="text-gray-700 dark:text-gray-300">🌙 深色模式</span>
+          <button onClick={handleThemeToggle} className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+            <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${currentTheme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        
+        {/* 消息通知 */}
+        <div className="flex justify-between items-center">
+          <span className="text-gray-700 dark:text-gray-300">🔔 消息通知</span>
+          <button onClick={() => setSettings({ ...settings, notifications: !settings.notifications })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+            <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        
+        {/* 音效 */}
+        <div className="flex justify-between items-center">
+          <span className="text-gray-700 dark:text-gray-300">🎵 音效</span>
+          <button onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+            <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        
+        {/* 简繁转换默认 */}
+        <div className="flex justify-between items-center">
+          <span className="text-gray-700 dark:text-gray-300">🌐 默认翻译</span>
+          <select
+            value={settings.defaultTranslate}
+            onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
+            className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            <option value="off">不翻译</option>
+            <option value="simplified">转为简体</option>
+            <option value="traditional">转为繁体</option>
+          </select>
+        </div>
 
-              <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🔔 通知设置</h2>
-                <NotificationSettings />
-              </motion.div>
-            </motion.div>
-          )}
+        {/* 👇 新增：翻译目标语言（中英/多语言翻译） */}
+        <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
+          <div>
+            <span className="text-gray-700 dark:text-gray-300">🌍 消息翻译</span>
+            <p className="text-xs text-gray-400">将外文消息翻译成此语言</p>
+          </div>
+          <select
+            value={localStorage.getItem('translateTargetLang') || 'zh'}
+            onChange={(e) => {
+              const lang = e.target.value;
+              localStorage.setItem('translateTargetLang', lang);
+              const langNames: Record<string, string> = {
+                'zh': '简体中文',
+                'zh-TW': '繁體中文',
+                'en': 'English',
+                'ja': '日本語',
+                'ko': '한국어',
+                'fr': 'Français',
+                'de': 'Deutsch',
+                'es': 'Español'
+              };
+              toast.success(`翻译语言已切换为 ${langNames[lang] || lang}`);
+            }}
+            className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          >
+            <option value="zh">简体中文</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+          </select>
+        </div>
+      </div>
+      
+      <button onClick={handleSaveSettings} disabled={saving} className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md">
+        {saving ? '保存中...' : '保存设置'}
+      </button>
+    </motion.div>
+
+    <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🔔 通知设置</h2>
+      <NotificationSettings />
+    </motion.div>
+  </motion.div>
+)}
 
           {/* 管理面板 */}
           {(isAdmin || isOwner) && activeTab === 'admin' && (

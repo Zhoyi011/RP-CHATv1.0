@@ -24,6 +24,7 @@ import { parseMarkdown } from '../../utils/renderMarkdown';
 import { smartConvert } from '../../services/translateApi';
 import AvatarFrame from '../common/AvatarFrame';
 import { useQuickSwitchPersona } from '../../hooks/useQuickSwitchPersona';
+import TranslatableMessage from './TranslatableMessage';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -249,15 +250,16 @@ const MessageBubble: React.FC<{
             </div>
           )}
           
-          {/* 消息内容（Markdown 渲染） */}
-          <div 
+        {/* 消息内容（支持翻译） */}
+          <TranslatableMessage 
+            content={message.content}
+            isOwn={isSelf}
             className={`break-words whitespace-pre-wrap ${
               isSelf 
                 ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
                 : '[&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 [&_a]:break-all'
-            }`}
-            dangerouslySetInnerHTML={{ __html: parseMarkdown(message.content) }} 
-          />
+        }`}
+      />
           
           {/* 链接预览 */}
           {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
