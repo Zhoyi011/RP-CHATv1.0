@@ -25,7 +25,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [viewDate, setViewDate] = useState(selected || new Date());
-  // 关键修复：临时选中的日期，初始值应该是当前选中的日期
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | null>(selected);
   const [tempTime, setTempTime] = useState<string>(() => {
     if (selected) {
@@ -34,11 +33,12 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     return '12:00';
   });
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [showYearPicker, setShowYearPicker] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  // 当 selected 从外部变化时，同步到临时状态
+  // 同步外部 selected 变化
   useEffect(() => {
     setTempSelectedDate(selected);
     if (selected) {
@@ -49,7 +49,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     }
   }, [selected]);
 
-  // 获取当前年月
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   
@@ -57,7 +56,7 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
   
-  // 构建日历数组 (5行就够了)
+  // 构建日历数组
   const calendarDays: (number | null)[] = [];
   
   for (let i = firstDayOfMonth - 1; i >= 0; i--) {
@@ -74,31 +73,37 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
   const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
   const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 
+  // 生成年份范围（当前年份前后20年）
+  const currentYear = new Date().getFullYear();
+  const startYear = currentYear - 50;
+  const endYear = currentYear + 20;
+  const years: number[] = [];
+  for (let y = startYear; y <= endYear; y++) {
+    years.push(y);
+  }
+
   // 计算弹窗位置
   const updatePosition = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const pickerWidth = 300;
-      const pickerHeight = showTimeSelect ? 400 : 340;
+      const pickerHeight = showYearPicker ? 350 : (showTimeSelect ? 400 : 340);
       
       let top = rect.bottom + 5;
       let left = rect.left + (rect.width / 2) - (pickerWidth / 2);
       
-      // 下方空间不足，显示在上方
       if (top + pickerHeight > window.innerHeight) {
         top = rect.top - pickerHeight - 5;
       }
       
-      // 左右边界检查
       left = Math.max(5, Math.min(left, window.innerWidth - pickerWidth - 5));
-      
       setPosition({ top, left });
     }
   };
 
   const openPicker = () => {
     if (!disabled) {
-      // 重置临时状态为当前选中的值
+      setShowYearPicker(false);
       setTempSelectedDate(selected);
       if (selected) {
         setViewDate(selected);
@@ -111,38 +116,34 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    
     const handleScroll = () => updatePosition();
     const handleResize = () => updatePosition();
-    
     window.addEventListener('scroll', handleScroll, true);
     window.addEventListener('resize', handleResize);
-    
     return () => {
       window.removeEventListener('scroll', handleScroll, true);
       window.removeEventListener('resize', handleResize);
     };
-  }, [isOpen]);
+  }, [isOpen, showYearPicker]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(event.target as Node) &&
           containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setShowYearPicker(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 判断日期状态
   const isToday = (day: number, isCurrentMonth: boolean) => {
     if (!isCurrentMonth) return false;
     const today = new Date();
     return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
   };
 
-  // 关键修复：判断是否被临时选中
   const isTempSelected = (day: number, isCurrentMonth: boolean) => {
     if (!isCurrentMonth || !tempSelectedDate) return false;
     return tempSelectedDate.getFullYear() === year && 
@@ -168,7 +169,6 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     setTimeout(updatePosition, 10);
   };
 
-  // 选择日期（临时选中，不等同于确认）
   const selectDate = (day: number, isCurrentMonth: boolean) => {
     if (!isCurrentMonth || isDisabledDate(day, isCurrentMonth)) return;
     
@@ -176,13 +176,12 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
     const [hours, minutes] = tempTime.split(':');
     newDate.setHours(parseInt(hours), parseInt(minutes));
     
-    // 更新临时选中的日期
     setTempSelectedDate(newDate);
     
-    // 如果不显示时间选择器，直接确认
     if (!showTimeSelect) {
       onChange(newDate);
       setIsOpen(false);
+      setShowYearPicker(false);
     }
   };
 
@@ -193,12 +192,30 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
       finalDate.setHours(parseInt(hours), parseInt(minutes));
       onChange(finalDate);
       setIsOpen(false);
+      setShowYearPicker(false);
     }
   };
 
   const clearSelection = () => {
     onChange(null);
     setIsOpen(false);
+    setShowYearPicker(false);
+  };
+
+  // 快速选择年份
+  const selectYear = (selectedYear: number) => {
+    const newDate = new Date(selectedYear, month, 1);
+    setViewDate(newDate);
+    setShowYearPicker(false);
+    setTimeout(updatePosition, 10);
+  };
+
+  // 快速选择月份
+  const selectMonth = (selectedMonth: number) => {
+    const newDate = new Date(year, selectedMonth, 1);
+    setViewDate(newDate);
+    setShowYearPicker(false);
+    setTimeout(updatePosition, 10);
   };
 
   const formatDisplayDate = () => {
@@ -232,115 +249,178 @@ const GlassDatePicker: React.FC<GlassDatePickerProps> = ({
           }}
         >
           <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/20 dark:border-gray-700/50 overflow-hidden">
-            {/* 头部 */}
-            <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 px-3 py-2.5">
-              <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={prevMonth}
-                  className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition"
-                >
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <span className="text-white font-semibold text-sm">
-                  {year}年 {monthNames[month]}
-                </span>
-                <button
-                  type="button"
-                  onClick={nextMonth}
-                  className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition"
-                >
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            </div>
             
-            {/* 星期 */}
-            <div className="grid grid-cols-7 gap-0.5 px-2 pt-3">
-              {weekDays.map(day => (
-                <div key={day} className="text-center text-[11px] font-medium text-gray-500 dark:text-gray-400 py-1.5">
-                  {day}
-                </div>
-              ))}
-            </div>
-            
-            {/* 日期 */}
-            <div className="grid grid-cols-7 gap-0.5 px-2 pb-2">
-              {calendarDays.map((day, index) => {
-                const isCurrentMonth = index >= firstDayOfMonth && index < firstDayOfMonth + daysInMonth;
-                const dayNum = day as number;
-                const today = isToday(dayNum, isCurrentMonth);
-                const tempSelected = isTempSelected(dayNum, isCurrentMonth);
-                const disabledDate = isDisabledDate(dayNum, isCurrentMonth);
-                
-                return (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => selectDate(dayNum, isCurrentMonth)}
-                    disabled={disabledDate}
-                    className={`
-                      relative w-9 h-9 rounded-lg text-xs font-medium transition-all duration-200
-                      ${!isCurrentMonth ? 'text-gray-300 dark:text-gray-600 cursor-default' : ''}
-                      ${disabledDate ? 'opacity-40 cursor-not-allowed' : ''}
-                      ${tempSelected ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md scale-95' : ''}
-                      ${today && !tempSelected ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : ''}
-                      ${!tempSelected && !disabledDate && isCurrentMonth ? 'hover:bg-purple-50 dark:hover:bg-purple-900/20' : ''}
-                    `}
-                  >
-                    {dayNum}
-                    {today && !tempSelected && (
-                      <span className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 rounded-full bg-purple-500"></span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            
-            {/* 时间选择 */}
-            {showTimeSelect && (
-              <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <input
-                      type="time"
-                      value={tempTime}
-                      onChange={(e) => setTempTime(e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none"
-                    />
+            {/* 年份/月份快速选择器 */}
+            {showYearPicker ? (
+              <>
+                {/* 年份选择器头部 */}
+                <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setShowYearPicker(false)}
+                      className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition"
+                    >
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <span className="text-white font-semibold text-sm">选择年份</span>
+                    <div className="w-7"></div>
                   </div>
+                </div>
+                {/* 年份网格 */}
+                <div className="grid grid-cols-4 gap-1 p-3 max-h-64 overflow-y-auto">
+                  {years.map(y => (
+                    <button
+                      key={y}
+                      type="button"
+                      onClick={() => selectYear(y)}
+                      className={`py-2 rounded-lg text-sm font-medium transition ${
+                        y === year
+                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                          : 'hover:bg-purple-50 dark:hover:bg-purple-900/20 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {y}年
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* 头部 - 可点击选择年份/月份 */}
+                <div className="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={prevMonth}
+                      className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition"
+                    >
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    
+                    <div className="flex gap-2">
+                      {/* 年份选择按钮 */}
+                      <button
+                        type="button"
+                        onClick={() => setShowYearPicker(true)}
+                        className="text-white font-semibold text-sm px-2 py-0.5 rounded-lg hover:bg-white/20 transition"
+                      >
+                        {year}年 ▼
+                      </button>
+                      {/* 月份选择下拉 */}
+                      <select
+                        value={month}
+                        onChange={(e) => selectMonth(parseInt(e.target.value))}
+                        className="bg-white/20 text-white font-semibold text-sm px-2 py-0.5 rounded-lg cursor-pointer hover:bg-white/30 transition"
+                      >
+                        {monthNames.map((m, idx) => (
+                          <option key={idx} value={idx} className="text-gray-800 dark:text-gray-800">
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={nextMonth}
+                      className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition"
+                    >
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                
+                {/* 星期 */}
+                <div className="grid grid-cols-7 gap-0.5 px-2 pt-3">
+                  {weekDays.map(day => (
+                    <div key={day} className="text-center text-[11px] font-medium text-gray-500 dark:text-gray-400 py-1.5">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* 日期 */}
+                <div className="grid grid-cols-7 gap-0.5 px-2 pb-2">
+                  {calendarDays.map((day, index) => {
+                    const isCurrentMonth = index >= firstDayOfMonth && index < firstDayOfMonth + daysInMonth;
+                    const dayNum = day as number;
+                    const today = isToday(dayNum, isCurrentMonth);
+                    const tempSelected = isTempSelected(dayNum, isCurrentMonth);
+                    const disabledDate = isDisabledDate(dayNum, isCurrentMonth);
+                    
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => selectDate(dayNum, isCurrentMonth)}
+                        disabled={disabledDate}
+                        className={`
+                          relative w-9 h-9 rounded-lg text-xs font-medium transition-all duration-200
+                          ${!isCurrentMonth ? 'text-gray-300 dark:text-gray-600 cursor-default' : ''}
+                          ${disabledDate ? 'opacity-40 cursor-not-allowed' : ''}
+                          ${tempSelected ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md scale-95' : ''}
+                          ${today && !tempSelected ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : ''}
+                          ${!tempSelected && !disabledDate && isCurrentMonth ? 'hover:bg-purple-50 dark:hover:bg-purple-900/20' : ''}
+                        `}
+                      >
+                        {dayNum}
+                        {today && !tempSelected && (
+                          <span className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 rounded-full bg-purple-500"></span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* 时间选择 */}
+                {showTimeSelect && (
+                  <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <input
+                          type="time"
+                          value={tempTime}
+                          onChange={(e) => setTempTime(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={confirmSelection}
+                        className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-md"
+                      >
+                        确认
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 底部 */}
+                <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2 flex justify-between">
                   <button
                     type="button"
-                    onClick={confirmSelection}
-                    className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-medium rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-md"
+                    onClick={clearSelection}
+                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 transition"
                   >
-                    确认
+                    清除
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 transition"
+                  >
+                    取消
                   </button>
                 </div>
-              </div>
+              </>
             )}
-            
-            {/* 底部 */}
-            <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2 flex justify-between">
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 transition"
-              >
-                清除
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 transition"
-              >
-                取消
-              </button>
-            </div>
           </div>
         </div>,
         document.body

@@ -99,6 +99,16 @@ const userSchema = new mongoose.Schema({
   birthday: { type: Date, default: null },
   zodiac: { type: String, default: '' },
 
+    // ===== 引导流程 =====
+  onboarded: {
+    type: Boolean,
+    default: false
+  },
+  onboardingCompletedAt: {
+    type: Date,
+    default: null
+  },
+
   // ===== 装备 =====
   equippedItems: {
     avatarFrame: { type: String, default: '' },
@@ -320,6 +330,7 @@ userSchema.methods.toSafeObject = function() {
     role: this.role,
     status: this.status,
     hasAccess: this.hasAccess,
+    onboarded: this.onboarded || false,
     diamonds: this.diamonds || 0,
     coins: this.coins || 0,
     dailyDiamondStreak: this.dailyDiamondStreak || 0,
@@ -336,4 +347,5 @@ userSchema.methods.toSafeObject = function() {
     achievements: this.achievements || []
   };
 };
+
 module.exports = mongoose.model('User', userSchema);

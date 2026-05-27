@@ -112,7 +112,8 @@ router.post('/register', async (req, res) => {
       displayName: username,
       hasAccess: false,
       role: 'user',
-      status: 'active'
+      status: 'active',
+      onboarded: false  // 👈 新用户默认未完成引导
     });
     
     await user.save();
@@ -133,7 +134,10 @@ router.post('/register', async (req, res) => {
     res.json({ 
       message: '注册成功，请输入邀请码激活账号',
       token,
-      user: user.toSafeObject(),
+      user: {
+        ...user.toSafeObject(),
+        onboarded: false
+      },
       needsInvite: true
     });
     
@@ -203,7 +207,10 @@ router.post('/login', async (req, res) => {
     res.json({
       message: '登录成功',
       token,
-      user: user.toSafeObject(),
+      user: {
+        ...user.toSafeObject(),
+        onboarded: user.onboarded || false
+      },
       needsInvite: !user.hasAccess
     });
     
@@ -263,7 +270,8 @@ router.post('/firebase', async (req, res) => {
         displayName: displayName || username,
         hasAccess: false,
         role: 'user',
-        status: 'active'
+        status: 'active',
+        onboarded: false  // 👈 新用户默认未完成引导
       });
       
       await user.save();
@@ -297,7 +305,10 @@ router.post('/firebase', async (req, res) => {
 
     res.json({
       token,
-      user: user.toSafeObject(),
+      user: {
+        ...user.toSafeObject(),
+        onboarded: user.onboarded || false
+      },
       needsInvite: !user.hasAccess,
       isNewUser
     });
@@ -378,7 +389,10 @@ router.post('/verify-invite', authMiddleware, async (req, res) => {
     res.json({
       message: '邀请码验证成功',
       token,
-      user: user.toSafeObject()
+      user: {
+        ...user.toSafeObject(),
+        onboarded: user.onboarded || false
+      }
     });
 
   } catch (error) {
@@ -407,7 +421,8 @@ router.get('/me', authMiddleware, async (req, res) => {
       ...user.toSafeObject(),
       birthday: user.birthday ? user.birthday.toISOString().split('T')[0] : null,
       zodiac: user.zodiac || '',
-      hasAccess: user.hasAccess
+      hasAccess: user.hasAccess,
+      onboarded: user.onboarded || false
     });
   } catch (error) {
     console.error('获取用户信息错误:', error);

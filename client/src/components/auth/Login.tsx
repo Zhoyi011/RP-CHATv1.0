@@ -59,92 +59,107 @@ const Login = () => {
     setCaptchaToken(null);
   };
 
-  // 邮箱密码登录
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+// 邮箱密码登录
+const handleEmailLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!captchaToken) {
+    toast.error('请完成验证');
+    (captchaRef.current as any)?.execute?.();
+    return;
+  }
+  
+  setLoading(true);
+  setError('');
+  
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, captchaToken })
+    });
     
-    if (!captchaToken) {
-      toast.error('请完成验证');
-      (captchaRef.current as any)?.execute?.();
-      return;
-    }
+    const data = await response.json();
     
-    setLoading(true);
-    setError('');
-    
-    try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, captchaToken })
-      });
+    if (response.ok) {
+      localStorage.setItem('token', data.token);
+      toast.success('登录成功');
       
-      const data = await response.json();
-      
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        toast.success('登录成功');
-        navigate(data.needsInvite ? '/invite' : '/chat');
+      // 👇 修改跳转逻辑
+      if (data.needsInvite) {
+        navigate('/invite');
+      } else if (data.user?.onboarded) {
+        navigate('/chat');
       } else {
-        setError(data.error || '登录失败');
-        toast.error(data.error || '登录失败');
-        resetCaptcha();
+        navigate('/onboarding');
       }
-    } catch (err) {
-      setError('网络错误，请稍后重试');
-      toast.error('网络错误');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Google 登录
-  const handleGoogleLogin = async () => {
-    if (!captchaToken) {
-      toast.error('请完成验证');
-      (captchaRef.current as any)?.execute?.();
-      return;
-    }
-    
-    setLoading(true);
-    setError('');
-    
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      
-      const response = await fetch(`${API_BASE}/auth/firebase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firebaseUid: result.user.uid,
-          email: result.user.email,
-          displayName: result.user.displayName,
-          captchaToken
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        toast.success('登录成功');
-        navigate(data.needsInvite ? '/invite' : '/chat');
-      } else {
-        setError(data.error || '登录失败');
-        toast.error(data.error || '登录失败');
-        resetCaptcha();
-      }
-    } catch (err: any) {
-      console.error('Google 登录失败:', err);
-      setError(err.message || 'Google 登录失败');
-      toast.error(err.message || 'Google 登录失败');
+    } else {
+      setError(data.error || '登录失败');
+      toast.error(data.error || '登录失败');
       resetCaptcha();
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    setError('网络错误，请稍后重试');
+    toast.error('网络错误');
+  } finally {
+    setLoading(false);
+  }
+};
+  // Google 登录
+const handleGoogleLogin = async () => {
+  if (!captchaToken) {
+    toast.error('请完成验证');
+    (captchaRef.current as any)?.execute?.();
+    return;
+  }
+  
+  setLoading(true);
+  setError('');
+  
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, provider);
+    
+    const response = await fetch(`${API_BASE}/auth/firebase`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firebaseUid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        captchaToken
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      localStorage.setItem('token', data.token);
+      toast.success('登录成功');
+      
+      // 👇 修改跳转逻辑
+      if (data.needsInvite) {
+        navigate('/invite');
+      } else if (data.user?.onboarded) {
+        navigate('/chat');
+      } else {
+        navigate('/onboarding');
+      }
+    } else {
+      setError(data.error || '登录失败');
+      toast.error(data.error || '登录失败');
+      resetCaptcha();
+    }
+  } catch (err: any) {
+    console.error('Google 登录失败:', err);
+    setError(err.message || 'Google 登录失败');
+    toast.error(err.message || 'Google 登录失败');
+    resetCaptcha();
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (checkingAuth) {
     return (

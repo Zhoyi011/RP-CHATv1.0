@@ -339,4 +339,57 @@ router.post('/delete-account', authMiddleware, async (req, res) => {
   }
 });
 
+// 检查用户名是否可用
+router.post('/check-username', async (req, res) => {
+  try {
+    const { username } = req.body;
+    const existingUser = await User.findOne({ username });
+    res.json({ exists: !!existingUser });
+  } catch (error) {
+    res.status(500).json({ error: '检查失败' });
+  }
+});
+
+// 保存引导信息
+router.post('/onboarding', authenticate, async (req, res) => {
+  try {
+    const { username, displayName, birthday } = req.body;
+    const userId = req.userId;
+    
+    // 检查用户名是否已被占用
+    const existingUser = await User.findOne({ username, _id: { $ne: userId } });
+    if (existingUser) {
+      return res.status(400).json({ error: '用户名已被占用' });
+    }
+    
+    // 更新用户信息
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        username,
+        displayName: displayName || '',
+        birthday: birthday || null,
+        onboarded: true,
+        onboardingCompletedAt: new Date()
+      },
+      { new: true }
+    );
+    
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('保存引导信息失败:', error);
+    res.status(500).json({ error: '保存失败' });
+  }
+});
+
+// 获取引导状态
+router.get('/onboarding-status', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    res.json({ onboarded: user?.onboarded || false });
+  } catch (error) {
+    res.status(500).json({ error: '获取状态失败' });
+  }
+});
+
 module.exports = router;

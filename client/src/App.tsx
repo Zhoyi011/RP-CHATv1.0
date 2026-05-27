@@ -26,6 +26,7 @@ import PendingRequests from './components/chat/PendingRequests';
 import MaintenancePage from './components/common/MaintenancePage';
 import { auth } from './firebase/config';
 import Wallet from './components/wallet/Wallet';
+import OnboardingWizard from './components/onboarding/OnboardingWizard';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -223,17 +224,26 @@ function AppContent() {
             borderRadius: '12px',
           },
           success: {
+            duration: 2000,  // 成功提示2秒
             style: {
               background: '#10b981',
               color: '#fff',
             },
           },
           error: {
+            duration: 4000,  // 错误提示4秒
             style: {
               background: '#ef4444',
               color: '#fff',
             },
           },
+          loading: {
+            duration: Infinity, // 加载提示持续直到手动关闭
+            style: {
+              background: '#2563eb',
+              color: '#fff',
+            },
+          }, // 加载提示持续直到手动关闭
         }}
       />
       <Routes>
@@ -337,6 +347,12 @@ function AppContent() {
         <Route path="/room/:roomId/pending" element={
           <ProtectedRoute>
             <PendingRequests />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/onboarding" element={
+          <ProtectedRoute>
+            <OnboardingWizard />
           </ProtectedRoute>
         } />
 
