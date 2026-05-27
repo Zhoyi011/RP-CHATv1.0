@@ -610,3 +610,18 @@ html.dark .p-4.space-y-4,
 html.dark .space-y-4 {
   background-color: transparent !important;
 }
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeSlideUp {
+  animation: fadeSlideUp 0.15s ease-out;
+}

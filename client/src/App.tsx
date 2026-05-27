@@ -1,5 +1,5 @@
 // client/src/App.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import toast, { Toaster } from 'react-hot-toast';
@@ -29,7 +29,7 @@ import Wallet from './components/wallet/Wallet';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
-// 维护模式检测 Hook
+// 维护模式检测 Hook（带轮询）
 const useMaintenanceCheck = () => {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
@@ -37,50 +37,61 @@ const useMaintenanceCheck = () => {
   const [checking, setChecking] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
 
-  useEffect(() => {
-    const checkMaintenance = async () => {
-      try {
-        // 获取维护状态
-        const res = await fetch(`${API_BASE}/admin/maintenance/status`);
-        const data = await res.json();
-        
-        // 获取当前用户角色
-        const token = localStorage.getItem('token');
-        let role = null;
-        if (token) {
-          try {
-            const userRes = await fetch(`${API_BASE}/auth/me`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (userRes.ok) {
-              const userData = await userRes.json();
-              role = userData.role;
-              setUserRole(role);
-            }
-          } catch (e) {}
-        }
-        
-        // 判断是否需要显示维护页面
-        // 超级管理员（owner/super_admin）不受维护模式影响
-        const isSuperAdmin = role === 'owner' || role === 'super_admin';
-        
-        if (data.maintenanceMode && !isSuperAdmin) {
-          setIsMaintenance(true);
-          setMaintenanceMessage(data.message);
-          setMaintenanceEndTime(data.endTime);
-        } else {
-          setIsMaintenance(false);
-        }
-      } catch (error) {
-        console.error('检查维护状态失败:', error);
-        setIsMaintenance(false);
-      } finally {
-        setChecking(false);
+  const checkMaintenance = useCallback(async () => {
+    try {
+      // 获取维护状态
+      const res = await fetch(`${API_BASE}/admin/maintenance/status`);
+      const data = await res.json();
+      
+      // 获取当前用户角色
+      const token = localStorage.getItem('token');
+      let role = null;
+      if (token) {
+        try {
+          const userRes = await fetch(`${API_BASE}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            role = userData.role;
+            setUserRole(role);
+          }
+        } catch (e) {}
       }
-    };
-    
-    checkMaintenance();
+      
+      // 判断是否需要显示维护页面
+      const isSuperAdmin = role === 'owner' || role === 'super_admin';
+      
+      if (data.maintenanceMode && !isSuperAdmin) {
+        setIsMaintenance(true);
+        setMaintenanceMessage(data.message);
+        setMaintenanceEndTime(data.endTime);
+      } else {
+        setIsMaintenance(false);
+      }
+    } catch (error) {
+      console.error('检查维护状态失败:', error);
+      setIsMaintenance(false);
+    } finally {
+      setChecking(false);
+    }
   }, []);
+
+  useEffect(() => {
+    checkMaintenance();
+    
+    // 每 10 秒轮询一次维护状态（实时生效）
+    const interval = setInterval(checkMaintenance, 10000);
+    
+    // 监听自定义事件，当管理员切换维护模式时立即检查
+    const handleMaintenanceToggle = () => checkMaintenance();
+    window.addEventListener('maintenanceToggled', handleMaintenanceToggle);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('maintenanceToggled', handleMaintenanceToggle);
+    };
+  }, [checkMaintenance]);
 
   return { isMaintenance, maintenanceMessage, maintenanceEndTime, checking, userRole };
 };
