@@ -34,13 +34,17 @@ router.get('/maintenance/status', async (req, res) => {
     const maintenanceMode = await SystemSettings.findOne({ key: 'maintenance_mode' });
     const maintenanceMessage = await SystemSettings.findOne({ key: 'maintenance_message' });
     const maintenanceEndTime = await SystemSettings.findOne({ key: 'maintenance_end_time' });
-    
+    console.log('📊 查询维护模式:', maintenanceMode);
+    console.log('📊 查询维护消息:', maintenanceMessage);
+    console.log('📊 查询维护结束时间:', maintenanceEndTime);
+
     res.json({
       maintenanceMode: maintenanceMode?.value || false,
       message: maintenanceMessage?.value || '服务器正在维护中，请稍后再试。',
       endTime: maintenanceEndTime?.value || null
     });
   } catch (error) {
+    console.error('查询维护模式失败:', error); 
     res.json({ maintenanceMode: false, message: '' });
   }
 });
@@ -50,24 +54,52 @@ router.post('/maintenance/toggle', superAdminMiddleware, async (req, res) => {
   try {
     const { enabled, message, endTime } = req.body;
     
-    await SystemSettings.findOneAndUpdate(
+    console.log('🔧 切换维护模式:', { enabled, message, endTime });  // 调试日志
+    
+    // 使用 updateOne 更可靠
+    await SystemSettings.updateOne(
       { key: 'maintenance_mode' },
-      { value: enabled, updatedBy: req.userId, updatedAt: new Date() }
+      { 
+        $set: { 
+          value: enabled, 
+          updatedBy: req.userId, 
+          updatedAt: new Date() 
+        } 
+      },
+      { upsert: true }
     );
     
     if (message !== undefined) {
-      await SystemSettings.findOneAndUpdate(
+      await SystemSettings.updateOne(
         { key: 'maintenance_message' },
-        { value: message, updatedBy: req.userId, updatedAt: new Date() }
+        { 
+          $set: { 
+            value: message, 
+            updatedBy: req.userId, 
+            updatedAt: new Date() 
+          } 
+        },
+        { upsert: true }
       );
     }
     
     if (endTime !== undefined) {
-      await SystemSettings.findOneAndUpdate(
+      await SystemSettings.updateOne(
         { key: 'maintenance_end_time' },
-        { value: endTime, updatedBy: req.userId, updatedAt: new Date() }
+        { 
+          $set: { 
+            value: endTime, 
+            updatedBy: req.userId, 
+            updatedAt: new Date() 
+          } 
+        },
+        { upsert: true }
       );
     }
+    
+    // 验证是否写入成功
+    const verify = await SystemSettings.findOne({ key: 'maintenance_mode' });
+    console.log('✅ 验证写入结果:', verify);
     
     await logAction(req, enabled ? 'MAINTENANCE_MODE_ON' : 'MAINTENANCE_MODE_OFF', {
       message,
@@ -85,7 +117,7 @@ router.post('/maintenance/toggle', superAdminMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('切换维护模式失败:', error);
-    res.status(500).json({ error: '操作失败' });
+    res.status(500).json({ error: '操作失败: ' + error.message });
   }
 });
 
