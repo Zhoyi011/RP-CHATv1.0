@@ -94,7 +94,7 @@ const InviteCode = () => {
         
         // 成功后跳转
         setTimeout(() => {
-          navigate('/chat', { replace: true });
+          navigate('/onboarding', { replace: true });
         }, 500);
       } else {
         setError(data.error || '邀请码无效');
