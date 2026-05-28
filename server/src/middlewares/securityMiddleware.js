@@ -71,26 +71,73 @@ function logSecurityEvent(type, req, details = {}) {
   return event;
 }
 
-// ========== 核心告警函数（修复版）==========
+// ========== 核心告警函数 ==========
 async function triggerAlert(type, req, details = {}) {
   const ip = getClientIp(req);
   const userId = req.userId || '未登录';
   const userAgent = req.headers['user-agent'] || 'unknown';
   
+  // 获取用户详细信息（用户名/显示名）
+  let userInfo = userId;
+  if (userId !== '未登录' && userId !== 'anonymous') {
+    try {
+      const User = require('../models/User');
+      const user = await User.findById(userId).select('username displayName');
+      if (user) {
+        const name = user.displayName || user.username;
+        userInfo = `${name} (${userId})`;
+      } else {
+        userInfo = `未知用户 (${userId})`;
+      }
+    } catch (error) {
+      userInfo = `${userId} (无法获取用户信息)`;
+    }
+  }
+  
+  // 获取当前时间（24小时制）
+  const now = new Date();
+  const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  
   let message = '';
   let alertType = 'warning';
   
+  // 类型映射（中文）
+  const typeMap = {
+    'RATE_LIMIT_EXCEEDED': '频率限制超限',
+    'INJECTION_ATTEMPT': 'SQL注入/XSS攻击',
+    'MALICIOUS_UA': '恶意User-Agent',
+    'AUTO_BANNED': 'IP自动封禁',
+    'FAILED_LOGIN': '登录失败',
+    'SUCCESS_LOGIN': '登录成功',
+    'PASSWORD_CHANGE': '密码修改',
+    'ACCOUNT_DELETED': '账户删除',
+    'INVITE_CREATE': '邀请码创建',
+    'BLACKLISTED_ACCESS': '黑名单IP访问',
+    'PATH_TRAVERSAL': '路径遍历攻击',
+    'DEBUG_ACCESS': '调试模式访问',
+    'UNAUTHORIZED_ACCESS': '未授权访问',
+    'USER_REGISTER': '新用户注册',
+    'INVITE_USED': '邀请码使用',
+    'ROLE_CHANGE': '角色变更',
+    'MAINTENANCE_MODE_ON': '维护模式开启',
+    'MAINTENANCE_MODE_OFF': '维护模式关闭',
+    'PROFILE_UPDATE': '资料更新',
+    'DELETE_ACCOUNT': '账户删除请求'
+  };
+  
+  const chineseType = typeMap[type] || '未知安全事件';
+  
   switch (type) {
     case 'RATE_LIMIT_EXCEEDED':
-      message = `**🚫 频率限制超限**\nIP: ${ip}\n用户: ${userId}\n限制: ${CONFIG.RATE_LIMIT_MAX}/分钟`;
+      message = `**🚫 频率限制超限**\nIP: ${ip}\n用户: ${userInfo}\n限制: ${CONFIG.RATE_LIMIT_MAX}/分钟`;
       alertType = 'warning';
       break;
     case 'INJECTION_ATTEMPT':
-      message = `**💉 SQL注入/XSS攻击**\nIP: ${ip}\n用户: ${userId}\n参数: ${details.parameter || '未知'}\n值: ${details.value || '未知'}`;
+      message = `**💉 SQL注入/XSS攻击**\nIP: ${ip}\n用户: ${userInfo}\n参数: ${details.parameter || '未知'}\n值: ${details.value || '未知'}`;
       alertType = 'critical';
       break;
     case 'MALICIOUS_UA':
-      message = `**🤖 恶意User-Agent**\nIP: ${ip}\n用户: ${userId}\nUA: ${userAgent.substring(0, 100)}`;
+      message = `**🤖 恶意User-Agent**\nIP: ${ip}\n用户: ${userInfo}\nUA: ${userAgent.substring(0, 100)}`;
       alertType = 'warning';
       break;
     case 'AUTO_BANNED':
@@ -102,36 +149,72 @@ async function triggerAlert(type, req, details = {}) {
       alertType = 'warning';
       break;
     case 'SUCCESS_LOGIN':
-      message = `**✅ 登录成功**\nIP: ${ip}\n用户: ${userId}\n设备: ${userAgent.substring(0, 80)}`;
+      message = `**✅ 登录成功**\nIP: ${ip}\n用户: ${userInfo}\n设备: ${userAgent.substring(0, 80)}`;
       alertType = 'info';
+      break;
+    case 'UNAUTHORIZED_ACCESS':
+      message = `**⚠️ 未授权访问**\nIP: ${ip}\n用户: ${userInfo}\n路径: ${req.url || '未知'}`;
+      alertType = 'warning';
       break;
     case 'PASSWORD_CHANGE':
-      message = `**🔑 密码修改**\n用户: ${userId}\nIP: ${ip}`;
+      message = `**🔑 密码修改**\n用户: ${userInfo}\nIP: ${ip}`;
       alertType = 'info';
       break;
-    case 'ACCOUNT_DELETE':
-      message = `**🗑️ 账户删除**\n用户: ${userId}\nIP: ${ip}`;
+    case 'ACCOUNT_DELETED':
+      message = `**🗑️ 账户删除**\n用户: ${userInfo}\nIP: ${ip}`;
       alertType = 'critical';
       break;
     case 'INVITE_CREATE':
-      message = `**🎫 邀请码创建**\n用户: ${userId}\nIP: ${ip}\n类型: ${details.type || 'user'}`;
+      message = `**🎫 邀请码创建**\n用户: ${userInfo}\nIP: ${ip}\n类型: ${details.type || 'user'}`;
+      alertType = 'info';
+      break;
+    case 'INVITE_USED':
+      message = `**🎟️ 邀请码使用**\n用户: ${userInfo}\nIP: ${ip}\n邀请类型: ${details.inviteType || 'user'}`;
       alertType = 'info';
       break;
     case 'BLACKLISTED_ACCESS':
-      message = `**🚫 黑名单IP访问**\nIP: ${ip}\n用户: ${userId}\nURL: ${req.url}`;
+      message = `**🚫 黑名单IP访问**\nIP: ${ip}\n用户: ${userInfo}\nURL: ${req.url}`;
       alertType = 'warning';
       break;
     case 'PATH_TRAVERSAL':
-      message = `**📁 路径遍历攻击**\nIP: ${ip}\n用户: ${userId}\n路径: ${details.path}`;
+      message = `**📁 路径遍历攻击**\nIP: ${ip}\n用户: ${userInfo}\n路径: ${details.path}`;
       alertType = 'critical';
       break;
     case 'DEBUG_ACCESS':
-      message = `**🔧 调试模式访问**\n用户: ${userId}\nIP: ${ip}`;
+      message = `**🔧 调试模式访问**\n用户: ${userInfo}\nIP: ${ip}`;
       alertType = 'info';
       break;
+    case 'USER_REGISTER':
+      message = `**📝 新用户注册**\n用户: ${userInfo}\nIP: ${ip}\n邮箱: ${details.email || '未知'}`;
+      alertType = 'info';
+      break;
+    case 'ROLE_CHANGE':
+      message = `**👑 角色变更**\n操作者: ${userInfo}\n目标用户: ${details.targetUsername || '未知'}\n新角色: ${details.newRole || '未知'}`;
+      alertType = 'warning';
+      break;
+    case 'MAINTENANCE_MODE_ON':
+      message = `**🔧 维护模式已开启**\n操作者: ${userInfo}\nIP: ${ip}`;
+      alertType = 'info';
+      break;
+    case 'MAINTENANCE_MODE_OFF':
+      message = `**✅ 维护模式已关闭**\n操作者: ${userInfo}\nIP: ${ip}`;
+      alertType = 'info';
+      break;
+    case 'PROFILE_UPDATE':
+      message = `**📝 资料更新**\n用户: ${userInfo}\nIP: ${ip}\n字段: ${details.field || '未知'}`;
+      alertType = 'info';
+      break;
+    case 'DELETE_ACCOUNT':
+      message = `**🗑️ 账户删除请求**\n用户: ${userInfo}\nIP: ${ip}`;
+      alertType = 'critical';
+      break;
     default:
-      message = `**⚠️ 未知安全事件**\n类型: ${type}\nIP: ${ip}\n用户: ${userId}`;
+      message = `**⚠️ ${chineseType}**\nIP: ${ip}\n用户: ${userInfo}\n时间: ${timeStr}`;
+      alertType = 'warning';
   }
+  
+  // 添加时间戳（24小时制）
+  message += `\n🕐 时间: ${timeStr}`;
   
   logSecurityEvent(type, req, details);
   

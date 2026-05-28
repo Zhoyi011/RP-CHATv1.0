@@ -48,6 +48,38 @@ async function sendSecurityAlert(message, type = 'warning') {
   } catch (error) {
     console.error('发送安全告警失败:', error);
   }
+}// server/src/services/discordAlert.js 中的 sendSecurityAlert 函数
+async function sendSecurityAlert(message, level = 'warning') {
+  if (!process.env.SECURITY_DISCORD_WEBHOOK) return;
+  
+  const colors = {
+    info: 0x3498db,      // 蓝色
+    warning: 0xf39c12,   // 橙色
+    critical: 0xe74c3c,  // 红色
+    success: 0x2ecc71    // 绿色
+  };
+  
+  const color = colors[level] || colors.warning;
+  
+  const embed = {
+    title: level === 'critical' ? '🔴 严重安全警报' : level === 'warning' ? '⚠️ 安全警报' : 'ℹ️ 安全通知',
+    description: message,
+    color: color,
+    timestamp: new Date().toISOString(),  // Discord 会自动显示时间
+    footer: {
+      text: 'RP Chat 安全系统 | ' + process.env.NODE_ENV
+    }
+  };
+  
+  try {
+    await fetch(process.env.SECURITY_DISCORD_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] })
+    });
+  } catch (error) {
+    console.error('发送 Discord 告警失败:', error);
+  }
 }
 
 // 发送更新公告
