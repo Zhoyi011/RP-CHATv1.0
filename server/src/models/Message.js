@@ -25,7 +25,20 @@ const messageSchema = new mongoose.Schema({
     type: Boolean, 
     default: false
   },
-  // ========== 新增字段 ==========
+  // ========== 拍一拍相关字段 ==========
+  isPat: { 
+    type: Boolean, 
+    default: false 
+  },
+  patData: {
+    actionId: { type: String },
+    actionName: { type: String },
+    actionIcon: { type: String },
+    customPattern: { type: String },
+    targetPersonaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Persona' },
+    targetPersonaName: { type: String }
+  },
+  // ========== 回复相关字段 ==========
   replyTo: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Message',
@@ -64,9 +77,10 @@ const messageSchema = new mongoose.Schema({
   mentionAll: { type: Boolean, default: false }
 });
 
-
 // 索引优化查询性能
 messageSchema.index({ roomId: 1, createdAt: -1 });
 messageSchema.index({ replyTo: 1 });
+messageSchema.index({ isPat: 1 });
+messageSchema.index({ isPat: 1, createdAt: -1 });  // 按时间查询拍一拍（可选）
 
 module.exports = mongoose.model('Message', messageSchema);
