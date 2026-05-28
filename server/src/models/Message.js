@@ -30,6 +30,7 @@ const messageSchema = new mongoose.Schema({
     type: Boolean, 
     default: false 
   },
+  
   patData: {
     actionId: { type: String },
     actionName: { type: String },

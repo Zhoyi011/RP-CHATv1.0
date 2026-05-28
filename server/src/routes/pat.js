@@ -121,7 +121,7 @@ router.post('/send', authMiddleware, async (req, res) => {
       io.to(roomId).emit('new-message', {
         _id: patMessage._id,
         content: patMessage.content,
-        isAction: true,
+        isAction: false,
         isPat: true,
         createdAt: patMessage.createdAt,
         roomId,
