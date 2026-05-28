@@ -59,7 +59,7 @@ inviteCodeSchema.statics.generateCode = function(length = 6) {
 
 // 生成带前缀的邀请码
 inviteCodeSchema.statics.generateCodeWithPrefix = function(prefix = 'IN') {
-  const random = this.generateCode(8);
+  const random = this.generateCode(6);
   return `${prefix}-${random}`;
 };
 
