@@ -195,6 +195,7 @@ const uploadRoutes = require('./routes/upload');
 const securityRoutes = require('./routes/security');
 const adminRoutes = require('./routes/admin');
 const redeemRoutes = require('./routes/redeem');
+const patRoutes = require('./routes/pat');
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -317,6 +318,7 @@ app.use('/api/security', securityRoutes);
 app.use('/api/redeem', redeemRoutes);
 app.use('/api/admin', adminLimit, adminRoutes);
 app.use('/api/user', adminLimit, userRoutes);
+app.use('/api/pat', patRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 

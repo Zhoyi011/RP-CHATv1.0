@@ -1,3 +1,4 @@
+// client/src/components/chat/ChatHome.tsx
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
@@ -25,6 +26,7 @@ import { smartConvert } from '../../services/translateApi';
 import AvatarFrame from '../common/AvatarFrame';
 import { useQuickSwitchPersona } from '../../hooks/useQuickSwitchPersona';
 import TranslatableMessage from './TranslatableMessage';
+import PatPanel from './PatPanel';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -87,7 +89,7 @@ const ReplyPreviewBar: React.FC<{
   );
 };
 
-// ========== 消息气泡组件（新版：滑动回复 + 回复按钮在外部）==========
+// ========== 消息气泡组件 ==========
 const MessageBubble: React.FC<{
   message: Message;
   isSelf: boolean;
@@ -103,6 +105,10 @@ const MessageBubble: React.FC<{
   const [showReplyButton, setShowReplyButton] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const dragRef = useRef<HTMLDivElement>(null);
+  
+  // 拍一拍相关状态
+  const [showPatPanel, setShowPatPanel] = useState(false);
+  const [patTarget, setPatTarget] = useState<{ id: string; name: string } | null>(null);
   
   // 长按事件
   const longPressProps = useLongPress({
@@ -133,15 +139,26 @@ const MessageBubble: React.FC<{
     return getFrameNameFromUrl(frameUrl);
   };
 
+  // 处理双击头像（拍一拍）
+  const handleDoubleClick = () => {
+    if (message.isRecalled) return;
+    const roomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
+    if (!roomId) return;
+    
+    setPatTarget({
+      id: message.personaId?._id || '',
+      name: getSenderDisplayName()
+    });
+    setShowPatPanel(true);
+  };
+
   // 滑动回复处理
   const handleDrag = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const maxOffset = 80;
     if (isSelf) {
-      // 自己的消息向左滑（负数）
       const newOffset = Math.max(-maxOffset, Math.min(0, info.offset.x));
       setSwipeOffset(newOffset);
     } else {
-      // 别人的消息向右滑（正数）
       const newOffset = Math.min(maxOffset, Math.max(0, info.offset.x));
       setSwipeOffset(newOffset);
     }
@@ -150,19 +167,15 @@ const MessageBubble: React.FC<{
   const handleDragEnd = () => {
     const threshold = 50;
     if (Math.abs(swipeOffset) >= threshold) {
-      // 触发回复
       onReply(message);
-      // 添加触觉反馈（如果支持）
       if (window.navigator && window.navigator.vibrate) {
         window.navigator.vibrate(50);
       }
       toast.success(`回复 ${getSenderDisplayName()}`, { icon: '💬', duration: 1500 });
     }
-    // 重置偏移
     setSwipeOffset(0);
   };
 
-  // 获取气泡样式
   const getBubbleClasses = () => {
     const baseClasses = "relative px-4 py-2.5 rounded-2xl max-w-full transition-all duration-200 select-text";
     if (isSelf) {
@@ -171,7 +184,6 @@ const MessageBubble: React.FC<{
     return `${baseClasses} bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-md shadow-sm hover:shadow-md`;
   };
 
-  // 获取气泡内联样式（滑动偏移）
   const getBubbleStyle = (): React.CSSProperties => {
     if (swipeOffset !== 0) {
       return {
@@ -182,118 +194,139 @@ const MessageBubble: React.FC<{
     return {};
   };
 
-  // 回复按钮的位置样式
   const replyButtonClasses = `absolute top-1/2 -translate-y-1/2 p-2 rounded-full bg-blue-500 text-white shadow-md hover:bg-blue-600 transition-all duration-200 z-10 ${
     isSelf ? '-left-12' : '-right-12'
   }`;
 
+  // 获取当前房间ID
+  const roomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
+
   return (
-    <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group relative`}>
-      {/* 对方头像 */}
-      {!isSelf && (
-        <AvatarFrame
-          avatarUrl={message.personaId?.avatar || ''}
-          frameName={getFrameName()}
-          size="sm"
-          className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
-          onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
-        />
-      )}
-      
-      {/* 消息主体区域（包含气泡和回复按钮） */}
-      <div className={`relative ${isSelf ? 'items-end' : ''} max-w-[75%]`}>
-        {/* 发送者名称 */}
+    <>
+      <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group relative`}>
+        {/* 对方头像 */}
         {!isSelf && (
-          <div 
+          <AvatarFrame
+            avatarUrl={message.personaId?.avatar || ''}
+            frameName={getFrameName()}
+            size="sm"
+            className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
             onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
-            className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition"
-          >
-            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
-              {getSenderDisplayName()}
-            </span>
-          </div>
+            onDoubleClick={handleDoubleClick}
+          />
         )}
         
-        {isSelf && (
-          <div className="flex justify-end mb-1 mr-1">
-            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-              {getSenderDisplayName()}
-            </span>
-          </div>
-        )}
-        
-        {/* 可拖拽的气泡容器 */}
-        <motion.div
-          ref={dragRef}
-          drag={isMobile ? "x" : false}
-          dragConstraints={{ left: isSelf ? -80 : 0, right: isSelf ? 0 : 80 }}
-          dragElastic={0.5}
-          dragMomentum={false}
-          onDrag={handleDrag}
-          onDragEnd={handleDragEnd}
-          style={getBubbleStyle()}
-          className={getBubbleClasses()}
-          {...longPressProps}
-        >
-          {/* 回复引用区域 */}
-          {message.replyTo && (
-            <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-1 mb-1">
-                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
-              </div>
-              <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
-              </p>
+        {/* 消息主体区域 */}
+        <div className={`relative ${isSelf ? 'items-end' : ''} max-w-[75%]`}>
+          {/* 发送者名称 */}
+          {!isSelf && (
+            <div 
+              onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
+              className="flex items-baseline gap-2 mb-1 ml-1 cursor-pointer hover:text-blue-600 transition"
+            >
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                {getSenderDisplayName()}
+              </span>
             </div>
           )}
           
-        {/* 消息内容（支持翻译） */}
-          <TranslatableMessage 
-            content={message.content}
-            isOwn={isSelf}
-            className={`break-words whitespace-pre-wrap ${
-              isSelf 
-                ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
-                : '[&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 [&_a]:break-all'
-        }`}
-      />
+          {isSelf && (
+            <div className="flex justify-end mb-1 mr-1">
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                {getSenderDisplayName()}
+              </span>
+            </div>
+          )}
           
-          {/* 链接预览 */}
-          {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
-          
-          {/* 时间戳 */}
-          <div className={`flex items-center gap-1 mt-1.5 ${isSelf ? 'justify-end' : 'justify-start'}`}>
-            <span className={`text-[10px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
-              {formatBubbleTime(new Date(message.createdAt))}
-            </span>
-          </div>
-        </motion.div>
+          {/* 可拖拽的气泡容器 */}
+          <motion.div
+            ref={dragRef}
+            drag={isMobile ? "x" : false}
+            dragConstraints={{ left: isSelf ? -80 : 0, right: isSelf ? 0 : 80 }}
+            dragElastic={0.5}
+            dragMomentum={false}
+            onDrag={handleDrag}
+            onDragEnd={handleDragEnd}
+            style={getBubbleStyle()}
+            className={getBubbleClasses()}
+            {...longPressProps}
+          >
+            {/* 回复引用区域 */}
+            {message.replyTo && (
+              <div className="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-1 mb-1">
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">回复</span>
+                </div>
+                <p className={`text-xs truncate ${isSelf ? 'text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                  {isReplyHidden ? '[消息已不可见]' : message.replyTo.content}
+                </p>
+              </div>
+            )}
+            
+            {/* 消息内容（支持翻译） */}
+            <TranslatableMessage 
+              content={message.content}
+              isOwn={isSelf}
+              className={`break-words whitespace-pre-wrap ${
+                isSelf 
+                  ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
+                  : '[&_a]:text-blue-600 [&_a]:underline [&_a]:hover:text-blue-800 dark:[&_a]:text-blue-400 [&_a]:break-all'
+              }`}
+            />
+            
+            {/* 链接预览 */}
+            {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
+            
+            {/* 时间戳 */}
+            <div className={`flex items-center gap-1 mt-1.5 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+              <span className={`text-[10px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
+                {formatBubbleTime(new Date(message.createdAt))}
+              </span>
+            </div>
+          </motion.div>
 
-        {/* 回复按钮（悬停时显示，在气泡外部） */}
-        <button
-          onClick={() => onReply(message)}
-          className={`${replyButtonClasses} opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 active:scale-95`}
-          title="回复"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-          </svg>
-        </button>
+          {/* 回复按钮 */}
+          <button
+            onClick={() => onReply(message)}
+            className={`${replyButtonClasses} opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 active:scale-95`}
+            title="回复"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 自己头像 */}
+        {isSelf && selectedPersona && (
+          <AvatarFrame
+            avatarUrl={selectedPersona.avatar || ''}
+            frameName={getFrameNameFromUrl(selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame)}
+            size="sm"
+            className="flex-shrink-0 cursor-pointer"
+            onDoubleClick={handleDoubleClick}
+          />
+        )}
       </div>
 
-      {/* 自己头像 */}
-      {isSelf && selectedPersona && (
-        <AvatarFrame
-          avatarUrl={selectedPersona.avatar || ''}
-          frameName={getFrameNameFromUrl(selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame)}
-          size="sm"
-          className="flex-shrink-0"
+      {/* 拍一拍面板 */}
+      {patTarget && roomId && (
+        <PatPanel
+          isOpen={showPatPanel}
+          onClose={() => {
+            setShowPatPanel(false);
+            setPatTarget(null);
+          }}
+          targetPersonaId={patTarget.id}
+          targetPersonaName={patTarget.name}
+          roomId={roomId}
+          onSuccess={() => {}}
         />
       )}
-    </div>
+    </>
   );
 };
 
@@ -451,7 +484,7 @@ const MessageList: React.FC<{
   );
 };
 
-// ========== 主组件（保持原有逻辑，只改了导入和消息列表） ==========
+// ========== 主组件 ==========
 const ChatHome = () => {
   console.log('🎨 [ChatHome] 主组件渲染');
   const navigate = useNavigate();
@@ -480,16 +513,13 @@ const ChatHome = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   
-  // 回复功能状态
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   
-  // 快捷切换角色相关状态
   const [showPersonaQuickSwitch, setShowPersonaQuickSwitch] = useState(false);
   const [personaSearchTerm, setPersonaSearchTerm] = useState('');
   const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
   const personaSwitchPanelRef = useRef<HTMLDivElement>(null);
 
-  // 保存最后使用的角色
   const saveLastUsedPersona = useCallback((personaId: string) => {
     localStorage.setItem('lastUsedPersonaId', personaId);
   }, []);
@@ -597,7 +627,6 @@ const ChatHome = () => {
     }
   }, [selectedRoom, isRoomAdmin, isRoomOwner, fetchPendingCount]);
 
-  // ========== 撤回消息 ==========
   const handleRecall = useCallback(async (message: Message) => {
     const diffMinutes = (Date.now() - new Date(message.createdAt).getTime()) / 1000 / 60;
     if (diffMinutes > 5) {
@@ -623,7 +652,6 @@ const ChatHome = () => {
     }
   }, []);
 
-  // ========== 删除消息（软删除）==========
   const handleDeleteSelf = useCallback(async (message: Message) => {
     if (!confirm('删除后仅你自己看不到这条消息，其他人仍可见。确定吗？')) return;
     
@@ -636,7 +664,6 @@ const ChatHome = () => {
     }
   }, []);
 
-  // ========== 回复消息 ==========
   const handleReply = useCallback((message: Message) => {
     setReplyToMessage(message);
     toast.success(`正在回复 ${message.personaId?.displayName || message.personaId?.name}`, { icon: '💬', duration: 2000 });
@@ -656,7 +683,6 @@ const ChatHome = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 加载数据
   useEffect(() => {
     if (!authChecked || !user) return;
     const loadData = async () => {
@@ -673,7 +699,6 @@ const ChatHome = () => {
         const approved = personasData.filter((p: Persona) => p.status === 'approved');
         setPersonas(approved);
         
-        // 恢复当前角色
         if (activePersonaRes.activePersona) {
           setSelectedPersona(activePersonaRes.activePersona.personaId);
         } else if (approved.length > 0) {
@@ -697,7 +722,6 @@ const ChatHome = () => {
     loadData();
   }, [authChecked, user]);
 
-  // 监听角色切换事件
   useEffect(() => {
     const handlePersonaChanged = (e: CustomEvent) => {
       const newPersona = e.detail;
@@ -742,7 +766,6 @@ const ChatHome = () => {
 
   useEffect(() => { if (selectedRoom) loadRoomPersonas(); }, [selectedRoom]);
 
-  // Socket 事件监听
   useEffect(() => {
     if (!authChecked || !user) return;
     const token = localStorage.getItem('token');
@@ -819,7 +842,6 @@ const ChatHome = () => {
     return () => { socketService.leaveRoom(); };
   }, [selectedRoom, selectedPersona, user]);
 
-  // 选择房间
   const handleSelectRoom = useCallback(async (room: Room) => {
     let persona = selectedPersona;
     
@@ -992,7 +1014,6 @@ const ChatHome = () => {
         </button>
       </div>
       
-      {/* 聊天列表 */}
       <div className="flex-1 overflow-y-auto">
         {showCreateRoom && <CreateRoom onClose={() => setShowCreateRoom(false)} onSuccess={() => window.location.reload()} />}
         {showUserList ? <UserList onSelectUser={handleSelectUser} /> :

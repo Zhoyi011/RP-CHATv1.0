@@ -1,11 +1,13 @@
+// client/src/components/common/AvatarFrame.tsx
 import React from 'react';
 
 interface Props {
   avatarUrl: string;
-  frameName?: string | null;  // 改成文件名，比如 'cat', 'demon'
+  frameName?: string | null;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   onClick?: () => void;
+  onDoubleClick?: () => void;  // 👈 新增双击事件
   // 手动调整参数（每个位置独立调整）
   frameSize?: number;   // 头像框大小（像素）
   avatarSize?: number;  // 头像大小（像素）
@@ -20,28 +22,23 @@ const sizeMap = {
   xl: 128,
 };
 
-// 每个头像框的独立调整参数（你手动调到这里）
-// 结构：位置 -> 头像框名称 -> 参数
+// 每个头像框的独立调整参数
 const frameAdjustments: Record<string, Record<string, { frameSize: number; avatarSize: number; offsetX: number; offsetY: number }>> = {
-  // 聊天消息（对方）
   'chat-message-other': {
     'cat': { frameSize: 70, avatarSize: 40, offsetX: 0, offsetY: 0 },
     'demon': { frameSize: 75, avatarSize: 38, offsetX: 0, offsetY: 2 },
     'purple': { frameSize: 500, avatarSize: 42, offsetX: 0, offsetY: 0 },
     'default': { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 },
   },
-  // 聊天消息（自己）
   'chat-message-self': {
     'cat': { frameSize: 70, avatarSize: 40, offsetX: 0, offsetY: 0 },
     'demon': { frameSize: 75, avatarSize: 38, offsetX: 0, offsetY: 2 },
     'default': { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 },
   },
-  // 侧边栏
   'sidebar': {
     'cat': { frameSize: 70, avatarSize: 42, offsetX: 0, offsetY: 0 },
     'default': { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 },
   },
-  // 角色详情页
   'persona-detail': {
     'cat': { frameSize: 140, avatarSize: 90, offsetX: 0, offsetY: 0 },
     'demon': { frameSize: 150, avatarSize: 85, offsetX: 0, offsetY: 5 },
@@ -55,6 +52,7 @@ const AvatarFrame: React.FC<Props> = ({
   size = 'md',
   className = '',
   onClick,
+  onDoubleClick,  // 👈 接收双击事件
   frameSize: propFrameSize,
   avatarSize: propAvatarSize,
   offsetX: propOffsetX,
@@ -62,7 +60,6 @@ const AvatarFrame: React.FC<Props> = ({
 }) => {
   const containerSize = sizeMap[size];
   
-  // 获取这个位置的头像框调整参数
   const locationKey = className.includes('chat-message') ? 'chat-message-other' 
     : className.includes('sidebar') ? 'sidebar'
     : className.includes('persona-detail') ? 'persona-detail'
@@ -71,7 +68,6 @@ const AvatarFrame: React.FC<Props> = ({
   const frameKey = frameName || 'default';
   const adjustments = frameAdjustments[locationKey]?.[frameKey] || frameAdjustments[locationKey]?.default || { frameSize: 65, avatarSize: 40, offsetX: 0, offsetY: 0 };
   
-  // 优先使用 props 传入的值，否则使用调整表的值
   const frameSize = propFrameSize ?? adjustments.frameSize;
   const avatarSize = propAvatarSize ?? adjustments.avatarSize;
   const offsetX = propOffsetX ?? adjustments.offsetX;
@@ -86,6 +82,7 @@ const AvatarFrame: React.FC<Props> = ({
         className={`rounded-full overflow-hidden ${className}`}
         style={{ width: containerSize, height: containerSize }}
         onClick={onClick}
+        onDoubleClick={onDoubleClick}  // 👈 添加双击
       >
         <img src={avatarUrl || defaultAvatar} alt="头像" className="w-full h-full object-cover" />
       </div>
@@ -97,6 +94,7 @@ const AvatarFrame: React.FC<Props> = ({
       className={`relative ${className}`}
       style={{ width: containerSize, height: containerSize, overflow: 'visible' }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}  // 👈 添加双击
     >
       {/* 头像 */}
       <img
