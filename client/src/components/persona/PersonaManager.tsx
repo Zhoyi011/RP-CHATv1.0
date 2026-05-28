@@ -1,3 +1,4 @@
+// client/src/components/persona/PersonaManager.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,6 +7,15 @@ import { personaApi, type Persona } from '../../services/api';
 import { usePermissions } from '../../hooks/usePermissions';
 import PersonaSearch from './PersonaSearch';
 import { useResponsive } from '../../hooks/useResponsive';
+import AvatarFrame from '../common/AvatarFrame';
+
+// 辅助函数：从 URL 中提取头像框文件名
+const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
+  if (match) return match[1].toLowerCase();
+  return null;
+};
 
 const PersonaManager = () => {
   const [personas, setPersonas] = useState<Persona[]>([]);
@@ -63,27 +73,24 @@ const PersonaManager = () => {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const config = {
-      approved: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', label: '✓ 已通过' },
-      pending: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400', label: '⏳ 审核中' },
-      rejected: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', label: '✗ 已拒绝' }
-    };
-    const c = config[status as keyof typeof config] || config.approved;
-    return <span className={`text-xs px-2 py-1 rounded-full ${c.bg} ${c.text}`}>{c.label}</span>;
+  // 获取头像框文件名
+  const getFrameName = (persona: Persona): string | null => {
+    const frameUrl = persona.avatarFrame || persona.equipped?.avatarFrame;
+    return getFrameNameFromUrl(frameUrl);
   };
 
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      'from-blue-400 to-cyan-500',
-      'from-indigo-400 to-blue-500',
-      'from-purple-400 to-indigo-500',
-      'from-pink-400 to-rose-500',
-      'from-emerald-400 to-teal-500',
-      'from-amber-400 to-orange-500',
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
+  // 获取状态标签样式
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', label: '✓ 已通过' };
+      case 'pending':
+        return { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400', label: '⏳ 审核中' };
+      case 'rejected':
+        return { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', label: '✗ 已拒绝' };
+      default:
+        return { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-400', label: '未知' };
+    }
   };
 
   return (
@@ -208,58 +215,82 @@ const PersonaManager = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {personas.map((persona, index) => (
-                  <motion.div
-                    key={persona._id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="group bg-white dark:bg-gray-800 rounded-2xl shadow hover:shadow-lg transition-all duration-200 overflow-hidden hover:-translate-y-0.5"
-                  >
-                    <div className="h-2 bg-gradient-to-r from-blue-500 to-cyan-600"></div>
-                    <div className="p-5">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            onClick={() => navigate(`/persona/${persona._id}`)}
-                            className={`w-12 h-12 rounded-full bg-gradient-to-br ${getAvatarColor(persona.name)} flex items-center justify-center text-white font-bold text-lg cursor-pointer hover:scale-105 transition shadow-md`}
-                          >
-                            {persona.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">{persona.displayName || persona.name}</h3>
-                              {persona.globalNumber && (
-                                <span className="text-xs text-gray-400 dark:text-gray-500">#{persona.globalNumber}</span>
-                              )}
+                {personas.map((persona, index) => {
+                  const statusConfig = getStatusConfig(persona.status);
+                  return (
+                    <motion.div
+                      key={persona._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="group bg-white dark:bg-gray-800 rounded-2xl shadow hover:shadow-lg transition-all duration-200 overflow-hidden hover:-translate-y-0.5"
+                    >
+                      <div className="h-2 bg-gradient-to-r from-blue-500 to-cyan-600"></div>
+                      <div className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            {/* 头像 */}
+                            <div 
+                              onClick={() => navigate(`/persona/${persona._id}`)}
+                              className="cursor-pointer"
+                            >
+                              <AvatarFrame
+                                avatarUrl={persona.avatar || ''}
+                                frameName={getFrameName(persona)}
+                                size="md"
+                              />
                             </div>
-                            <div className="mt-1">{getStatusBadge(persona.status)}</div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* 角色名 */}
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                  {persona.displayName || persona.name}
+                                </h3>
+                                {/* 同名编号 - 仅当有同名时显示一次 */}
+                                {persona.sameNameNumber && persona.sameNameNumber > 1 && (
+                                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                                    #{persona.sameNameNumber}
+                                  </span>
+                                )}
+                              </div>
+                              {/* 状态标签 - 不包含编号 */}
+                              <div className="mt-1">
+                                <span className={`text-xs px-2 py-1 rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
+                                  {statusConfig.label}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
+                        
+                        {/* 描述 */}
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">
+                          {persona.description || '暂无简介'}
+                        </p>
+                        
+                        {/* 标签 */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {persona.tags?.slice(0, 3).map((tag, idx) => (
+                            <span key={idx} className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs px-2 py-1 rounded-full">
+                              #{tag}
+                            </span>
+                          ))}
+                          {persona.tags && persona.tags.length > 3 && (
+                            <span className="text-xs text-gray-400">+{persona.tags.length - 3}</span>
+                          )}
+                        </div>
+                        
+                        {/* 底部信息 */}
+                        <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+                          <span>创建于 {new Date(persona.createdAt).toLocaleDateString()}</span>
+                          {persona.usageCount && persona.usageCount > 0 && (
+                            <span>🎭 {persona.usageCount} 次使用</span>
+                          )}
+                        </div>
                       </div>
-                      
-                      <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">{persona.description || '暂无简介'}</p>
-                      
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {persona.tags?.slice(0, 3).map((tag, idx) => (
-                          <span key={idx} className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs px-2 py-1 rounded-full">
-                            #{tag}
-                          </span>
-                        ))}
-                        {persona.tags && persona.tags.length > 3 && (
-                          <span className="text-xs text-gray-400">+{persona.tags.length - 3}</span>
-                        )}
-                      </div>
-                      
-                      <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                        <span>创建于 {new Date(persona.createdAt).toLocaleDateString()}</span>
-                        {persona.usageCount && persona.usageCount > 0 && (
-                          <span>🎭 {persona.usageCount} 次使用</span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -285,11 +316,15 @@ const PersonaManager = () => {
                       <div className="flex flex-col lg:flex-row lg:items-start gap-6">
                         <div className="flex-1">
                           <div className="flex items-center gap-4 mb-3">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                              {persona.name.charAt(0).toUpperCase()}
-                            </div>
+                            <AvatarFrame
+                              avatarUrl={persona.avatar || ''}
+                              frameName={getFrameName(persona)}
+                              size="md"
+                            />
                             <div>
-                              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">{persona.displayName || persona.name}</h3>
+                              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                                {persona.displayName || persona.name}
+                              </h3>
                               <p className="text-sm text-gray-500 dark:text-gray-400">
                                 申请人：{persona.createdBy?.username}
                               </p>

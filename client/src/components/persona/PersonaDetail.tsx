@@ -219,7 +219,6 @@ const PersonaDetail = () => {
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-2xl font-bold">{persona.displayName || persona.name}</h2>
-                {persona.globalNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">#{persona.globalNumber}</span>}
                 {persona.sameNameNumber && <span className="text-sm bg-white/20 px-2 py-0.5 rounded-full">同名 #{persona.sameNameNumber}</span>}
                 
                 {isCurrentUserPersona && availablePersonas.length > 1 && (
@@ -355,10 +354,6 @@ const PersonaDetail = () => {
                 <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
                   <span className="text-gray-500 dark:text-gray-400">使用次数</span>
                   <span className="text-gray-700 dark:text-gray-300">{persona.usageCount || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500 dark:text-gray-400">全局编号</span>
-                  <span className="text-gray-700 dark:text-gray-300">#{persona.globalNumber || '?'}</span>
                 </div>
               </div>
             </div>

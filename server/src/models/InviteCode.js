@@ -9,7 +9,7 @@ const inviteCodeSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['user', 'admin', 'super_admin'],  // ✅ 新增 super_admin
+    enum: ['user', 'admin', 'super_admin'],
     default: 'user'
   },
   createdBy: { 
@@ -21,7 +21,7 @@ const inviteCodeSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User' 
   },
-  usedAt: {  // ✅ 新增：使用时间
+  usedAt: {
     type: Date,
     default: null
   },
@@ -29,11 +29,11 @@ const inviteCodeSchema = new mongoose.Schema({
     type: Date, 
     required: true 
   },
-  maxUses: {  // ✅ 新增：最大使用次数
+  maxUses: {
     type: Number,
     default: 1
   },
-  usesCount: {  // ✅ 新增：已使用次数
+  usesCount: {
     type: Number,
     default: 0
   },
@@ -61,6 +61,14 @@ inviteCodeSchema.statics.generateCode = function(length = 6) {
 inviteCodeSchema.statics.generateCodeWithPrefix = function(prefix = 'IN') {
   const random = this.generateCode(8);
   return `${prefix}-${random}`;
+};
+
+// 计算过期时间（创建当天 + N 天，设置为当天 23:59:59）
+inviteCodeSchema.statics.calculateExpiryDate = function(days = 7) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(23, 59, 59, 999);
+  return date;
 };
 
 // 检查邀请码是否有效

@@ -69,7 +69,6 @@ router.post('/register', async (req, res) => {
   try {
     const { username, email, password, captchaToken } = req.body;
     
-    // 验证验证码（生产环境）
     if (process.env.NODE_ENV === 'production') {
       const isValidCaptcha = await verifyHCaptcha(captchaToken);
       if (!isValidCaptcha) {
@@ -77,7 +76,6 @@ router.post('/register', async (req, res) => {
       }
     }
     
-    // 验证输入
     if (!username || username.length < 2) {
       return res.status(400).json({ error: '用户名至少需要2个字符' });
     }
@@ -88,23 +86,19 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: '密码至少需要6个字符' });
     }
     
-    // 检查用户名是否存在
     const existingUsername = await User.findOne({ username });
     if (existingUsername) {
       return res.status(400).json({ error: '用户名已存在' });
     }
     
-    // 检查邮箱是否存在
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
       return res.status(400).json({ error: '邮箱已被注册' });
     }
     
-    // 加密密码
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     
-    // 创建用户
     const user = new User({
       username,
       email,
@@ -113,12 +107,11 @@ router.post('/register', async (req, res) => {
       hasAccess: false,
       role: 'user',
       status: 'active',
-      onboarded: false  // 👈 新用户默认未完成引导
+      onboarded: false
     });
     
     await user.save();
     
-    // 生成 token
     const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
     const token = jwt.sign(
       { userId: user._id, email: user.email, username: user.username, role: user.role, hasAccess: false },
@@ -126,7 +119,6 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     );
     
-    // 审计日志
     await logAction(req, 'USER_REGISTER', { email: user.email, username: user.username });
     
     console.log(`✅ 新用户注册: ${username} (${email})`);
@@ -152,7 +144,6 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password, captchaToken } = req.body;
     
-    // 验证验证码（生产环境）
     if (process.env.NODE_ENV === 'production') {
       const isValidCaptcha = await verifyHCaptcha(captchaToken);
       if (!isValidCaptcha) {
@@ -165,7 +156,6 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: '请输入邮箱和密码' });
     }
     
-    // 查找用户（通过邮箱或用户名）
     const user = await User.findOne({ 
       $or: [{ email: email.toLowerCase() }, { username: email }] 
     });
@@ -175,23 +165,19 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: '邮箱或密码错误' });
     }
     
-    // 检查用户是否有密码（Google 登录用户可能没有密码）
     if (!user.password) {
       return res.status(401).json({ error: '此账号使用第三方登录，请使用 Google 登录' });
     }
     
-    // 验证密码
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       await triggerAlert('FAILED_LOGIN', req, { username: user.username, reason: '密码错误' });
       return res.status(401).json({ error: '邮箱或密码错误' });
     }
     
-    // 更新最后登录时间
     user.lastLogin = new Date();
     await user.save();
     
-    // 生成 token
     const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
     const token = jwt.sign(
       { userId: user._id, email: user.email, username: user.username, role: user.role, hasAccess: user.hasAccess || false },
@@ -199,7 +185,6 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
     
-    // 审计日志
     await logAction(req, 'USER_LOGIN', { email: user.email, username: user.username });
     
     console.log(`✅ 用户登录: ${user.username} (${user.email})`);
@@ -224,10 +209,7 @@ router.post('/login', async (req, res) => {
 router.post('/firebase', async (req, res) => {
   try {
     const { firebaseUid, email, displayName, captchaToken } = req.body;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const userAgent = req.headers['user-agent'] || 'unknown';
     
-    // 验证验证码（生产环境）
     if (process.env.NODE_ENV === 'production') {
       const isValidCaptcha = await verifyHCaptcha(captchaToken);
       if (!isValidCaptcha) {
@@ -243,7 +225,6 @@ router.post('/firebase', async (req, res) => {
     let isNewUser = false;
     
     if (!user) {
-      // 新用户注册
       let baseUsername = (displayName || email.split('@')[0]).trim();
       baseUsername = baseUsername.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
       
@@ -271,22 +252,18 @@ router.post('/firebase', async (req, res) => {
         hasAccess: false,
         role: 'user',
         status: 'active',
-        onboarded: false  // 👈 新用户默认未完成引导
+        onboarded: false
       });
       
       await user.save();
       isNewUser = true;
       
-      // 审计日志
       await logAction(req, 'USER_REGISTER', { email: user.email, username: user.username });
       await triggerAlert('USER_REGISTER', req, { userId: user._id, email: user.email, username: user.username });
       
     } else {
-      // 已有用户登录
       user.lastLogin = new Date();
       await user.save();
-      
-      // 审计日志
       await logAction(req, 'USER_LOGIN', { email: user.email, username: user.username });
     }
 
@@ -369,7 +346,6 @@ router.post('/verify-invite', authMiddleware, async (req, res) => {
     }
     await code.save();
     
-    // 审计日志
     await logAction(req, 'USE_INVITE_CODE', { inviteCode: code.code, inviteType: code.type, newRole });
     await triggerAlert('INVITE_USED', req, { userId: user._id, username: user.username, inviteType: code.type });
     
@@ -409,11 +385,13 @@ router.get('/me', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
     
+    // 不要在这里触发 UNAUTHORIZED_ACCESS 警报
     if (!user.hasAccess) {
-      await triggerAlert('UNAUTHORIZED_ACCESS', req, { username: user.username });
       return res.status(403).json({ 
         error: '您的账号尚未激活，请联系管理员获取邀请码',
-        code: 'ACCESS_DENIED'
+        code: 'ACCESS_DENIED',
+        hasAccess: false,
+        onboarded: user.onboarded || false
       });
     }
     
@@ -492,8 +470,8 @@ router.post('/admin/create-invite', authMiddleware, adminMiddleware, async (req,
       return res.status(400).json({ error: '邀请码已存在' });
     }
     
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+    // 🔥 修复：使用正确的过期时间计算（当天 23:59:59）
+    const expiresAt = InviteCode.calculateExpiryDate(expiresInDays);
     
     const inviteCode = new InviteCode({
       code,

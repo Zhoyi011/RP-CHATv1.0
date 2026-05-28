@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { personaApi } from '../../services/api';
 import { useResponsive } from '../../hooks/useResponsive';
+import AvatarUpload from '../common/AvatarUpload';
+import AvatarFrame from '../common/AvatarFrame';
 
 const PersonaCreate = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    tags: ''
+    tags: '',
+    avatar: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showAvatarUpload, setShowAvatarUpload] = useState(false);
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
 
@@ -26,6 +30,7 @@ const PersonaCreate = () => {
         .map(tag => tag.trim())
         .filter(tag => tag.length > 0);
 
+      // 创建角色请求（头像会在审核通过后由管理员或用户自己上传）
       await personaApi.createRequest({
         name: formData.name,
         description: formData.description,
@@ -38,6 +43,10 @@ const PersonaCreate = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAvatarUpload = (url: string) => {
+    setFormData({ ...formData, avatar: url });
   };
 
   return (
@@ -72,6 +81,35 @@ const PersonaCreate = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* 头像选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  角色头像
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <AvatarFrame
+                      avatarUrl={formData.avatar || ''}
+                      frameName={null}
+                      size="lg"
+                    />
+                    {!formData.avatar && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                        <span className="text-white text-xs">无头像</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAvatarUpload(true)}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                  >
+                    {formData.avatar ? '更换头像' : '上传头像'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">建议使用 1:1 比例的图片，支持 JPG、PNG、GIF</p>
+              </div>
+
               {/* 角色名称 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -153,6 +191,19 @@ const PersonaCreate = () => {
           </div>
         </div>
       </div>
+
+      {/* 头像上传弹窗 */}
+      <AnimatePresence>
+        {showAvatarUpload && (
+          <AvatarUpload
+            currentAvatar={formData.avatar}
+            onUpload={handleAvatarUpload}
+            onClose={() => setShowAvatarUpload(false)}
+            title={`上传 ${formData.name || '角色'} 的头像`}
+            type="persona"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

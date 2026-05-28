@@ -32,6 +32,35 @@ console.log('🔧 [ChatHome] 组件模块加载');
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
+// ========== 动画变体 ==========
+const pageVariants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: 0.3 } },
+  exit: { opacity: 0, transition: { duration: 0.2 } }
+};
+
+const messageVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1, 
+    transition: { type: 'spring' as const, damping: 20, stiffness: 300 } 
+  },
+  exit: { opacity: 0, x: -20, transition: { duration: 0.2 } }
+};
+
+const patMessageVariants = {
+  hidden: { opacity: 0, scale: 0.8, y: 10 },
+  visible: { 
+    opacity: 1, 
+    scale: 1, 
+    y: 0, 
+    transition: { type: 'spring' as const, damping: 15, stiffness: 400 } 
+  },
+  exit: { opacity: 0, scale: 0.8, transition: { duration: 0.15 } }
+};
+
 // ========== 辅助函数 ==========
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
@@ -70,7 +99,12 @@ const ReplyPreviewBar: React.FC<{
 }> = ({ replyTo, onCancel }) => {
   const isHidden = replyTo.isRecalled || replyTo.isDeleted;
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-t-lg border-l-4 border-blue-500 mb-2">
+    <motion.div 
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-t-lg border-l-4 border-blue-500 mb-2"
+    >
       <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
       </svg>
@@ -85,7 +119,7 @@ const ReplyPreviewBar: React.FC<{
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
-    </div>
+    </motion.div>
   );
 };
 
@@ -143,10 +177,7 @@ const MessageBubble: React.FC<{
   // 处理单击（进入详情页）
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (isDoubleClickRef.current) {
-      return;
-    }
+    if (isDoubleClickRef.current) return;
     
     clickTimeoutRef.current = setTimeout(() => {
       if (!isDoubleClickRef.current && message.personaId?._id) {
@@ -161,27 +192,21 @@ const MessageBubble: React.FC<{
     e.stopPropagation();
     e.preventDefault();
     
-    // 清除单击的延迟执行
     if (clickTimeoutRef.current) {
       clearTimeout(clickTimeoutRef.current);
       clickTimeoutRef.current = null;
     }
     
-    // 标记为双击模式
     isDoubleClickRef.current = true;
     
     if (message.isRecalled) {
-      setTimeout(() => {
-        isDoubleClickRef.current = false;
-      }, 300);
+      setTimeout(() => { isDoubleClickRef.current = false; }, 300);
       return;
     }
     
     const roomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
     if (!roomId) {
-      setTimeout(() => {
-        isDoubleClickRef.current = false;
-      }, 300);
+      setTimeout(() => { isDoubleClickRef.current = false; }, 300);
       return;
     }
     
@@ -191,10 +216,7 @@ const MessageBubble: React.FC<{
     });
     setShowPatPanel(true);
     
-    // 重置双击标记
-    setTimeout(() => {
-      isDoubleClickRef.current = false;
-    }, 500);
+    setTimeout(() => { isDoubleClickRef.current = false; }, 500);
   };
 
   // 滑动回复处理
@@ -247,7 +269,13 @@ const MessageBubble: React.FC<{
 
   return (
     <>
-      <div className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group relative`}>
+      <motion.div 
+        variants={messageVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''} group relative`}
+      >
         {/* 对方头像 */}
         {!isSelf && (
           <AvatarFrame
@@ -294,6 +322,8 @@ const MessageBubble: React.FC<{
             style={getBubbleStyle()}
             className={getBubbleClasses()}
             {...longPressProps}
+            whileHover={{ scale: 1.01 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           >
             {/* 回复引用区域 */}
             {message.replyTo && (
@@ -333,7 +363,10 @@ const MessageBubble: React.FC<{
           </motion.div>
 
           {/* 回复按钮 */}
-          <button
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            whileHover={{ scale: 1.1, opacity: 1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={() => onReply(message)}
             className={`${replyButtonClasses} opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 active:scale-95`}
             title="回复"
@@ -341,7 +374,7 @@ const MessageBubble: React.FC<{
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
             </svg>
-          </button>
+          </motion.button>
         </div>
 
         {/* 自己头像 */}
@@ -355,7 +388,7 @@ const MessageBubble: React.FC<{
             onDoubleClick={handleDoubleClick}
           />
         )}
-      </div>
+      </motion.div>
 
       {/* 拍一拍面板 */}
       {patTarget && roomId && (
@@ -452,7 +485,12 @@ const MessageList: React.FC<{
   }
 
   return (
-    <>
+    <motion.div
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+    >
       {messages.map((msg, index) => {
         const prevMsg = index > 0 ? messages[index - 1] : null;
         const showDivider = shouldShowTimeDivider(prevMsg, msg);
@@ -460,54 +498,87 @@ const MessageList: React.FC<{
         return (
           <React.Fragment key={msg._id}>
             {showDivider && (
-              <div className="flex justify-center my-4">
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex justify-center my-4"
+              >
                 <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
                   {formatDividerTime(new Date(msg.createdAt))}
                 </span>
-              </div>
+              </motion.div>
             )}
             
             {(() => {
+              // 撤回消息
               if (msg.isRecalled) {
                 return (
-                  <div className="flex justify-center my-1">
+                  <motion.div 
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="flex justify-center my-1"
+                  >
                     <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full italic">
                       {msg.content}
                     </span>
-                  </div>
+                  </motion.div>
                 );
               }
               
+              // 系统消息
               if (msg.userId?._id === 'system') {
                 return (
-                  <div className="flex justify-center my-1">
-                    <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">{msg.content}</span>
-                  </div>
+                  <motion.div 
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="flex justify-center my-1"
+                  >
+                    <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full">
+                      {msg.content}
+                    </span>
+                  </motion.div>
                 );
               }
               
-// ✅ 正确顺序：先检查 isPat
-if (msg.isPat) {
-  return (
-    <div className="flex justify-center my-1">
-      <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
-        {msg.content}
-      </span>
-    </div>
-  );
-}
-
-// 再检查 isAction
-if (msg.isAction) {
-  return (
-    <div className="flex justify-center my-1">
-      <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
-        * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
-      </span>
-    </div>
-  );
-}
+              // 🔥 拍一拍消息（必须在 isAction 之前！）
+              if (msg.isPat) {
+                return (
+                  <motion.div 
+                    variants={patMessageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="flex justify-center my-1"
+                  >
+                    <motion.span 
+                      whileHover={{ scale: 1.02 }}
+                      className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full cursor-default shadow-sm"
+                    >
+                      ✨ {msg.content} ✨
+                    </motion.span>
+                  </motion.div>
+                );
+              }
               
+              // 普通动作消息
+              if (msg.isAction) {
+                return (
+                  <motion.div 
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="flex justify-center my-1"
+                  >
+                    <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
+                      * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
+                    </span>
+                  </motion.div>
+                );
+              }
+              
+              // 普通消息气泡
               const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
               
               return (
@@ -537,7 +608,7 @@ if (msg.isAction) {
         onClose={() => setContextMenu({ ...contextMenu, visible: false })}
         theme="dark"
       />
-    </>
+    </motion.div>
   );
 };
 
@@ -696,7 +767,11 @@ const ChatHome = () => {
       
       setMessages(prev => prev.map(msg => 
         msg._id === message._id 
-          ? { ...msg, content: `${msg.personaId?.displayName || msg.personaId?.name || '用户'} 撤回了一条消息`, isRecalled: true }
+          ? { 
+              ...msg, 
+              content: `${msg.personaId?.displayName || msg.personaId?.name || '用户'} 撤回了一条消息`, 
+              isRecalled: true 
+            }
           : msg
       ));
     } catch (error: any) {

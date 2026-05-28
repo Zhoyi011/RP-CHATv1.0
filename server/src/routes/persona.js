@@ -445,13 +445,11 @@ router.post('/:personaId/post', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取角色动态列表
+// 获取角色动态列表（修复版）
 router.get('/:personaId/posts', authMiddleware, async (req, res) => {
   try {
     const { limit = 20, page = 1 } = req.query;
-    const persona = await Persona.findById(req.params.personaId)
-      .populate('posts.comments.userId', 'username avatar')
-      .populate('posts.likes', 'username');
+    const persona = await Persona.findById(req.params.personaId);
     
     if (!persona) {
       return res.status(404).json({ error: '角色不存在' });
