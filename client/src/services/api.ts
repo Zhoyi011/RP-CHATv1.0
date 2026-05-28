@@ -154,6 +154,7 @@ export interface Message {
   _id: string;
   content: string;
   isAction: boolean;
+  isPat?: boolean;
   createdAt: string;
   roomId: string | { _id: string; name: string };
   personaId: {

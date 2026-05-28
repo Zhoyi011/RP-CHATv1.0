@@ -486,15 +486,27 @@ const MessageList: React.FC<{
                 );
               }
               
-              if (msg.isAction) {
-                return (
-                  <div className="flex justify-center my-1">
-                    <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
-                      * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
-                    </span>
-                  </div>
-                );
-              }
+              // 拍一拍消息（独立显示，不重复添加名字）
+              if (msg.isPat) {
+  return (
+    <div className="flex justify-center my-1">
+      <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
+        {msg.content}
+      </span>
+    </div>
+  );
+}
+
+// 普通动作消息
+if (msg.isAction) {
+  return (
+    <div className="flex justify-center my-1">
+      <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
+        * {msg.personaId?.displayName || msg.personaId?.name} {msg.content} *
+      </span>
+    </div>
+  );
+}
               
               const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
               
