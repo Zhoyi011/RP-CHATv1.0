@@ -407,6 +407,9 @@ const io = require('socket.io')(server, {
   transports: ['websocket', 'polling']
 });
 
+// 🔥 关键：将 io 实例挂载到 app，供 pat.js 等路由使用
+app.set('io', io);
+
 const onlineUsers = new Map();
 const roomOnlineCount = new Map();
 const voiceRooms = new Map();

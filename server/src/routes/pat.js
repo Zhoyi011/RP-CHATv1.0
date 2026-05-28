@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Persona = require('../models/Persona');
 const Room = require('../models/Room');
+const Message = require('../models/Message');
 
 // 认证中间件
 const authMiddleware = (req, res, next) => {
@@ -47,6 +48,8 @@ router.post('/send', authMiddleware, async (req, res) => {
     const { roomId, targetPersonaId, actionId, customPattern } = req.body;
     const userId = req.userId;
     
+    console.log('拍一拍请求:', { roomId, targetPersonaId, actionId, customPattern, userId });
+    
     // 获取发送者角色
     const activePersona = await Persona.findOne({ userId, status: 'approved' });
     if (!activePersona) {
@@ -59,13 +62,13 @@ router.post('/send', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '目标角色不存在' });
     }
     
-    // 获取动作
+    // 获取动作和模式
     let action;
     let pattern;
     
     if (customPattern) {
       // 自定义模式
-      action = { name: '自定义', icon: '✨', id: 'custom' };
+      action = { id: 'custom', name: '自定义', icon: '✨' };
       pattern = customPattern;
     } else {
       action = PRESET_ACTIONS.find(a => a.id === actionId);
@@ -90,15 +93,16 @@ router.post('/send', authMiddleware, async (req, res) => {
       .replace(/{actor}/g, actorDisplay)
       .replace(/{target}/g, targetDisplay);
     
+    console.log('生成的消息:', message);
+    
     // 保存到数据库（作为特殊消息类型）
-    const Message = require('../models/Message');
     const patMessage = new Message({
       roomId,
       userId: activePersona._id,
       personaId: activePersona._id,
       content: message,
       isAction: true,
-      isPat: true,  // 标记为拍一拍消息
+      isPat: true,
       patData: {
         actionId: action.id,
         actionName: action.name,
@@ -111,24 +115,26 @@ router.post('/send', authMiddleware, async (req, res) => {
     
     await patMessage.save();
     
-    // 广播给房间所有人
+    // 获取 io 实例
     const io = req.app.get('io');
-    io.to(roomId).emit('new-message', {
-      _id: patMessage._id,
-      content: patMessage.content,
-      isAction: true,
-      isPat: true,
-      createdAt: patMessage.createdAt,
-      roomId,
-      personaId: {
-        _id: activePersona._id,
-        name: activePersona.name,
-        displayName: activePersona.displayName,
-        avatar: activePersona.avatar,
-        sameNameNumber: activePersona.sameNameNumber
-      },
-      userId: { _id: userId }
-    });
+    if (io) {
+      io.to(roomId).emit('new-message', {
+        _id: patMessage._id,
+        content: patMessage.content,
+        isAction: true,
+        isPat: true,
+        createdAt: patMessage.createdAt,
+        roomId,
+        personaId: {
+          _id: activePersona._id,
+          name: activePersona.name,
+          displayName: activePersona.displayName,
+          avatar: activePersona.avatar,
+          sameNameNumber: activePersona.sameNameNumber
+        },
+        userId: { _id: userId }
+      });
+    }
     
     res.json({
       success: true,
@@ -141,7 +147,7 @@ router.post('/send', authMiddleware, async (req, res) => {
     
   } catch (error) {
     console.error('发送拍一拍失败:', error);
-    res.status(500).json({ error: '发送失败' });
+    res.status(500).json({ error: '发送失败: ' + error.message });
   }
 });
 

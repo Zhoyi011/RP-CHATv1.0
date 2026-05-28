@@ -32,7 +32,7 @@ console.log('🔧 [ChatHome] 组件模块加载');
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
-// ========== 辅助函数：从 URL 中提取头像框文件名 ==========
+// ========== 辅助函数 ==========
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
@@ -102,13 +102,14 @@ const MessageBubble: React.FC<{
   onReply: (message: Message) => void;
 }> = ({ message, isSelf, isMobile, navigate, selectedPersona, onTranslate, translatingMsgId, onLongPress, onReply }) => {
   const urls = extractUrls(message.content);
-  const [showReplyButton, setShowReplyButton] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const dragRef = useRef<HTMLDivElement>(null);
   
-  // 拍一拍相关状态
+  // 拍一拍相关
   const [showPatPanel, setShowPatPanel] = useState(false);
   const [patTarget, setPatTarget] = useState<{ id: string; name: string } | null>(null);
+  const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDoubleClickRef = useRef(false);
   
   // 长按事件
   const longPressProps = useLongPress({
@@ -139,17 +140,61 @@ const MessageBubble: React.FC<{
     return getFrameNameFromUrl(frameUrl);
   };
 
-  // 处理双击头像（拍一拍）
-  const handleDoubleClick = () => {
-    if (message.isRecalled) return;
+  // 处理单击（进入详情页）
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (isDoubleClickRef.current) {
+      return;
+    }
+    
+    clickTimeoutRef.current = setTimeout(() => {
+      if (!isDoubleClickRef.current && message.personaId?._id) {
+        navigate(`/persona/${message.personaId._id}`);
+      }
+      clickTimeoutRef.current = null;
+    }, 250);
+  };
+
+  // 处理双击（拍一拍）
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // 清除单击的延迟执行
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    
+    // 标记为双击模式
+    isDoubleClickRef.current = true;
+    
+    if (message.isRecalled) {
+      setTimeout(() => {
+        isDoubleClickRef.current = false;
+      }, 300);
+      return;
+    }
+    
     const roomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
-    if (!roomId) return;
+    if (!roomId) {
+      setTimeout(() => {
+        isDoubleClickRef.current = false;
+      }, 300);
+      return;
+    }
     
     setPatTarget({
       id: message.personaId?._id || '',
       name: getSenderDisplayName()
     });
     setShowPatPanel(true);
+    
+    // 重置双击标记
+    setTimeout(() => {
+      isDoubleClickRef.current = false;
+    }, 500);
   };
 
   // 滑动回复处理
@@ -198,7 +243,6 @@ const MessageBubble: React.FC<{
     isSelf ? '-left-12' : '-right-12'
   }`;
 
-  // 获取当前房间ID
   const roomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
 
   return (
@@ -211,7 +255,7 @@ const MessageBubble: React.FC<{
             frameName={getFrameName()}
             size="sm"
             className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
-            onClick={() => { if (message.personaId?._id) navigate(`/persona/${message.personaId._id}`); }}
+            onClick={handleClick}
             onDoubleClick={handleDoubleClick}
           />
         )}
@@ -266,7 +310,7 @@ const MessageBubble: React.FC<{
               </div>
             )}
             
-            {/* 消息内容（支持翻译） */}
+            {/* 消息内容 */}
             <TranslatableMessage 
               content={message.content}
               isOwn={isSelf}
@@ -307,6 +351,7 @@ const MessageBubble: React.FC<{
             frameName={getFrameNameFromUrl(selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame)}
             size="sm"
             className="flex-shrink-0 cursor-pointer"
+            onClick={handleClick}
             onDoubleClick={handleDoubleClick}
           />
         )}
@@ -512,7 +557,6 @@ const ChatHome = () => {
   const [showAIChat, setShowAIChat] = useState(tabParam === 'ai');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
-  
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   
   const [showPersonaQuickSwitch, setShowPersonaQuickSwitch] = useState(false);
@@ -640,11 +684,7 @@ const ChatHome = () => {
       
       setMessages(prev => prev.map(msg => 
         msg._id === message._id 
-          ? { 
-              ...msg, 
-              content: `${msg.personaId?.displayName || msg.personaId?.name || '用户'} 撤回了一条消息`, 
-              isRecalled: true 
-            }
+          ? { ...msg, content: `${msg.personaId?.displayName || msg.personaId?.name || '用户'} 撤回了一条消息`, isRecalled: true }
           : msg
       ));
     } catch (error: any) {

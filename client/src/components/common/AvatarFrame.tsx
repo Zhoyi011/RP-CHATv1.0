@@ -1,4 +1,3 @@
-// client/src/components/common/AvatarFrame.tsx
 import React from 'react';
 
 interface Props {
@@ -6,13 +5,12 @@ interface Props {
   frameName?: string | null;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
-  onClick?: () => void;
-  onDoubleClick?: () => void;  // 👈 新增双击事件
-  // 手动调整参数（每个位置独立调整）
-  frameSize?: number;   // 头像框大小（像素）
-  avatarSize?: number;  // 头像大小（像素）
-  offsetX?: number;     // 水平偏移
-  offsetY?: number;     // 垂直偏移
+  onClick?: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
+  frameSize?: number;
+  avatarSize?: number;
+  offsetX?: number;
+  offsetY?: number;
 }
 
 const sizeMap = {
@@ -22,7 +20,6 @@ const sizeMap = {
   xl: 128,
 };
 
-// 每个头像框的独立调整参数
 const frameAdjustments: Record<string, Record<string, { frameSize: number; avatarSize: number; offsetX: number; offsetY: number }>> = {
   'chat-message-other': {
     'cat': { frameSize: 70, avatarSize: 40, offsetX: 0, offsetY: 0 },
@@ -52,7 +49,7 @@ const AvatarFrame: React.FC<Props> = ({
   size = 'md',
   className = '',
   onClick,
-  onDoubleClick,  // 👈 接收双击事件
+  onDoubleClick,
   frameSize: propFrameSize,
   avatarSize: propAvatarSize,
   offsetX: propOffsetX,
@@ -82,7 +79,7 @@ const AvatarFrame: React.FC<Props> = ({
         className={`rounded-full overflow-hidden ${className}`}
         style={{ width: containerSize, height: containerSize }}
         onClick={onClick}
-        onDoubleClick={onDoubleClick}  // 👈 添加双击
+        onDoubleClick={onDoubleClick}
       >
         <img src={avatarUrl || defaultAvatar} alt="头像" className="w-full h-full object-cover" />
       </div>
@@ -94,9 +91,8 @@ const AvatarFrame: React.FC<Props> = ({
       className={`relative ${className}`}
       style={{ width: containerSize, height: containerSize, overflow: 'visible' }}
       onClick={onClick}
-      onDoubleClick={onDoubleClick}  // 👈 添加双击
+      onDoubleClick={onDoubleClick}
     >
-      {/* 头像 */}
       <img
         src={avatarUrl || defaultAvatar}
         alt="头像"
@@ -110,7 +106,6 @@ const AvatarFrame: React.FC<Props> = ({
           zIndex: 1,
         }}
       />
-      {/* 头像框 */}
       <img
         src={frameUrl}
         alt="头像框"
