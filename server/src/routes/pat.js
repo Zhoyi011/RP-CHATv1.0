@@ -100,8 +100,8 @@ router.post('/send', authMiddleware, async (req, res) => {
       roomId,
       userId: activePersona._id,
       personaId: activePersona._id,
-      content: message,
-      isAction: true,
+      content: message, //已经包含了动作和目标的完整文本
+      isAction: false, 
       isPat: true,
       patData: {
         actionId: action.id,

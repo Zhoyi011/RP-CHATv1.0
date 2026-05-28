@@ -486,8 +486,8 @@ const MessageList: React.FC<{
                 );
               }
               
-              // 拍一拍消息（独立显示，不重复添加名字）
-              if (msg.isPat) {
+// ✅ 正确顺序：先检查 isPat
+if (msg.isPat) {
   return (
     <div className="flex justify-center my-1">
       <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full">
@@ -497,7 +497,7 @@ const MessageList: React.FC<{
   );
 }
 
-// 普通动作消息
+// 再检查 isAction
 if (msg.isAction) {
   return (
     <div className="flex justify-center my-1">
