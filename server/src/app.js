@@ -506,7 +506,15 @@ io.on('connection', (socket) => {
       let avatarFrameUrl = persona.equipped?.avatarFrame?.image || null;
       
       const Message = require('./models/Message');
-      const message = new Message({ roomId, userId: user._id, personaId, content: cleanContent, isAction: isAction || false, replyTo: replyToId || null });
+      const message = new Message({ 
+        roomId, 
+        userId: user._id, 
+        personaId, 
+        content: cleanContent, 
+        isAction: isAction || false, 
+        isPat: false,  // 普通消息不是拍一拍
+        replyTo: replyToId || null 
+      });
       await message.save();
       
       let replyToData = null;
@@ -514,16 +522,40 @@ io.on('connection', (socket) => {
         const replyToMessage = await Message.findById(replyToId);
         if (replyToMessage) {
           const replyPersona = await Persona.findById(replyToMessage.personaId);
-          replyToData = { _id: replyToMessage._id, content: replyToMessage.content, isRecalled: replyToMessage.isRecalled || false, isDeleted: replyToMessage.isDeleted || false, senderName: replyPersona ? (replyPersona.displayName || replyPersona.name) : '用户' };
+          replyToData = { 
+            _id: replyToMessage._id, 
+            content: replyToMessage.content, 
+            isRecalled: replyToMessage.isRecalled || false, 
+            isDeleted: replyToMessage.isDeleted || false, 
+            senderName: replyPersona ? (replyPersona.displayName || replyPersona.name) : '用户' 
+          };
         }
       }
       
+      // ✅ 修复：广播消息时包含 isPat、isRecalled、isDeleted 字段
       io.in(roomId).emit('new-message', {
-        _id: message._id, content: message.content, isAction: message.isAction, createdAt: message.createdAt, roomId, replyTo: replyToData, isRecalled: false, isDeleted: false,
-        personaId: { _id: persona._id, name: persona.name, displayName: persona.displayName, avatar: persona.avatar, sameNameNumber: persona.sameNameNumber, avatarFrame: avatarFrameUrl, equipped: { avatarFrame: avatarFrameUrl } },
+        _id: message._id,
+        content: message.content,
+        isAction: message.isAction,
+        isPat: message.isPat || false,
+        isRecalled: false,
+        isDeleted: false,
+        createdAt: message.createdAt,
+        roomId,
+        replyTo: replyToData,
+        personaId: {
+          _id: persona._id,
+          name: persona.name,
+          displayName: persona.displayName,
+          avatar: persona.avatar,
+          sameNameNumber: persona.sameNameNumber,
+          avatarFrame: avatarFrameUrl,
+          equipped: { avatarFrame: avatarFrameUrl }
+        },
         userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
       });
     } catch (error) {
+      console.error('发送消息失败:', error);
       socket.emit('error', { message: '发送消息失败' });
     }
   });
@@ -552,8 +584,14 @@ io.on('connection', (socket) => {
       
       const persona = await Persona.findById(message.personaId);
       const senderName = persona ? (persona.displayName || persona.name) : '用户';
-      io.in(roomId).emit('message-recalled', { messageId: message._id, recalledBy: userId, recalledByName: senderName, recalledAt: message.recalledAt });
+      io.in(roomId).emit('message-recalled', { 
+        messageId: message._id, 
+        recalledBy: userId, 
+        recalledByName: senderName, 
+        recalledAt: message.recalledAt 
+      });
     } catch (error) {
+      console.error('撤回消息失败:', error);
       socket.emit('error', { message: '撤回失败' });
     }
   });
@@ -579,8 +617,13 @@ io.on('connection', (socket) => {
       message.deletedAt = new Date();
       await message.save();
       
-      socket.emit('message-deleted', { messageId: message._id, deletedAt: message.deletedAt });
+      // 只通知删除者本人
+      socket.emit('message-deleted', { 
+        messageId: message._id, 
+        deletedAt: message.deletedAt 
+      });
     } catch (error) {
+      console.error('删除消息失败:', error);
       socket.emit('error', { message: '删除失败' });
     }
   });

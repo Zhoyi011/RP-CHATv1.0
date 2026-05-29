@@ -156,7 +156,7 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       });
       const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
       
-      // ✅ 修复：从 PersonaRoom 中查找群主（role === 'owner'）
+      // 从 PersonaRoom 中查找群主（role === 'owner'）
       let creatorName = '?';
       try {
         const ownerRecord = await PersonaRoom.findOne({ roomId: room._id, role: 'owner' })
@@ -201,7 +201,7 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         unreadCount,
         memberCount,
         onlineCount: 0,
-        creatorName,  // ✅ 修复后的群主名称
+        creatorName,
         createdAt: room.createdAt,
         lastMessage: formattedLastMessage
       };
@@ -327,7 +327,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取消息（支持回复和软删除过滤）==========
+// ========== 获取消息（支持回复、软删除过滤、拍一拍字段）==========
 router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -393,13 +393,16 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         avatarFrameUrl = persona.equipped.avatarFrame.image;
       }
       
+      // ✅ 修复：添加 isPat 字段到返回对象
       return {
         _id: msg._id,
         content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
-        isAction: msg.isAction,
+        isAction: msg.isAction || false,
+        isPat: msg.isPat || false,           // 关键修复：拍一拍标记
+        isRecalled: msg.isRecalled || false,
+        isDeleted: msg.isDeleted || false,
         createdAt: msg.createdAt,
         roomId: msg.roomId,
-        isRecalled: msg.isRecalled || false,
         replyTo: replyToData,
         personaId: persona ? {
           _id: persona._id,
@@ -450,12 +453,13 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
       personaId: persona._id,
       content,
       isAction: content.startsWith('/me ') || content.startsWith('/action '),
+      isPat: false,  // 普通消息不是拍一拍
       replyTo: replyToId || null
     });
     
     await message.save();
     
-    // ✅ 处理@提及
+    // 处理@提及
     const io = req.app.get('io');
     const mentionedUsers = await processMentions(content, roomId, persona._id, persona);
     
@@ -497,10 +501,12 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
         _id: message._id,
         content: message.content,
         isAction: message.isAction,
+        isPat: false,  // 普通消息不是拍一拍
+        isRecalled: false,
+        isDeleted: false,
         createdAt: message.createdAt,
         roomId: message.roomId,
         replyTo: replyToData,
-        isRecalled: false,
         personaId: {
           _id: persona._id,
           name: persona.name,
@@ -583,28 +589,20 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
     
-    // 验证房间是否存在
     const room = await Room.findById(roomId);
     if (!room) {
       return res.status(404).json({ error: '房间不存在' });
     }
     
-    // 获取所有 PersonaRoom 记录
     const personaRooms = await PersonaRoom.find({ roomId });
-    
-    // 收集所有 personaId
     const personaIds = personaRooms.map(pr => pr.personaId).filter(id => id);
-    
-    // 批量查询 Persona 信息
     const personas = await Persona.find({ _id: { $in: personaIds } });
     
-    // 创建映射以便快速查找
     const personaMap = new Map();
     personas.forEach(p => {
       personaMap.set(p._id.toString(), p);
     });
     
-    // 构建成员列表
     const members = personaRooms
       .filter(pr => pr.personaId && personaMap.has(pr.personaId.toString()))
       .map(pr => {

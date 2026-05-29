@@ -542,29 +542,25 @@ const MessageList: React.FC<{
                 );
               }
               
-              // 🔥 拍一拍消息 - 通过内容关键词判断
-                const patKeywords = ['拍了拍', '抱了抱', '亲了亲', '贴了贴', '戳了戳', '揉了揉', '摸了摸', '点了点', '推了推', '挠了挠'];
-                const isPatByContent = patKeywords.some(keyword => msg.content.includes(keyword));
-                const isPat = msg.isPat || (msg.isAction && isPatByContent);
-
-                if (isPat) {
-                  return (
-                    <motion.div 
-                      variants={patMessageVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="flex justify-center my-1"
-                    >
-                      <motion.span 
-                        whileHover={{ scale: 1.02 }}
-                        className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full cursor-default shadow-sm"
-                      >
-                        ✨ {msg.content} ✨
-                      </motion.span>
-                    </motion.div>
-                  );
-                }
+// ✅ 修复：直接使用后端保存的 isPat 字段判断拍一拍消息
+if (msg.isPat === true) {
+  return (
+    <motion.div 
+      variants={patMessageVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="flex justify-center my-1"
+    >
+      <motion.span 
+        whileHover={{ scale: 1.02 }}
+        className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full cursor-default shadow-sm"
+      >
+        ✨ {msg.content} ✨
+      </motion.span>
+    </motion.div>
+  );
+}
               
               // 普通动作消息
               if (msg.isAction) {
