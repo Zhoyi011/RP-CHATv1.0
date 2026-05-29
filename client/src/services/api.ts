@@ -1,8 +1,17 @@
 // API 基础配置
 import toast from 'react-hot-toast';
 
-// 🔥 Vercel 生产环境必须使用完整的 HTTPS URL
-const API_BASE = 'https://rp-chatv1-0.onrender.com/api';
+// 🔥 智能判断环境：生产环境使用相对路径（Vercel 代理），开发环境使用完整 URL
+const getApiBase = () => {
+  // 生产环境（Vercel）：使用相对路径 /api，通过 vercel.json 代理到 Render
+  if (import.meta.env.PROD) {
+    return '/api';
+  }
+  // 开发环境（localhost）：直接使用 Render 完整 URL
+  return 'https://rp-chatv1-0.onrender.com/api';
+};
+
+const API_BASE = getApiBase();
 
 const getToken = (): string | null => {
   return localStorage.getItem('token');
@@ -17,7 +26,7 @@ async function request<T>(
 ): Promise<T> {
   const token = getToken();
   
-  // 🔥 关键修复：为 GET 请求自动添加时间戳参数，彻底防止缓存
+  // 为 GET 请求添加时间戳参数，彻底防止缓存
   const method = options.method || 'GET';
   let finalEndpoint = endpoint;
   
@@ -35,8 +44,11 @@ async function request<T>(
     ...options.headers,
   };
 
+  const fullUrl = `${API_BASE}${finalEndpoint}`;
+  console.log('🔧 [API] 请求:', fullUrl);
+
   try {
-    const response = await fetch(`${API_BASE}${finalEndpoint}`, {
+    const response = await fetch(fullUrl, {
       ...options,
       headers,
       credentials: 'include',
@@ -70,7 +82,7 @@ async function request<T>(
     return data as T;
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      console.error('网络错误，请检查网络连接');
+      console.error('❌ [API] 网络错误:', error);
       toast.error('网络连接失败，请检查网络');
       throw new Error('网络连接失败');
     }
@@ -154,7 +166,6 @@ export interface Room {
   };
 }
 
-// ========== 回复消息类型 ==========
 export interface ReplyToInfo {
   _id: string;
   content: string;
@@ -162,7 +173,6 @@ export interface ReplyToInfo {
   isDeleted: boolean;
 }
 
-// ========== 消息类型 ==========
 export interface Message {
   _id: string;
   content: string;
@@ -190,7 +200,6 @@ export interface Message {
   replyTo?: ReplyToInfo | null;
 }
 
-// ========== Persona 类型 ==========
 export interface Persona {
   _id: string;
   name: string;
@@ -249,7 +258,6 @@ export interface ActivePersonaResponse {
   } | null;
 }
 
-// ========== 邀请码类型 ==========
 export interface InviteCode {
   _id: string;
   code: string;

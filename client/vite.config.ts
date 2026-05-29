@@ -8,8 +8,7 @@ export default defineConfig({
       '/api': {
         target: 'https://rp-chatv1-0.onrender.com',
         changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path
+        secure: false,
       }
     }
   }
