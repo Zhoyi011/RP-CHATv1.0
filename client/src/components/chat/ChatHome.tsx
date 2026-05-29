@@ -542,25 +542,25 @@ const MessageList: React.FC<{
                 );
               }
               
-// ✅ 修复：直接使用后端保存的 isPat 字段判断拍一拍消息
-if (msg.isPat === true) {
-  return (
-    <motion.div 
-      variants={patMessageVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-      className="flex justify-center my-1"
-    >
-      <motion.span 
-        whileHover={{ scale: 1.02 }}
-        className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full cursor-default shadow-sm"
-      >
-        ✨ {msg.content} ✨
-      </motion.span>
-    </motion.div>
-  );
-}
+              // ✅ 修复：直接使用后端保存的 isPat 字段判断拍一拍消息
+              if (msg.isPat === true) {
+                return (
+                  <motion.div 
+                    variants={patMessageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="flex justify-center my-1"
+                  >
+                    <motion.span 
+                      whileHover={{ scale: 1.02 }}
+                      className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1 rounded-full cursor-default shadow-sm"
+                    >
+                      ✨ {msg.content} ✨
+                    </motion.span>
+                  </motion.div>
+                );
+              }
               
               // 普通动作消息
               if (msg.isAction) {
@@ -641,6 +641,12 @@ const ChatHome = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+  
+  // ========== 消息分页相关状态 ==========
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [oldestMessageDate, setOldestMessageDate] = useState<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   
   const [showPersonaQuickSwitch, setShowPersonaQuickSwitch] = useState(false);
   const [personaSearchTerm, setPersonaSearchTerm] = useState('');
@@ -800,6 +806,135 @@ const ChatHome = () => {
     setReplyToMessage(null);
   }, []);
 
+  // ========== 消息分页加载函数 ==========
+  
+  // 加载初始消息（重置）
+  const loadInitialMessages = useCallback(async () => {
+    if (!selectedRoom || !selectedPersona || !user) return;
+    
+    console.log('📥 [loadInitialMessages] 开始加载初始消息', { roomId: selectedRoom._id });
+    
+    try {
+      // 加载最新 50 条消息
+      const data = await roomApi.getMessagesWithLimit(selectedRoom._id, 50);
+      console.log('📥 [loadInitialMessages] 收到响应', { count: data?.length || 0 });
+      
+      if (Array.isArray(data)) {
+        setMessages(data);
+        // 记录最早消息的时间戳，用于加载更多
+        if (data.length > 0) {
+          setOldestMessageDate(data[0].createdAt);
+          // 如果返回了 50 条，可能还有更多
+          setHasMoreMessages(data.length === 50);
+          console.log('📥 [loadInitialMessages] 设置状态', { 
+            oldestMessageDate: data[0].createdAt, 
+            hasMoreMessages: data.length === 50,
+            messageCount: data.length 
+          });
+        } else {
+          setHasMoreMessages(false);
+          console.log('📥 [loadInitialMessages] 消息为空');
+        }
+      }
+      socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
+    } catch (err) { 
+      console.error('❌ [loadInitialMessages] 加载消息失败:', err); 
+    }
+  }, [selectedRoom, selectedPersona, user]);
+
+  // 加载更多历史消息（上拉加载）
+  const loadMoreMessages = useCallback(async () => {
+    console.log('📥 [loadMoreMessages] 被调用', { 
+      selectedRoom: !!selectedRoom, 
+      isLoadingMore, 
+      hasMoreMessages, 
+      oldestMessageDate 
+    });
+    
+    if (!selectedRoom || isLoadingMore || !hasMoreMessages || !oldestMessageDate) {
+      console.log('❌ [loadMoreMessages] 条件不满足，跳过', {
+        hasRoom: !!selectedRoom,
+        isLoadingMore,
+        hasMoreMessages,
+        hasDate: !!oldestMessageDate
+      });
+      return;
+    }
+    
+    setIsLoadingMore(true);
+    console.log('📥 [loadMoreMessages] 开始加载更多', { before: oldestMessageDate });
+    
+    try {
+      // 使用 before 参数加载更早的消息
+      const data = await roomApi.getMessagesWithLimit(
+        selectedRoom._id, 
+        50, 
+        oldestMessageDate
+      );
+      
+      console.log('📥 [loadMoreMessages] 收到响应', { count: data?.length || 0 });
+      
+      if (Array.isArray(data) && data.length > 0) {
+        // 将旧消息追加到现有消息之前（避免顺序混乱）
+        setMessages(prev => {
+          const newMessages = [...data, ...prev];
+          console.log('📥 [loadMoreMessages] 消息已追加', { 
+            oldCount: prev.length, 
+            newCount: data.length, 
+            total: newMessages.length 
+          });
+          return newMessages;
+        });
+        // 更新最早消息的时间戳（取新加载消息的第一条）
+        setOldestMessageDate(data[0].createdAt);
+        // 如果返回数量少于请求数量，说明没有更多了
+        if (data.length < 50) {
+          setHasMoreMessages(false);
+          console.log('📥 [loadMoreMessages] 没有更多消息了');
+        }
+      } else {
+        setHasMoreMessages(false);
+        console.log('📥 [loadMoreMessages] 响应为空或无数据');
+      }
+    } catch (err) {
+      console.error('❌ [loadMoreMessages] 加载更多消息失败:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [selectedRoom, isLoadingMore, hasMoreMessages, oldestMessageDate]);
+
+  // 监听消息容器滚动，实现上拉加载更多
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      console.log('❌ [滚动监听] 消息容器未找到');
+      return;
+    }
+
+    console.log('✅ [滚动监听] 已绑定', { 
+      hasMoreMessages, 
+      isLoadingMore, 
+      oldestMessageDate 
+    });
+
+    const handleScroll = () => {
+      console.log('📜 [滚动] scrollTop:', container.scrollTop, 'hasMore:', hasMoreMessages, 'loading:', isLoadingMore);
+      
+      if (container.scrollTop <= 100 && hasMoreMessages && !isLoadingMore) {
+        console.log('🚀 [滚动] 触发加载更多');
+        loadMoreMessages();
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    console.log('✅ [滚动监听] 事件已添加');
+    
+    return () => {
+      console.log('🧹 [滚动监听] 已移除');
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [hasMoreMessages, isLoadingMore, loadMoreMessages]);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (!firebaseUser) { navigate('/'); return; }
@@ -954,19 +1089,22 @@ const ChatHome = () => {
     };
   }, [authChecked, user, selectedPersona, selectedRoom]);
 
+  // 使用分页加载替代原来的直接加载
   useEffect(() => {
     if (!selectedRoom || !selectedPersona || !user) return;
-    const loadMessages = async () => {
-      try {
-        const data = await roomApi.getMessages(selectedRoom._id);
-        if (Array.isArray(data)) {
-          setMessages(data);
-        }
-        socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
-      } catch (err) { console.error('加载消息失败:', err); }
+    
+    console.log('🔄 [ChatHome] 切换房间，重置分页状态', { roomId: selectedRoom._id });
+    
+    // 重置分页状态
+    setHasMoreMessages(true);
+    setIsLoadingMore(false);
+    setOldestMessageDate(null);
+    
+    loadInitialMessages();
+    
+    return () => { 
+      socketService.leaveRoom(); 
     };
-    loadMessages();
-    return () => { socketService.leaveRoom(); };
   }, [selectedRoom, selectedPersona, user]);
 
   const handleSelectRoom = useCallback(async (room: Room) => {
@@ -1258,7 +1396,11 @@ const ChatHome = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-inherit">
+        {/* 消息列表容器 - 添加 ref 用于滚动监听 */}
+        <div 
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-inherit"
+        >
           <MessageList 
             messages={messages} 
             user={user} 
@@ -1270,6 +1412,17 @@ const ChatHome = () => {
             onRecall={handleRecall}
             onDeleteSelf={handleDeleteSelf}
           />
+          {/* 加载更多提示 */}
+          {isLoadingMore && (
+            <div className="text-center py-2">
+              <span className="text-xs text-gray-400">加载更早的消息...</span>
+            </div>
+          )}
+          {!hasMoreMessages && messages.length > 0 && (
+            <div className="text-center py-2">
+              <span className="text-xs text-gray-400">✨ 已到底部 ✨</span>
+            </div>
+          )}
         </div>
 
         {replyToMessage && (

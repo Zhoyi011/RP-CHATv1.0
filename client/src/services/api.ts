@@ -1,7 +1,8 @@
 // API 基础配置
 import toast from 'react-hot-toast';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
+// 开发环境使用相对路径（通过 Vite 代理），生产环境使用完整地址
+const API_BASE = import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api');
 
 const getToken = (): string | null => {
   return localStorage.getItem('token');
@@ -16,14 +17,26 @@ async function request<T>(
 ): Promise<T> {
   const token = getToken();
   
+  // 🔥 关键修复：为 GET 请求自动添加时间戳参数，彻底防止缓存
+  const method = options.method || 'GET';
+  let finalEndpoint = endpoint;
+  
+  if (method === 'GET') {
+    const timestamp = Date.now();
+    const separator = endpoint.includes('?') ? '&' : '?';
+    finalEndpoint = `${endpoint}${separator}_t=${timestamp}`;
+  }
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
     ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
 
   try {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetch(`${API_BASE}${finalEndpoint}`, {
       ...options,
       headers,
       credentials: 'include',
@@ -163,7 +176,6 @@ export interface Message {
     displayName: string;
     avatar?: string;
     sameNameNumber?: number;
-    // ✅ 头像框字段
     avatarFrame?: string | null;
     equipped?: {
       avatarFrame?: string | null;
@@ -226,7 +238,6 @@ export interface Persona {
     avatarFrameUrl?: string;
     avatarFrameId?: string;
   };
-  // ✅ 头像框快捷字段
   avatarFrame?: string | null;
 }
 
@@ -573,30 +584,18 @@ export interface CheckRedeemCodeResponse {
 }
 
 export const redeemApi = {
-  /**
-   * 创建充值码（仅 super_admin/owner）
-   */
   create: (data: CreateRedeemCodeRequest): Promise<CreateRedeemCodeResponse> =>
     request('/redeem/create', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  /**
-   * 批量创建充值码（仅 super_admin/owner）
-   */
   batchCreate: (data: BatchCreateRedeemCodeRequest): Promise<BatchCreateRedeemCodeResponse> =>
     request('/redeem/batch-create', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  /**
-   * 获取充值码列表（仅 super_admin/owner）
-   * @param page 页码
-   * @param limit 每页数量
-   * @param filters 筛选条件 { isUsed?: boolean, isExpired?: boolean }
-   */
   getList: (page = 1, limit = 20, filters?: { isUsed?: boolean; isExpired?: boolean }): Promise<RedeemCodeListResponse> => {
     let url = `/redeem/list?page=${page}&limit=${limit}`;
     if (filters?.isUsed !== undefined) url += `&isUsed=${filters.isUsed}`;
@@ -604,66 +603,47 @@ export const redeemApi = {
     return request(url);
   },
 
-  /**
-   * 删除充值码（仅 super_admin/owner）
-   */
   delete: (codeId: string): Promise<{ success: boolean; message: string }> =>
     request(`/redeem/${codeId}`, {
       method: 'DELETE',
     }),
 
-  /**
-   * 使用充值码（普通用户）
-   */
   use: (code: string): Promise<UseRedeemCodeResponse> =>
     request('/redeem/use', {
       method: 'POST',
       body: JSON.stringify({ code }),
     }),
 
-  /**
-   * 获取当前用户的充值记录
-   */
   getHistory: (limit = 20): Promise<RedemptionHistoryResponse> =>
     request(`/redeem/history?limit=${limit}`),
 
-  /**
-   * 获取充值统计（仅 super_admin/owner）
-   */
   getStats: (): Promise<RedeemStatsResponse> =>
     request('/redeem/stats'),
 
-  /**
-   * 检查充值码有效性（不消耗）
-   */
   check: (code: string): Promise<CheckRedeemCodeResponse> =>
     request(`/redeem/check/${encodeURIComponent(code)}`),
 };
 
 // ========== 翻译 API ==========
 export const translateApi = {
-  // 简体转繁体
   s2t: (text: string): Promise<{ result: string }> =>
     request('/translate/s2t', {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
 
-  // 繁体转简体
   t2s: (text: string): Promise<{ result: string }> =>
     request('/translate/t2s', {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
 
-  // 智能简繁转换
   convert: (text: string): Promise<{ result: string }> =>
     request('/translate/convert', {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
 
-  // 多语言翻译
   lang: (text: string, targetLang: string): Promise<{ result: string; original: string; targetLang: string }> =>
     request('/translate/lang', {
       method: 'POST',

@@ -327,14 +327,21 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取消息（支持回复、软删除过滤、拍一拍字段）==========
+// ========== 获取消息（支持回复、软删除过滤、拍一拍字段、游标分页）==========
 router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const limit = parseInt(req.query.limit) || 100;
-    const before = req.query.before;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100); // 限制最大 100 条
+    const before = req.query.before; // 游标：获取比这个时间更早的消息
     
-    let query = Message.find({ roomId })
+    // 构建查询条件
+    let queryCondition = { roomId };
+    if (before) {
+      queryCondition.createdAt = { $lt: new Date(before) };
+    }
+    
+    // 🔥 关键修复：使用游标分页，不用 limit 限制总数
+    let messages = await Message.find(queryCondition)
       .populate({
         path: 'personaId',
         populate: {
@@ -344,28 +351,13 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         }
       })
       .populate('replyTo', 'content isRecalled isDeleted')
-      .sort({ createdAt: -1 })
-      .limit(limit);
+      .sort({ createdAt: -1 })  // 按时间倒序（最新的在前）
+      .limit(limit);            // 限制返回数量
     
-    if (before) {
-      const beforeDate = new Date(before);
-      query = Message.find({ roomId, createdAt: { $lt: beforeDate } })
-        .populate({
-          path: 'personaId',
-          populate: {
-            path: 'equipped.avatarFrame',
-            model: 'ShopItem',
-            select: 'image name'
-          }
-        })
-        .populate('replyTo', 'content isRecalled isDeleted')
-        .sort({ createdAt: -1 })
-        .limit(limit);
-    }
-    
-    let messages = await query.exec();
+    // 反转顺序（从旧到新，便于前端追加）
     messages = messages.reverse();
     
+    // 软删除过滤：过滤掉当前用户自己删除的消息
     const filteredMessages = messages.filter(msg => {
       if (msg.isDeleted && msg.deletedBy === req.userId) {
         return false;
@@ -373,6 +365,7 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       return true;
     });
     
+    // 构建返回数据
     const safeMessages = filteredMessages.map(msg => {
       let replyToData = null;
       if (msg.replyTo) {
@@ -393,12 +386,11 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         avatarFrameUrl = persona.equipped.avatarFrame.image;
       }
       
-      // ✅ 修复：添加 isPat 字段到返回对象
       return {
         _id: msg._id,
         content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
         isAction: msg.isAction || false,
-        isPat: msg.isPat || false,           // 关键修复：拍一拍标记
+        isPat: msg.isPat || false,
         isRecalled: msg.isRecalled || false,
         isDeleted: msg.isDeleted || false,
         createdAt: msg.createdAt,
