@@ -40,7 +40,6 @@ async function request<T>(
   console.log('🔧 [API] 请求:', fullUrl);
 
   try {
-    // 关键修复：移除 credentials: 'include'，避免 CORS 预检失败
     const response = await fetch(fullUrl, {
       ...options,
       headers,
@@ -379,8 +378,9 @@ export const roomApi = {
   getMessages: (roomId: string) =>
     request<Message[]>(`/room/${roomId}/messages`),
     
+  // 🔥 关键修复：返回类型改为 { messages: Message[]; hasMore: boolean }
   getMessagesWithLimit: (roomId: string, limit = 50, before?: string) =>
-    request<Message[]>(`/room/${roomId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
+    request<{ messages: Message[]; hasMore: boolean }>(`/room/${roomId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
     
   sendMessageWithReply: (roomId: string, content: string, personaId: string, replyToId?: string) =>
     request<{ success: boolean; message: any }>(`/room/${roomId}/messages`, {

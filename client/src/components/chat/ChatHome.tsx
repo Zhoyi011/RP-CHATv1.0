@@ -542,7 +542,7 @@ const MessageList: React.FC<{
                 );
               }
               
-              // ✅ 修复：直接使用后端保存的 isPat 字段判断拍一拍消息
+              // 拍一拍消息
               if (msg.isPat === true) {
                 return (
                   <motion.div 
@@ -562,7 +562,7 @@ const MessageList: React.FC<{
                 );
               }
               
-              // 普通动作消息
+              // 动作消息
               if (msg.isAction) {
                 return (
                   <motion.div 
@@ -642,7 +642,7 @@ const ChatHome = () => {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   
-  // ========== 消息分页相关状态 ==========
+  // 消息分页相关状态
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [oldestMessageDate, setOldestMessageDate] = useState<string | null>(null);
@@ -815,26 +815,29 @@ const ChatHome = () => {
     console.log('📥 [loadInitialMessages] 开始加载初始消息', { roomId: selectedRoom._id });
     
     try {
-      // 加载最新 50 条消息
-      const data = await roomApi.getMessagesWithLimit(selectedRoom._id, 50);
-      console.log('📥 [loadInitialMessages] 收到响应', { count: data?.length || 0 });
+      const response = await roomApi.getMessagesWithLimit(selectedRoom._id, 50);
+      console.log('📥 [loadInitialMessages] 收到响应', { 
+        messageCount: response.messages?.length || 0, 
+        hasMore: response.hasMore 
+      });
       
-      if (Array.isArray(data)) {
-        setMessages(data);
-        // 记录最早消息的时间戳，用于加载更多
-        if (data.length > 0) {
-          setOldestMessageDate(data[0].createdAt);
-          // 如果返回了 50 条，可能还有更多
-          setHasMoreMessages(data.length === 50);
+      if (response.messages && Array.isArray(response.messages)) {
+        setMessages(response.messages);
+        if (response.messages.length > 0) {
+          setOldestMessageDate(response.messages[0].createdAt);
+          setHasMoreMessages(response.hasMore);
           console.log('📥 [loadInitialMessages] 设置状态', { 
-            oldestMessageDate: data[0].createdAt, 
-            hasMoreMessages: data.length === 50,
-            messageCount: data.length 
+            oldestMessageDate: response.messages[0].createdAt, 
+            hasMoreMessages: response.hasMore,
+            messageCount: response.messages.length 
           });
         } else {
           setHasMoreMessages(false);
           console.log('📥 [loadInitialMessages] 消息为空');
         }
+      } else {
+        setHasMoreMessages(false);
+        console.log('📥 [loadInitialMessages] 响应格式错误');
       }
       socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
     } catch (err) { 
@@ -865,31 +868,26 @@ const ChatHome = () => {
     console.log('📥 [loadMoreMessages] 开始加载更多', { before: oldestMessageDate });
     
     try {
-      // 使用 before 参数加载更早的消息
-      const data = await roomApi.getMessagesWithLimit(
+      const response = await roomApi.getMessagesWithLimit(
         selectedRoom._id, 
         50, 
         oldestMessageDate
       );
       
-      console.log('📥 [loadMoreMessages] 收到响应', { count: data?.length || 0 });
+      console.log('📥 [loadMoreMessages] 收到响应', { 
+        messageCount: response.messages?.length || 0, 
+        hasMore: response.hasMore 
+      });
       
-      if (Array.isArray(data) && data.length > 0) {
-        // 将旧消息追加到现有消息之前（避免顺序混乱）
-        setMessages(prev => {
-          const newMessages = [...data, ...prev];
-          console.log('📥 [loadMoreMessages] 消息已追加', { 
-            oldCount: prev.length, 
-            newCount: data.length, 
-            total: newMessages.length 
-          });
-          return newMessages;
+      if (response.messages && response.messages.length > 0) {
+        setMessages(prev => [...response.messages, ...prev]);
+        setOldestMessageDate(response.messages[0].createdAt);
+        setHasMoreMessages(response.hasMore);
+        console.log('📥 [loadMoreMessages] 消息已追加', { 
+          newCount: response.messages.length,
+          hasMore: response.hasMore
         });
-        // 更新最早消息的时间戳（取新加载消息的第一条）
-        setOldestMessageDate(data[0].createdAt);
-        // 如果返回数量少于请求数量，说明没有更多了
-        if (data.length < 50) {
-          setHasMoreMessages(false);
+        if (response.messages.length < 50) {
           console.log('📥 [loadMoreMessages] 没有更多消息了');
         }
       } else {
