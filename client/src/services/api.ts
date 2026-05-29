@@ -1,8 +1,8 @@
 // API 基础配置
 import toast from 'react-hot-toast';
 
-// 开发环境使用相对路径（通过 Vite 代理），生产环境使用完整地址
-const API_BASE = import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api');
+// 🔥 Vercel 生产环境必须使用完整的 HTTPS URL
+const API_BASE = 'https://rp-chatv1-0.onrender.com/api';
 
 const getToken = (): string | null => {
   return localStorage.getItem('token');
