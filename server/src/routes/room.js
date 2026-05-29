@@ -327,12 +327,12 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取消息（支持回复、软删除过滤、拍一拍字段、游标分页）==========
+// ========== 🔥 修复后的获取消息接口 ==========
 router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 100); // 限制最大 100 条
-    const before = req.query.before; // 游标：获取比这个时间更早的消息
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const before = req.query.before;
     
     // 构建查询条件
     let queryCondition = { roomId };
@@ -340,8 +340,8 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       queryCondition.createdAt = { $lt: new Date(before) };
     }
     
-    // 🔥 关键修复：使用游标分页，不用 limit 限制总数
-    let messages = await Message.find(queryCondition)
+    // 关键修复：查询 limit+1 条，用于判断是否还有更多（基于原始数据，避免软删除影响分页判断）
+    let rawMessages = await Message.find(queryCondition)
       .populate({
         path: 'personaId',
         populate: {
@@ -351,14 +351,21 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         }
       })
       .populate('replyTo', 'content isRecalled isDeleted')
-      .sort({ createdAt: -1 })  // 按时间倒序（最新的在前）
-      .limit(limit);            // 限制返回数量
+      .sort({ createdAt: -1 })
+      .limit(limit + 1);
     
-    // 反转顺序（从旧到新，便于前端追加）
-    messages = messages.reverse();
+    // 判断是否有更多未过滤的消息
+    let hasMore = rawMessages.length > limit;
+    if (hasMore) {
+      // 去掉多查的那一条
+      rawMessages = rawMessages.slice(0, limit);
+    }
+    
+    // 反转顺序（从旧到新）
+    rawMessages = rawMessages.reverse();
     
     // 软删除过滤：过滤掉当前用户自己删除的消息
-    const filteredMessages = messages.filter(msg => {
+    const filteredMessages = rawMessages.filter(msg => {
       if (msg.isDeleted && msg.deletedBy === req.userId) {
         return false;
       }
@@ -411,7 +418,11 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       };
     });
     
-    res.json(safeMessages);
+    // 返回消息数组和 hasMore 标志
+    res.json({
+      messages: safeMessages,
+      hasMore: hasMore
+    });
   } catch (error) {
     console.error('获取消息失败:', error);
     res.status(500).json({ error: '服务器错误' });
@@ -445,7 +456,7 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
       personaId: persona._id,
       content,
       isAction: content.startsWith('/me ') || content.startsWith('/action '),
-      isPat: false,  // 普通消息不是拍一拍
+      isPat: false,
       replyTo: replyToId || null
     });
     
@@ -493,7 +504,7 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
         _id: message._id,
         content: message.content,
         isAction: message.isAction,
-        isPat: false,  // 普通消息不是拍一拍
+        isPat: false,
         isRecalled: false,
         isDeleted: false,
         createdAt: message.createdAt,
