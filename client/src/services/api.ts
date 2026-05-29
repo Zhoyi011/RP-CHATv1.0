@@ -1,17 +1,11 @@
 // API 基础配置
 import toast from 'react-hot-toast';
 
-// 🔥 智能判断环境：生产环境使用相对路径（Vercel 代理），开发环境使用完整 URL
-const getApiBase = () => {
-  // 生产环境（Vercel）：使用相对路径 /api，通过 vercel.json 代理到 Render
-  if (import.meta.env.PROD) {
-    return '/api';
-  }
-  // 开发环境（localhost）：直接使用 Render 完整 URL
-  return 'https://rp-chatv1-0.onrender.com/api';
-};
+// 可靠的环境检测：根据 hostname 判断
+const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_BASE = isDev ? 'https://rp-chatv1-0.onrender.com/api' : '/api';
 
-const API_BASE = getApiBase();
+console.log('🔧 [API] 环境:', isDev ? '开发环境' : '生产环境', 'API_BASE:', API_BASE);
 
 const getToken = (): string | null => {
   return localStorage.getItem('token');
@@ -38,8 +32,6 @@ async function request<T>(
   
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
     ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
@@ -48,10 +40,11 @@ async function request<T>(
   console.log('🔧 [API] 请求:', fullUrl);
 
   try {
+    // 关键修复：移除 credentials: 'include'，避免 CORS 预检失败
     const response = await fetch(fullUrl, {
       ...options,
       headers,
-      credentials: 'include',
+      mode: 'cors',
     });
 
     // 处理 401 未授权错误
@@ -81,8 +74,8 @@ async function request<T>(
 
     return data as T;
   } catch (error) {
+    console.error('❌ [API] 错误:', error);
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      console.error('❌ [API] 网络错误:', error);
       toast.error('网络连接失败，请检查网络');
       throw new Error('网络连接失败');
     }
