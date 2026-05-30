@@ -8,6 +8,10 @@ import DiamondBalance from '../diamond/DiamondBalance';
 import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 import AvatarFrame from '../common/AvatarFrame';
 import toast from 'react-hot-toast';
+import { AFKProvider } from '../../contexts/AFKContext';
+import { AFKStatus } from '../common/AFKStatus';
+import { ConnectionStatus } from '../common/ConnectionStatus';
+import { useAFK } from '../../contexts/AFKContext';
 
 interface Props {
   children: React.ReactNode;
@@ -28,9 +32,11 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   return null;
 };
 
-const DesktopLayout: React.FC<Props> = ({ children }) => {
+// 内部组件，用于使用 useAFK
+const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { enterAFKManually } = useAFK();
   const [userData, setUserData] = useState<User | null>(null);
   const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
@@ -279,6 +285,11 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* AFK 状态指示器 - 右上角 */}
+      <div className="fixed top-4 right-4 z-50">
+        <AFKStatus size="md" />
+      </div>
+
       {/* 侧边栏 */}
       <motion.aside 
         initial={false}
@@ -517,7 +528,7 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
 
       {/* 主内容区 */}
       <main className="flex-1 overflow-hidden flex flex-col">
-        {/* 顶部栏 - 美化版 */}
+        {/* 顶部栏 */}
         <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
             {/* 页面图标 */}
@@ -548,13 +559,21 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
             </div>
           </div>
           
-          {/* 右侧状态 */}
-          <div className="flex items-center gap-4">
-            {/* 在线状态指示器 */}
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 dark:bg-green-900/20">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs text-green-600 dark:text-green-400" style={{ fontFamily: "'MaokenZhuyuanTi', sans-serif" }}>在线</span>
-            </div>
+          {/* 🔥 右侧状态 - 添加手动 AFK 按钮 */}
+          <div className="flex items-center gap-2">
+            {/* 手动进入隐私保护模式按钮 */}
+            <button
+              onClick={() => enterAFKManually()}
+              className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-110 active:scale-90"
+              title="立即进入隐私保护模式"
+            >
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </button>
+
+            {/* 连接状态指示器 */}
+            <ConnectionStatus showText={true} />
             
             {/* 钻石余额 */}
             <DiamondBalance size="sm" />
@@ -566,6 +585,17 @@ const DesktopLayout: React.FC<Props> = ({ children }) => {
         </div>
       </main>
     </div>
+  );
+};
+
+// 外层组件，提供 AFKProvider
+const DesktopLayout: React.FC<Props> = ({ children }) => {
+  return (
+    <AFKProvider>
+      <DesktopLayoutContent>
+        {children}
+      </DesktopLayoutContent>
+    </AFKProvider>
   );
 };
 

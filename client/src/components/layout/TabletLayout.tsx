@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { authApi, type User } from '../../services/api';
 import DiamondBalance from '../diamond/DiamondBalance';
+import { AFKProvider } from '../../contexts/AFKContext';
+import { AFKStatus } from '../common/AFKStatus';
+import { ConnectionStatus } from '../common/ConnectionStatus';
 
 interface Props {
   children: React.ReactNode;
@@ -158,168 +162,178 @@ const TabletLayout: React.FC<Props> = ({ children }) => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
-      {/* 顶部导航栏 */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
-          <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-            RP Chat
-          </h1>
+    <AFKProvider>
+      <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
+        {/* AFK 状态指示器 - 右上角 */}
+        <div className="fixed top-4 right-4 z-50">
+          <AFKStatus size="md" />
         </div>
 
-        <div className="flex items-center gap-2">
-          <DiamondBalance size="sm" />
-          
-          <button
-            onClick={() => navigate('/search')}
-            className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </button>
-
-          <div className="relative">
+        {/* 顶部导航栏 */}
+        <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="transition-all duration-200 hover:scale-110 active:scale-90"
+              className="p-2 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
             >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
-              </div>
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md animate-pulse">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 遮罩层 */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-20 transition-opacity animate-in fade-in duration-200" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* 侧边栏抽屉 */}
-      <div
-        ref={sidebarRef}
-        className={`fixed left-0 top-0 bottom-0 w-72 bg-white shadow-2xl z-30 transform transition-transform duration-300 ease-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="flex flex-col h-full">
-          {/* 侧边栏头部 */}
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <img src="/favicon.svg" alt="Logo" className="w-12 h-12" />
-              <div>
-                <h2 className="text-lg font-bold text-gray-800">RP Chat</h2>
-                <p className="text-xs text-gray-400">角色扮演聊天室</p>
-              </div>
-            </div>
+            <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
+            <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+              RP Chat
+            </h1>
           </div>
 
-          {/* 当前角色信息 */}
-          <div className="p-4 mx-4 my-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-800 truncate">
-                  {currentPersona?.displayName || currentPersona?.name || '未选择角色'}
-                </p>
-                <p className="text-xs text-gray-500">当前使用的角色</p>
-              </div>
-            </div>
-          </div>
+          <div className="flex items-center gap-2">
+            {/* 连接状态指示器（在线/挂机/离线/异常）- 平板显示文字 */}
+            <ConnectionStatus showText={true} />
+            
+            <DiamondBalance size="sm" />
+            
+            <button
+              onClick={() => navigate('/search')}
+              className="p-2 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
 
-          {/* 导航菜单 */}
-          <nav className="flex-1 px-4 space-y-1">
-            {navItems.map((item) => (
+            <div className="relative">
               <button
-                key={item.path}
-                onClick={() => handleNavigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
-                  isActive(item.path)
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
-                }`}
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="transition-all duration-200 hover:scale-110 active:scale-90"
               >
-                {item.icon}
-                <span className="font-medium">{item.name}</span>
-                {item.name === '聊天' && unreadCount > 0 && !isActive(item.path) && (
-                  <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                  {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
+                </div>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center shadow-md animate-pulse">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </button>
-            ))}
-          </nav>
-
-          {/* 底部区域 */}
-          <div className="p-4 border-t border-gray-100 space-y-2">
-            <button
-              onClick={() => handleNavigate('/profile')}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>🎭</span>
-              <span>角色主页</span>
-            </button>
-
-            <button
-              onClick={() => handleNavigate('/persona')}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>🔄</span>
-              <span>切换角色</span>
-            </button>
-
-            <button
-              onClick={() => handleNavigate('/settings')}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>⚙️</span>
-              <span>账号设置</span>
-            </button>
-
-            <button
-              onClick={() => handleNavigate('/changelog')}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>📋</span>
-              <span>更新日志</span>
-            </button>
-
-            <div className="border-t border-gray-100 my-1"></div>
-
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <span>🚪</span>
-              <span>退出登录</span>
-            </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* 主内容区 */}
-      <div className="flex-1 overflow-y-auto">
-        {children}
+        {/* 遮罩层 */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 bg-black/40 z-20 transition-opacity animate-in fade-in duration-200" onClick={() => setSidebarOpen(false)} />
+        )}
+
+        {/* 侧边栏抽屉 */}
+        <div
+          ref={sidebarRef}
+          className={`fixed left-0 top-0 bottom-0 w-72 bg-white shadow-2xl z-30 transform transition-transform duration-300 ease-out ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="flex flex-col h-full">
+            {/* 侧边栏头部 */}
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <img src="/favicon.svg" alt="Logo" className="w-12 h-12" />
+                <div>
+                  <h2 className="text-lg font-bold text-gray-800">RP Chat</h2>
+                  <p className="text-xs text-gray-400">角色扮演聊天室</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 当前角色信息 */}
+            <div className="p-4 mx-4 my-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                  {currentPersona?.name?.charAt(0).toUpperCase() || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 truncate">
+                    {currentPersona?.displayName || currentPersona?.name || '未选择角色'}
+                  </p>
+                  <p className="text-xs text-gray-500">当前使用的角色</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 导航菜单 */}
+            <nav className="flex-1 px-4 space-y-1">
+              {navItems.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => handleNavigate(item.path)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                    isActive(item.path)
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                  }`}
+                >
+                  {item.icon}
+                  <span className="font-medium">{item.name}</span>
+                  {item.name === '聊天' && unreadCount > 0 && !isActive(item.path) && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            {/* 底部区域 */}
+            <div className="p-4 border-t border-gray-100 space-y-2">
+              <button
+                onClick={() => handleNavigate('/profile')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>🎭</span>
+                <span>角色主页</span>
+              </button>
+
+              <button
+                onClick={() => handleNavigate('/persona')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>🔄</span>
+                <span>切换角色</span>
+              </button>
+
+              <button
+                onClick={() => handleNavigate('/settings')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>⚙️</span>
+                <span>账号设置</span>
+              </button>
+
+              <button
+                onClick={() => handleNavigate('/changelog')}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>📋</span>
+                <span>更新日志</span>
+              </button>
+
+              <div className="border-t border-gray-100 my-1"></div>
+
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>🚪</span>
+                <span>退出登录</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 主内容区 */}
+        <div className="flex-1 overflow-y-auto">
+          {children}
+        </div>
       </div>
-    </div>
+    </AFKProvider>
   );
 };
 

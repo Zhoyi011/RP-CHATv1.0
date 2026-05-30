@@ -7,6 +7,7 @@ import { authApi, type User, type UserSettings, adminApi } from '../../services/
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAFK } from '../../contexts/AFKContext';
 import NotificationSettings from '../common/NotificationSettings';
 import CreateRedeemCode from '../admin/CreateRedeemCode';
 import MaintenanceScheduler from '../admin/MaintenanceScheduler';
@@ -78,6 +79,15 @@ const Settings: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin, isOwner } = usePermissions();
   const { theme: currentTheme, setTheme: setCurrentTheme, toggleTheme } = useTheme();
+  const { 
+    setCustomTimeout, 
+    isAFK, 
+    afkDuration, 
+    setAFKPassword, 
+    afkPassword, 
+    afkPasswordEnabled, 
+    setAFKPasswordEnabled 
+  } = useAFK();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'account' | 'preferences' | 'admin'>('account');
@@ -96,6 +106,11 @@ const Settings: React.FC = () => {
     defaultTranslate: 'off'
   });
   const [saving, setSaving] = useState(false);
+
+  // AFK 设置
+  const [afkTimeout, setAfkTimeout] = useState(5);
+  const [localAfkPassword, setLocalAfkPassword] = useState('');
+  const [localAfkPasswordEnabled, setLocalAfkPasswordEnabled] = useState(false);
 
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
   const [creatingInvite, setCreatingInvite] = useState(false);
@@ -180,6 +195,18 @@ const Settings: React.FC = () => {
       loadExemptSetting();
     }
   }, [isAdmin, isOwner, isSuperAdmin]);
+
+  // 加载 AFK 设置
+  useEffect(() => {
+    const savedAFKTimeout = localStorage.getItem('afkTimeout');
+    if (savedAFKTimeout) {
+      const timeout = parseInt(savedAFKTimeout, 10);
+      setAfkTimeout(timeout);
+      setCustomTimeout(timeout * 60);
+    }
+    setLocalAfkPassword(afkPassword);
+    setLocalAfkPasswordEnabled(afkPasswordEnabled);
+  }, [setCustomTimeout, afkPassword, afkPasswordEnabled]);
 
   const loadUserData = async () => {
     try {
@@ -379,6 +406,26 @@ const Settings: React.FC = () => {
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
     setCurrentTheme(newTheme);
     setSettings({ ...settings, theme: newTheme });
+  };
+
+  const handleAFKTimeoutChange = (minutes: number) => {
+    setAfkTimeout(minutes);
+    setCustomTimeout(minutes * 60);
+    localStorage.setItem('afkTimeout', minutes.toString());
+    toast.success(`AFK 超时已设为 ${minutes} 分钟`);
+  };
+
+  const handleAFKPasswordChange = (password: string) => {
+    setLocalAfkPassword(password);
+    setAFKPassword(password);
+    toast.success('AFK 解锁密码已保存');
+  };
+
+  const handleAFKPasswordEnabledChange = () => {
+    const newValue = !localAfkPasswordEnabled;
+    setLocalAfkPasswordEnabled(newValue);
+    setAFKPasswordEnabled(newValue);
+    toast.success(newValue ? 'AFK 密码保护已开启' : 'AFK 密码保护已关闭');
   };
 
   const handleCreateInviteCode = async () => {
@@ -679,104 +726,166 @@ const Settings: React.FC = () => {
           )}
 
           {/* 偏好设置 */}
-{activeTab === 'preferences' && (
-  <motion.div
-    key="preferences"
-    initial="hidden"
-    animate="visible"
-    exit="exit"
-    variants={cardVariants}
-    className="space-y-6"
-  >
-    <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
-      <div className="space-y-4">
-        {/* 深色模式 */}
-        <div className="flex justify-between items-center">
-          <span className="text-gray-700 dark:text-gray-300">🌙 深色模式</span>
-          <button onClick={handleThemeToggle} className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-            <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${currentTheme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
-        </div>
-        
-        {/* 消息通知 */}
-        <div className="flex justify-between items-center">
-          <span className="text-gray-700 dark:text-gray-300">🔔 消息通知</span>
-          <button onClick={() => setSettings({ ...settings, notifications: !settings.notifications })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-            <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
-        </div>
-        
-        {/* 音效 */}
-        <div className="flex justify-between items-center">
-          <span className="text-gray-700 dark:text-gray-300">🎵 音效</span>
-          <button onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-            <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-          </button>
-        </div>
-        
-        {/* 简繁转换默认 */}
-        <div className="flex justify-between items-center">
-          <span className="text-gray-700 dark:text-gray-300">🌐 默认翻译</span>
-          <select
-            value={settings.defaultTranslate}
-            onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
-            className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          >
-            <option value="off">不翻译</option>
-            <option value="simplified">转为简体</option>
-            <option value="traditional">转为繁体</option>
-          </select>
-        </div>
+          {activeTab === 'preferences' && (
+            <motion.div
+              key="preferences"
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              variants={cardVariants}
+              className="space-y-6"
+            >
+              <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">偏好设置</h2>
+                <div className="space-y-4">
+                  {/* 深色模式 */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 dark:text-gray-300">🌙 深色模式</span>
+                    <button onClick={handleThemeToggle} className={`w-12 h-6 rounded-full transition-all duration-200 ${currentTheme === 'dark' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${currentTheme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  
+                  {/* 消息通知 */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 dark:text-gray-300">🔔 消息通知</span>
+                    <button onClick={() => setSettings({ ...settings, notifications: !settings.notifications })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.notifications ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  
+                  {/* 音效 */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 dark:text-gray-300">🎵 音效</span>
+                    <button onClick={() => setSettings({ ...settings, soundEnabled: !settings.soundEnabled })} className={`w-12 h-6 rounded-full transition-all duration-200 ${settings.soundEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${settings.soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  
+                  {/* 简繁转换默认 */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 dark:text-gray-300">🌐 默认翻译</span>
+                    <select
+                      value={settings.defaultTranslate}
+                      onChange={(e) => setSettings({ ...settings, defaultTranslate: e.target.value as 'off' | 'simplified' | 'traditional' })}
+                      className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                      <option value="off">不翻译</option>
+                      <option value="simplified">转为简体</option>
+                      <option value="traditional">转为繁体</option>
+                    </select>
+                  </div>
 
-        {/* 👇 新增：翻译目标语言（中英/多语言翻译） */}
-        <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
-          <div>
-            <span className="text-gray-700 dark:text-gray-300">🌍 消息翻译</span>
-            <p className="text-xs text-gray-400">将外文消息翻译成此语言</p>
-          </div>
-          <select
-            value={localStorage.getItem('translateTargetLang') || 'zh'}
-            onChange={(e) => {
-              const lang = e.target.value;
-              localStorage.setItem('translateTargetLang', lang);
-              const langNames: Record<string, string> = {
-                'zh': '简体中文',
-                'zh-TW': '繁體中文',
-                'en': 'English',
-                'ja': '日本語',
-                'ko': '한국어',
-                'fr': 'Français',
-                'de': 'Deutsch',
-                'es': 'Español'
-              };
-              toast.success(`翻译语言已切换为 ${langNames[lang] || lang}`);
-            }}
-            className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          >
-            <option value="zh">简体中文</option>
-            <option value="zh-TW">繁體中文</option>
-            <option value="en">English</option>
-            <option value="ja">日本語</option>
-            <option value="ko">한국어</option>
-            <option value="fr">Français</option>
-            <option value="de">Deutsch</option>
-            <option value="es">Español</option>
-          </select>
-        </div>
-      </div>
-      
-      <button onClick={handleSaveSettings} disabled={saving} className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md">
-        {saving ? '保存中...' : '保存设置'}
-      </button>
-    </motion.div>
+                  {/* 翻译目标语言 */}
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div>
+                      <span className="text-gray-700 dark:text-gray-300">🌍 消息翻译</span>
+                      <p className="text-xs text-gray-400">将外文消息翻译成此语言</p>
+                    </div>
+                    <select
+                      value={localStorage.getItem('translateTargetLang') || 'zh'}
+                      onChange={(e) => {
+                        const lang = e.target.value;
+                        localStorage.setItem('translateTargetLang', lang);
+                        const langNames: Record<string, string> = {
+                          'zh': '简体中文',
+                          'zh-TW': '繁體中文',
+                          'en': 'English',
+                          'ja': '日本語',
+                          'ko': '한국어',
+                          'fr': 'Français',
+                          'de': 'Deutsch',
+                          'es': 'Español'
+                        };
+                        toast.success(`翻译语言已切换为 ${langNames[lang] || lang}`);
+                      }}
+                      className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                      <option value="zh">简体中文</option>
+                      <option value="zh-TW">繁體中文</option>
+                      <option value="en">English</option>
+                      <option value="ja">日本語</option>
+                      <option value="ko">한국어</option>
+                      <option value="fr">Français</option>
+                      <option value="de">Deutsch</option>
+                      <option value="es">Español</option>
+                    </select>
+                  </div>
 
-    <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🔔 通知设置</h2>
-      <NotificationSettings />
-    </motion.div>
-  </motion.div>
-)}
+                  {/* AFK 超时设置 */}
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div>
+                      <span className="text-gray-700 dark:text-gray-300">😴 离开状态 (AFK)</span>
+                      <p className="text-xs text-gray-400">无操作后自动进入挂机模式</p>
+                    </div>
+                    <select
+                      value={afkTimeout}
+                      onChange={(e) => handleAFKTimeoutChange(Number(e.target.value))}
+                      className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                      <option value={1}>1 分钟</option>
+                      <option value={3}>3 分钟</option>
+                      <option value={5}>5 分钟</option>
+                      <option value={10}>10 分钟</option>
+                      <option value={15}>15 分钟</option>
+                      <option value={30}>30 分钟</option>
+                      <option value={60}>60 分钟</option>
+                    </select>
+                  </div>
+
+                  {/* 🔐 AFK 密码保护开关 */}
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
+                    <div>
+                      <span className="text-gray-700 dark:text-gray-300">🔐 AFK 密码保护</span>
+                      <p className="text-xs text-gray-400">开启后需要输入密码才能退出挂机模式</p>
+                    </div>
+                    <button
+                      onClick={handleAFKPasswordEnabledChange}
+                      className={`w-12 h-6 rounded-full transition-all duration-200 ${localAfkPasswordEnabled ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${localAfkPasswordEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* 🔑 AFK 解锁密码（仅在开启密码保护时显示） */}
+                  {localAfkPasswordEnabled && (
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-gray-700 dark:text-gray-300">🔑 解锁密码</span>
+                        <p className="text-xs text-gray-400">设置解锁密码，默认 1234</p>
+                      </div>
+                      <input
+                        type="password"
+                        value={localAfkPassword}
+                        onChange={(e) => handleAFKPasswordChange(e.target.value)}
+                        placeholder="默认: 1234"
+                        className="px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white w-32"
+                      />
+                    </div>
+                  )}
+
+                  {/* 当前 AFK 状态显示 */}
+                  {isAFK && (
+                    <div className="mt-2 p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                      <p className="text-sm text-orange-600 dark:text-orange-400 flex items-center gap-2">
+                        <span>🔴</span>
+                        当前处于挂机模式 (已持续 {Math.floor(afkDuration / 60)} 分钟 {afkDuration % 60} 秒)
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <button onClick={handleSaveSettings} disabled={saving} className="mt-4 w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-2 rounded-xl font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 shadow-md">
+                  {saving ? '保存中...' : '保存设置'}
+                </button>
+              </motion.div>
+
+              <motion.div variants={itemVariants} className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6">
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🔔 通知设置</h2>
+                <NotificationSettings />
+              </motion.div>
+            </motion.div>
+          )}
 
           {/* 管理面板 */}
           {(isAdmin || isOwner) && activeTab === 'admin' && (

@@ -2,6 +2,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { AFKProvider } from './contexts/AFKContext';
+import { AFKScreen } from './components/common/AFKScreen';
 import toast, { Toaster } from 'react-hot-toast';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
@@ -203,16 +205,16 @@ function AppContent() {
   }
 
   return (
-    <>
-      {/* ========== Toaster 全局配置（一劳永逸）========== */}
+    <AFKScreen>
+      {/* Toaster 全局配置 */}
       <Toaster 
         position="top-center"
         reverseOrder={false}
         gutter={8}
         toastOptions={{
-          duration: 3000,           // 默认 3 秒自动消失
+          duration: 3000,
           success: {
-            duration: 2000,         // 成功提示 2 秒
+            duration: 2000,
             icon: '✅',
             style: {
               background: '#10b981',
@@ -220,7 +222,7 @@ function AppContent() {
             },
           },
           error: {
-            duration: 3000,         // 错误提示 3 秒
+            duration: 3000,
             icon: '❌',
             style: {
               background: '#ef4444',
@@ -228,7 +230,7 @@ function AppContent() {
             },
           },
           loading: {
-            duration: Infinity,      // 加载提示不自动消失
+            duration: Infinity,
             icon: '⏳',
           },
           style: {
@@ -241,7 +243,6 @@ function AppContent() {
           },
         }}
       />
-      {/* ============================================= */}
       
       <Routes>
         <Route path="/" element={<Login />} />
@@ -355,16 +356,18 @@ function AppContent() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </AFKScreen>
   );
 }
 
 function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <AFKProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AFKProvider>
     </ThemeProvider>
   );
 }

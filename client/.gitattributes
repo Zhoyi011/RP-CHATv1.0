@@ -1,0 +1,2 @@
+public/wallpapers/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
+public/wallpapers/**/*.webm filter=lfs diff=lfs merge=lfs -text
