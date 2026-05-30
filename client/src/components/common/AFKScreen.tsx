@@ -109,7 +109,6 @@ const overlayVariants: Variants = {
   }
 };
 
-// 脉冲光环动画
 const pulseRingVariants: Variants = {
   animate: {
     scale: [1, 1.2, 1],
@@ -127,7 +126,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   const { isMobile, isTablet } = useResponsive();
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
-  const [showUnlock, setShowUnlock] = useState(false);
   const [showUI, setShowUI] = useState(false);
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [lockIconRotate, setLockIconRotate] = useState(false);
@@ -144,9 +142,8 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   const activeLayerRef = useRef<'A' | 'B'>('A');
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const healthCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastCurrentTimeRef = useRef<number>(0);
   const retryCountRef = useRef<number>(0);
+  const lastCurrentTimeRef = useRef<number>(0);
 
   // 监听来自 DraggableAFKStatus 的事件
   useEffect(() => {
@@ -154,7 +151,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       console.log('📱 显示 AFK UI');
       setShowUI(true);
       setShowPasswordField(false);
-      setShowUnlock(false);
       setPassword('');
       setError(false);
       setLockIconRotate(false);
@@ -163,7 +159,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     const handleHideUI = () => {
       console.log('📱 隐藏 AFK UI');
       setShowUI(false);
-      setShowUnlock(false);
       setShowPasswordField(false);
       setPassword('');
       setError(false);
@@ -176,13 +171,11 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
         console.log('📱 切换 AFK UI:', newValue);
         if (newValue) {
           setShowPasswordField(false);
-          setShowUnlock(false);
           setPassword('');
           setError(false);
           setLockIconRotate(false);
           window.dispatchEvent(new CustomEvent('afkUIShown'));
         } else {
-          setShowUnlock(false);
           setShowPasswordField(false);
           setPassword('');
           setError(false);
@@ -208,11 +201,11 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   useEffect(() => {
     if (!isAFK) {
       setShowUI(false);
-      setShowUnlock(false);
       setShowPasswordField(false);
       setPassword('');
       setError(false);
       setLockIconRotate(false);
+      retryCountRef.current = 0;
     }
   }, [isAFK]);
 
@@ -220,14 +213,14 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     return layer === 'A' ? videoASrc.current : videoBSrc.current;
   }, []);
 
-  // 🔥 强制播放视频（带重试和稳定性保障）
+  // 强制播放视频（带重试和稳定性保障）
   const forcePlayVideo = useCallback((video: HTMLVideoElement, retry = 0) => {
     if (!video) return;
     
     // 检查视频是否有效
     if (!video.src || video.src === '' || video.src === window.location.href) {
-      if (retry < 5) {
-        console.log(`🎬 视频源无效，重试 ${retry + 1}/5`);
+      if (retry < 3) {
+        console.log(`🎬 视频源无效，重试 ${retry + 1}/3`);
         setTimeout(() => forcePlayVideo(video, retry + 1), 300);
       }
       return;
@@ -243,10 +236,9 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
             retryCountRef.current = 0;
           })
           .catch((e: Error) => {
-            console.log(`🎬 播放失败 (${retry + 1}/5):`, e.message);
-            if (retry < 5) {
+            console.log(`🎬 播放失败 (${retry + 1}/3):`, e.message);
+            if (retry < 3) {
               setTimeout(() => {
-                // 重新加载视频
                 video.load();
                 setTimeout(() => forcePlayVideo(video, retry + 1), 200);
               }, 500);
@@ -255,11 +247,9 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       }
     };
     
-    // 如果视频已经 ready，立即播放
     if (video.readyState >= 2) {
       tryPlay();
     } else {
-      // 等待视频加载
       const handleCanPlay = () => {
         video.removeEventListener('canplay', handleCanPlay);
         tryPlay();
@@ -267,7 +257,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       video.addEventListener('canplay', handleCanPlay);
       setTimeout(() => {
         video.removeEventListener('canplay', handleCanPlay);
-        if (retry < 5) {
+        if (retry < 3) {
           forcePlayVideo(video, retry + 1);
         }
       }, 2000);
@@ -343,35 +333,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     }, 500);
   }, [getVideoByLayer, isTransitioning, performSmoothTransition]);
 
-  // 🔥 视频健康检查（检测卡住或暂停）
-  const startHealthCheck = useCallback(() => {
-    if (healthCheckRef.current) clearInterval(healthCheckRef.current);
-    healthCheckRef.current = setInterval(() => {
-      const currentVideo = getVideoByLayer(activeLayerRef.current);
-      if (!currentVideo || !isAFK) return;
-      
-      // 检查视频是否卡住（currentTime 2秒没变化）
-      if (!currentVideo.paused && !currentVideo.ended) {
-        if (lastCurrentTimeRef.current === currentVideo.currentTime && currentVideo.currentTime > 0) {
-          console.log('⚠️ 视频卡住了，尝试恢复播放');
-          forcePlayVideo(currentVideo);
-        }
-        lastCurrentTimeRef.current = currentVideo.currentTime;
-      } else if (currentVideo.paused && !currentVideo.ended && isAFK) {
-        // 视频意外暂停，尝试恢复
-        console.log('⚠️ 视频意外暂停，尝试恢复播放');
-        forcePlayVideo(currentVideo);
-      }
-    }, 2000);
-  }, [getVideoByLayer, forcePlayVideo, isAFK]);
-
-  const stopHealthCheck = useCallback(() => {
-    if (healthCheckRef.current) {
-      clearInterval(healthCheckRef.current);
-      healthCheckRef.current = null;
-    }
-  }, []);
-
   const stopProgressCheck = useCallback(() => {
     if (progressCheckRef.current) {
       clearInterval(progressCheckRef.current);
@@ -407,16 +368,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     };
   }, [getVideoByLayer, isTransitioning, performSmoothTransition, startProgressCheck, stopProgressCheck]);
 
-  // 启动健康检查
-  useEffect(() => {
-    if (isAFK && totalCount > 0) {
-      startHealthCheck();
-    } else {
-      stopHealthCheck();
-    }
-    return () => stopHealthCheck();
-  }, [isAFK, totalCount, startHealthCheck, stopHealthCheck]);
-
   useEffect(() => {
     if (isAFK && totalCount > 0) {
       activeLayerRef.current = 'A';
@@ -424,22 +375,21 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       setCurrentIndex(0);
       setNextIndex(1);
       lastCurrentTimeRef.current = 0;
+      retryCountRef.current = 0;
       stopProgressCheck();
       loadVideoToLayer('A', wallpapers[0], true);
       if (totalCount > 1) loadVideoToLayer('B', wallpapers[1]);
     } else {
       stopProgressCheck();
-      stopHealthCheck();
     }
-  }, [isAFK, totalCount, wallpapers, loadVideoToLayer, stopProgressCheck, stopHealthCheck]);
+  }, [isAFK, totalCount, wallpapers, loadVideoToLayer, stopProgressCheck]);
 
   useEffect(() => {
     return () => {
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       stopProgressCheck();
-      stopHealthCheck();
     };
-  }, [stopProgressCheck, stopHealthCheck]);
+  }, [stopProgressCheck]);
 
   // ESC 键处理
   useEffect(() => {
@@ -448,7 +398,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
         if (showUI && afkPasswordEnabled) {
           e.preventDefault();
           setShowUI(false);
-          setShowUnlock(false);
           setShowPasswordField(false);
           setPassword('');
           setError(false);
@@ -470,7 +419,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       if (unlockAFK(password)) {
         setPassword('');
         setError(false);
-        setShowUnlock(false);
         setShowPasswordField(false);
         setShowUI(false);
         setLockIconRotate(false);
@@ -525,7 +473,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               style={{ opacity: 0, zIndex: 0 }}
             />
 
-            {/* 暗色遮罩 - 带渐变 */}
+            {/* 暗色遮罩 */}
             <motion.div 
               variants={overlayVariants}
               initial="hidden"
