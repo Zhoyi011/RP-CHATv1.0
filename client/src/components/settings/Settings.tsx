@@ -1,5 +1,5 @@
 // client/src/components/settings/Settings.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '../../firebase/config';
@@ -88,6 +88,10 @@ const Settings: React.FC = () => {
     afkPasswordEnabled, 
     setAFKPasswordEnabled 
   } = useAFK();
+  
+  // 🔥 使用 ref 来跟踪是否已经加载过 AFK 设置，防止重复加载
+  const afkSettingsLoadedRef = useRef(false);
+  
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'account' | 'preferences' | 'admin'>('account');
@@ -185,6 +189,7 @@ const Settings: React.FC = () => {
     }
   };
 
+  // 🔥 修复：使用 useRef 确保只执行一次，并移除会导致循环的依赖项
   useEffect(() => {
     loadUserData();
     if (isAdmin || isOwner) {
@@ -196,8 +201,12 @@ const Settings: React.FC = () => {
     }
   }, [isAdmin, isOwner, isSuperAdmin]);
 
-  // 加载 AFK 设置
+  // 🔥 修复 AFK 设置加载 - 使用 ref 防止重复执行，并且只在组件挂载时执行一次
   useEffect(() => {
+    // 防止重复加载
+    if (afkSettingsLoadedRef.current) return;
+    afkSettingsLoadedRef.current = true;
+    
     const savedAFKTimeout = localStorage.getItem('afkTimeout');
     if (savedAFKTimeout) {
       const timeout = parseInt(savedAFKTimeout, 10);
@@ -206,7 +215,16 @@ const Settings: React.FC = () => {
     }
     setLocalAfkPassword(afkPassword);
     setLocalAfkPasswordEnabled(afkPasswordEnabled);
-  }, [setCustomTimeout, afkPassword, afkPasswordEnabled]);
+  }, []); // 🔥 空依赖数组，只在挂载时执行一次
+
+  // 🔥 当 AFK 设置从外部变化时，同步到本地状态（不会触发循环）
+  useEffect(() => {
+    setLocalAfkPassword(afkPassword);
+  }, [afkPassword]);
+
+  useEffect(() => {
+    setLocalAfkPasswordEnabled(afkPasswordEnabled);
+  }, [afkPasswordEnabled]);
 
   const loadUserData = async () => {
     try {
@@ -905,7 +923,7 @@ const Settings: React.FC = () => {
                     <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">快速导航</h3>
                   </div>
                   <div className="space-y-1.5">
-                    {adminNavItems.map((item, idx) => (
+                    {adminNavItems.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => scrollToSection(item.id)}

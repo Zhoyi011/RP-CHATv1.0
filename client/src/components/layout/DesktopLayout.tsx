@@ -1,3 +1,4 @@
+// client/src/components/layout/DesktopLayout.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,10 +9,10 @@ import DiamondBalance from '../diamond/DiamondBalance';
 import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 import AvatarFrame from '../common/AvatarFrame';
 import toast from 'react-hot-toast';
-import { AFKProvider } from '../../contexts/AFKContext';
-import { AFKStatus } from '../common/AFKStatus';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
+// 🔥 使用可拖拽的 AFK 状态组件
+import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
 
 interface Props {
   children: React.ReactNode;
@@ -32,7 +33,6 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   return null;
 };
 
-// 内部组件，用于使用 useAFK
 const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -285,10 +285,8 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* AFK 状态指示器 - 右上角 */}
-      <div className="fixed top-4 right-4 z-50">
-        <AFKStatus size="md" />
-      </div>
+      {/* 🔥 可拖拽的 AFK 状态锁头（仅在挂机模式显示，可拖拽到任意位置） */}
+      <DraggableAFKStatus size="md" />
 
       {/* 侧边栏 */}
       <motion.aside 
@@ -559,11 +557,14 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
             </div>
           </div>
           
-          {/* 🔥 右侧状态 - 添加手动 AFK 按钮 */}
+          {/* 右侧状态 - 手动 AFK 按钮 */}
           <div className="flex items-center gap-2">
-            {/* 手动进入隐私保护模式按钮 */}
+            {/* 🔥 手动进入隐私保护模式按钮（灰色锁头，始终显示） */}
             <button
-              onClick={() => enterAFKManually()}
+              onClick={() => {
+                console.log('🔒 锁头按钮被点击');
+                enterAFKManually();
+              }}
               className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-110 active:scale-90"
               title="立即进入隐私保护模式"
             >
@@ -588,15 +589,9 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   );
 };
 
-// 外层组件，提供 AFKProvider
+// 外层组件
 const DesktopLayout: React.FC<Props> = ({ children }) => {
-  return (
-    <AFKProvider>
-      <DesktopLayoutContent>
-        {children}
-      </DesktopLayoutContent>
-    </AFKProvider>
-  );
+  return <DesktopLayoutContent>{children}</DesktopLayoutContent>;
 };
 
 export default DesktopLayout;

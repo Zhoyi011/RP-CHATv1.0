@@ -1,4 +1,4 @@
-好的！我来帮你完整化 `PROJECT_CONTEXT.md`，包含所有文件的详细说明。
+以下是合并后的完整项目文档，包含所有历史内容和新完成的 AFK 系统、拍一拍修复、消息分页等更新。
 
 ```markdown
 # RP Chat - 项目上下文文档
@@ -46,6 +46,17 @@
 | `favicon.svg` | 网站图标 |
 | `fonts/MaokenZhuyuanTi.ttf` | 猫啃珠圆体字体（全局使用） |
 | `frames/` | 头像框图片目录（.png 格式） |
+| **`wallpapers/`** | **AFK 隐私保护壁纸目录** |
+| `wallpapers/desktop/1.mp4` | 电脑端壁纸 1（~26MB） |
+| `wallpapers/desktop/2.mp4` | 电脑端壁纸 2（~38MB） |
+| `wallpapers/desktop/3.mp4` | 电脑端壁纸 3（~48MB） |
+| `wallpapers/desktop/4.mp4` | 电脑端壁纸 4（~251MB） |
+| `wallpapers/desktop/5.mp4` | 电脑端壁纸 5（~72MB） |
+| `wallpapers/desktop/6.mp4` | 电脑端壁纸 6（~189MB） |
+| `wallpapers/desktop/7.mp4` | 电脑端壁纸 7（~206MB） |
+| `wallpapers/mobile/1.mp4` | 手机端壁纸 1（~26MB） |
+| `wallpapers/mobile/2.mp4` | 手机端壁纸 2（~38MB） |
+| `wallpapers/mobile/3.mp4` | 手机端壁纸 3（~25MB） |
 
 #### `src/` - 源代码
 
@@ -54,7 +65,7 @@
 | 文件 | 职责 |
 |------|------|
 | `main.tsx` | React 渲染入口，导入全局样式 |
-| `App.tsx` | 应用根组件 + 路由配置 + 维护模式检测 |
+| `App.tsx` | 应用根组件 + 路由配置 + 维护模式检测 + AFK 上下文 |
 | `App.css` | 组件样式（动画、计数器等） |
 | `index.css` | 全局样式（Tailwind、字体、深色模式、动画） |
 | `vite-env.d.ts` | Vite 环境变量类型声明 |
@@ -116,7 +127,7 @@
 | `AIChat.tsx` | AI 聊天弹窗组件 |
 | `AIChatRoom.tsx` | AI 对戏主界面 |
 | `AISettings.tsx` | AI 角色设置 |
-| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab）** |
+| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页加载** |
 | **`ChatInput.tsx`** | **消息输入框（表情、简繁转换、回复预览、@提及）** |
 | `CreateRoom.tsx` | 创建群聊弹窗 |
 | `GroupDetail.tsx` | 群聊详情页 |
@@ -140,6 +151,9 @@
 |------|------|
 | **`AvatarFrame.tsx`** | **头像框显示（支持独立配置 scale/offset）** |
 | **`AvatarUpload.tsx`** | **头像上传弹窗（Cloudinary）** |
+| **`AFKScreen.tsx`** | **AFK 隐私保护遮挡屏幕（全屏壁纸，支持视频循环播放）** |
+| **`AFKStatus.tsx`** | **AFK 状态指示器（在线/挂机/离线/异常）** |
+| **`ConnectionStatus.tsx`** | **连接状态指示器** |
 | `Changelog.tsx` | 更新日志展示 |
 | `ContextMenu.tsx` | 右键菜单 |
 | `CustomDatePicker.tsx` | 自定义日期选择器 |
@@ -165,9 +179,9 @@
 
 | 文件 | 职责 |
 |------|------|
-| `DesktopLayout.tsx` | 桌面端布局（侧边栏 + 左下角色切换） |
-| `MobileLayout.tsx` | 移动端布局（顶部栏 + 底部 Tab） |
-| `TabletLayout.tsx` | 平板端布局 |
+| `DesktopLayout.tsx` | 桌面端布局（侧边栏 + 左下角色切换 + 右上手动AFK按钮） |
+| `MobileLayout.tsx` | 移动端布局（顶部栏 + 底部 Tab + AFK支持） |
+| `TabletLayout.tsx` | 平板端布局（AFK支持） |
 
 ---
 
@@ -209,7 +223,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `Settings.tsx` | 应用设置（账号/偏好/管理面板） |
+| `Settings.tsx` | 应用设置（账号/偏好/管理面板/AFK设置） |
 
 ---
 
@@ -257,6 +271,7 @@
 | 文件 | 职责 |
 |------|------|
 | `ThemeContext.tsx` | 深色/浅色模式上下文（仅 localStorage） |
+| **`AFKContext.tsx`** | **AFK 状态管理上下文（5分钟无操作自动进入，ESC退出，手动进入）** |
 
 ##### `src/hooks/`
 
@@ -276,7 +291,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| **`api.ts`** | **API 调用封装（核心，含 401 拦截）** |
+| **`api.ts`** | **API 调用封装（核心，含 401 拦截，GET 请求自动添加 _t 时间戳防缓存）** |
 | `diamondApi.ts` | 钻石系统 API |
 | `linkPreviewApi.ts` | 链接预览 API |
 | `Notification.ts` | 浏览器通知 |
@@ -302,7 +317,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `variants.ts` | Framer Motion 动画变体（可选） |
+| `variants.ts` | Framer Motion 动画变体 |
 
 ---
 
@@ -315,6 +330,7 @@
 | `package.json` | 依赖和脚本 |
 | `.env` | 环境变量 |
 | `render.yaml` | Render 部署配置 |
+| `.gitattributes` | Git LFS 配置（大文件存储） |
 
 #### `src/` - 源代码
 
@@ -331,7 +347,7 @@
 | `User.js` | 用户模型 | username, email, password, diamonds, role, hasAccess, onboarded, equippedItems |
 | `Persona.js` | 角色模型 | name, displayName, description, avatar, userId, status, sameNameNumber, equipped |
 | `Room.js` | 房间模型 | name, description, createdBy, members, isPublic, requireApproval |
-| `Message.js` | 消息模型 | content, roomId, personaId, isAction, isPat, replyTo, isRecalled, isDeleted, mentions |
+| `Message.js` | 消息模型 | content, roomId, personaId, isAction, **isPat**, replyTo, isRecalled, isDeleted, mentions |
 | `InviteCode.js` | 邀请码模型 | code, type, createdBy, usedBy, expiresAt, maxUses, usesCount |
 | `RedeemCode.js` | 充值码模型 | code, diamondAmount, createdBy, isUsed, usedBy, expiresAt |
 | `RedemptionRecord.js` | 充值记录模型 | userId, redeemCodeId, code, diamondAmount, previousBalance, newBalance |
@@ -354,7 +370,7 @@
 | `auth.js` | 登录、注册、Google 登录、邀请码验证、获取用户信息 |
 | `user.js` | 用户资料、修改密码、删除账户、引导状态、用户名检查 |
 | `persona.js` | 角色 CRUD、审核、搜索、守护、亲密关系、动态 |
-| `room.js` | 房间 CRUD、消息、审核、撤回、删除、转让、@提及 |
+| `room.js` | 房间 CRUD、消息（**支持分页游标 before 参数**）、审核、撤回、删除、转让、@提及 |
 | `pat.js` | 拍一拍（预设动作、自定义、发送） |
 | `redeem.js` | 充值码创建、使用、列表、统计 |
 | `admin.js` | 维护模式开关、管理员豁免、维护计划 |
@@ -418,44 +434,50 @@
 
 ## 🔗 关键数据流
 
-### 1. 发送消息流程
+### 1. 发送消息流程（支持回复和提及）
 用户点击回复按钮 → 设置 replyToMessage → 输入框显示回复预览 → 用户输入内容（可 @ 成员） → 前端解析 @ 提及 → 发送消息带 replyToId 和 mentions → 后端 mentionHandler 处理 → 保存消息到 MongoDB → 广播 new-message → 前端显示消息和引用内容，@ 成员高亮。
 
-### 2. 消息撤回流程
+### 2. 消息分页加载流程
+用户滚动到聊天顶部 → 触发 loadMoreMessages → 发送 GET /api/room/:roomId/messages?before=最早消息ID → 后端返回 50 条更早的消息 → 前端 prepend 到消息列表顶部 → 保持滚动位置。
+
+### 3. 消息撤回流程
 用户右键/长按消息 → 选择撤回（5分钟内）→ 后端标记 isRecalled → 广播 message-recalled → 所有人看到撤回提示。
 
-### 3. 消息删除流程
+### 4. 消息删除流程
 用户右键/长按消息 → 选择删除（仅自己）→ 后端标记 isDeleted → 仅删除者本人看不到。
 
-### 4. AI 对戏流程
+### 5. AI 对戏流程
 点击 AI 对戏 Tab → 加载默认 AI 角色 → 发送消息 → 调用 DeepSeek API → 返回带动作描写的回复。
 
-### 5. 每日签到流程
+### 6. 每日签到流程
 打开签到面板 → GET 签到信息 → 点击领取 → POST 领取 → 计算连续奖励（5,5,8,8,10,15,20 循环）→ 更新钻石。
 
-### 6. 角色切换流程
+### 7. 角色切换流程
 点击切换按钮 → 打开 PersonaSwitchPanel → 选择角色 → API 更新激活角色 → localStorage 保存 → 触发事件更新界面。
 
-### 7. 头像上传流程
+### 8. 头像上传流程
 点击更换头像 → 选择图片 → 上传到 Cloudinary → 返回 URL → 更新数据库 → 刷新页面。
 
-### 8. 头像框系统
+### 9. 头像框系统
 购买头像框 → 装备到角色 → 显示时根据 frameId 应用配置（scale, offsetX, offsetY）→ 在头像周围显示。
 
-### 9. @提及流程
+### 10. @提及流程
 用户在输入框输入 `@` → 弹出成员列表 → 选择成员 → 插入 `@用户名` → 发送时后端解析 mentions → 为被提及者创建通知 → 被提及者收到高亮消息。
 
-### 10. 维护模式流程
+### 11. 维护模式流程
 管理员在设置面板开启维护模式 → 后端设置 SystemSettings → 所有非管理员请求返回 503 → Socket.IO 拒绝连接。
 
-### 11. 拍一拍流程
+### 12. 拍一拍流程
 双击头像 → 弹出拍一拍面板 → 选择预设动作或自定义 → 后端生成消息（格式：{actor} 动作 {target}）→ 保存为 isPat: true → 广播 → 前端显示 ✨ 样式。
 
-### 12. 充值码流程
+### 13. 充值码流程
 管理员创建充值码 → 用户在钱包输入充值码 → 后端验证 → 增加钻石 → 记录使用。
 
-### 13. 新用户引导流程
+### 14. 新用户引导流程
 注册成功 → 输入邀请码 → 引导页（用户名/昵称/生日）→ 创建角色 → 创建/加入群聊 → 进入聊天页。
+
+### 15. AFK 隐私保护流程
+用户无操作 5 分钟（开发环境 30 秒）→ AFKContext 检测 → 设置 isAFK = true → AFKScreen 全屏显示 → 播放壁纸视频（顺序循环）→ 用户按 ESC 或点击退出按钮 → 恢复界面。**手动 AFK**：点击锁头图标 → 立即进入 AFK 模式（⚠️ 当前存在 bug，遮挡层不显示）。
 
 ---
 
@@ -513,7 +535,8 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] 链接预览卡片
 - [x] Markdown 渲染
 - [x] **@提及功能（成员选择、通知、高亮）**
-- [x] **拍一拍功能（双击头像，预设+自定义动作）**
+- [x] **拍一拍功能（双击头像，预设+自定义动作，使用 isPat 字段存储）**
+- [x] **消息分页加载（游标分页，滚动自动加载历史）**
 
 #### 👤 角色系统
 - [x] 角色创建/编辑/删除
@@ -563,6 +586,18 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **Discord 告警（安全事件、部署通知等）**
 - [x] **维护模式（管理员可开关，支持定时计划）**
 
+#### 🛡️ AFK 隐私保护系统
+- [x] 无操作 5 分钟后自动进入隐私保护模式
+- [x] 全屏动态壁纸（支持视频/图片）
+- [x] 电脑/手机分离壁纸（7个电脑端 + 3个手机端）
+- [x] 顺序循环播放（1→2→3→...→N→1）
+- [x] 双视频层无缝切换（避免空白暴露）
+- [x] 密码保护（可选）
+- [x] 手动进入按钮（电脑端右上角锁头图标）
+- [x] ESC 键退出
+- [x] 连接状态指示器（在线/挂机/离线/异常）
+- [x] AFK 状态指示器
+
 #### 📱 布局与主题
 - [x] 深色模式（仅 localStorage，无系统跟随）
 - [x] 响应式布局（手机/平板/桌面）
@@ -593,6 +628,9 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] 全局搜索
 - [x] GitHub Actions Discord 通知
 - [x] Framer Motion 动画
+- [x] **API 缓存问题修复（GET 请求自动添加 _t 时间戳）**
+- [x] **CORS 和网络连接优化（智能环境检测）**
+- [x] **Git LFS 配置（壁纸大文件存储）**
 
 ### ⏳ 开发中
 - [ ] 私聊功能（后端未完成）
@@ -630,7 +668,8 @@ Room (房间)
   └── 1:N → PersonaRoom (成员)
 
 Message (消息)
-  └── 自关联 → replyTo (回复)
+  ├── 自关联 → replyTo (回复)
+  └── 字段 → isPat (拍一拍标记)
 
 ShopItem (商品)
   └── 1:N → UserInventory (库存)
@@ -662,7 +701,7 @@ Title (头衔)
 |------|------|------|
 | `connected` | `{ id, timestamp }` | 连接成功 |
 | `ping` | `{}` | 心跳检测 |
-| `new-message` | `Message` | 新消息 |
+| `new-message` | `Message`（含 isPat） | 新消息 |
 | `message-recalled` | `{ messageId, recalledByName }` | 消息被撤回 |
 | `message-deleted` | `{ messageId }` | 消息被删除 |
 | `room-online-count` | `{ roomId, count }` | 在线人数更新 |
@@ -701,18 +740,22 @@ Title (头衔)
 > | 配置项 | 文件位置 |
 > |--------|----------|
 > | 头像框配置 | `AvatarFrame.tsx` 的 `frameAdjustments` |
+> | AFK 配置 | `AFKContext.tsx` 的 `AFK_CONFIG`（超时时间） |
+> | AFK 壁纸 | `AFKScreen.tsx` 的 `DESKTOP_WALLPAPERS` / `MOBILE_WALLPAPERS` |
 > | Cloudinary | `CLOUDINARY_URL` 环境变量 |
 > | DeepSeek API | `aiService.js` |
 > | Socket.IO | `app.js` + `socket.ts` |
 > | 路由守卫 | `App.tsx` + `api.ts` 401 拦截 |
+> | API 缓存 | `api.ts` 中的 `_t` 时间戳参数 |
 > | Discord 告警 | `discordAlert.js` + 环境变量 |
 > | 维护模式 | `admin.js` + `SystemSettings` 模型 |
 > | 提及处理 | `mentionHandler.js` 中间件 |
 > | 头衔系统 | `title.js` 路由 + `Title` 模型 |
 > | 群组权限 | `useGroupPermission.ts` Hook |
-> | 拍一拍 | `pat.js` + `PatPanel.tsx` |
+> | 拍一拍 | `pat.js` + `PatPanel.tsx` + `Message.js` 的 `isPat` 字段 |
 > | 充值码 | `redeem.js` + `Wallet.tsx` |
 > | 翻译 | `translateService.js` + `TranslatableMessage.tsx` |
+> | 消息分页 | `room.js` 的 `before` 参数 + `ChatHome.tsx` 的滚动监听 |
 > 
 > ### 手机端路由：
 > 
@@ -744,9 +787,10 @@ Title (头衔)
 
 | 日期 | 更新内容 |
 |------|----------|
-| 2026-05-28 | **拍一拍功能**（双击头像，预设/自定义动作）；**充值码系统**（钱包页面）；**多语言翻译**（Google Translate，消息内翻译）；**新用户引导流程**；**全局编号移除**（只保留同名编号）；**定时维护计划**；**动画优化**（Framer Motion）；**安全中间件优化**（翻译接口白名单） |
-| 2026-05-27 | **管理员豁免选项**；**头像上传优化**；**PersonaManager 头像显示**；**动态功能修复** |
-| 2026-05-26 | **头像框系统集成**；**安全系统**；**认证升级**；**@提及功能**；**头衔系统**；**群组管理修复** |
+| **2026-05-30** | **AFK 隐私保护系统**（5分钟自动进入、全屏视频壁纸、双视频层无缝切换、电脑/手机分离壁纸、密码保护、手动AFK按钮）；**拍一拍修复**（isPat 字段存储，刷新后样式保留）；**消息分页加载**（游标分页，滚动自动加载历史）；**API 缓存问题修复**（GET 请求自动添加 _t 时间戳）；**CORS 和网络连接优化**（智能环境检测）；**Git LFS 配置**（壁纸大文件存储） |
+| 2026-05-28 | 拍一拍功能（双击头像，预设/自定义动作）；充值码系统（钱包页面）；多语言翻译（Google Translate，消息内翻译）；新用户引导流程；全局编号移除（只保留同名编号）；定时维护计划；动画优化（Framer Motion）；安全中间件优化（翻译接口白名单） |
+| 2026-05-27 | 管理员豁免选项；头像上传优化；PersonaManager 头像显示；动态功能修复 |
+| 2026-05-26 | 头像框系统集成；安全系统；认证升级；@提及功能；头衔系统；群组管理修复 |
 | 2026-05-23 | 修复头像上传（Cloudinary），完善头像框系统 |
 | 2026-05-22 | 完成头像框功能、角色切换面板、手机端重构 |
 | 2026-05-21 | 完成 AI 对戏模块、商城系统、帖子系统、每日签到 |
@@ -754,15 +798,25 @@ Title (头衔)
 
 ---
 
+### ⚠️ 当前已知问题
+
+| 问题 | 严重程度 | 说明 |
+|------|----------|------|
+| 手动 AFK 按钮不显示遮挡层 | 🔴 高 | `enterAFKManually` 日志正常但 `AFKScreen` 未渲染 |
+| AFK 状态切换时短暂空白 | 🟡 中 | 视频切换时仍有极短空白（已优化但未完全解决） |
+| 手机端视频可能卡顿 | 🟡 中 | 大文件在低端手机上可能播放不流畅 |
+
+---
+
 *本文档由 AI 维护，每次重要更新后请同步更新*
 ```
 
-这个完整版文档包含了：
-- 所有前端文件的详细说明（包括新增的 wallet、onboarding、pat 等）
-- 所有后端模型的详细说明（包括新增的 RedeemCode、RedemptionRecord、MaintenanceSchedule 等）
-- 所有 API 路由的说明
-- 所有中间件和服务的说明
-- 完整的功能清单
-- 数据库模型关系图
-- Socket.IO 事件列表
-- AI 维护指南（含所有关键配置位置）
+以上是合并后的完整项目文档，包含了：
+- 所有历史功能（头像框、安全系统、@提及、头衔、充值码等）
+- 新增的 AFK 隐私保护系统
+- 拍一拍修复（`isPat` 字段）
+- 消息分页加载
+- API 缓存修复
+- CORS 优化
+- Git LFS 配置
+- 当前已知问题列表
