@@ -1,16 +1,16 @@
 // server/src/routes/friend.js
-import express from 'express';
-import mongoose from 'mongoose';
-import authMiddleware from '../middlewares/authMiddleware.js';
-import Friend from '../models/Friend.js';
-import FriendRequest from '../models/FriendRequest.js';
-import User from '../models/User.js';
-import Post from '../models/Post.js';
-import { emitToUser } from '../app.js'; // 需要在app.js导出
+const express = require('express');
+const mongoose = require('mongoose');
+const authMiddleware = require('../middlewares/authMiddleware');
+const Friend = require('../models/Friend');
+const FriendRequest = require('../models/FriendRequest');
+const User = require('../models/User');
+const Post = require('../models/Post');
+const { emitToUser } = require('../utils/socketHelper');
 
 const router = express.Router();
 
-// 获取好友列表
+// ========== 获取好友列表 ==========
 router.get('/list', authMiddleware, async (req, res) => {
   try {
     const { group, search } = req.query;
@@ -25,7 +25,6 @@ router.get('/list', authMiddleware, async (req, res) => {
       .populate('friendId', 'username email avatar role')
       .sort({ isStarred: -1, lastInteractionAt: -1, createdAt: -1 });
 
-    // 搜索过滤
     if (search) {
       const searchLower = search.toLowerCase();
       friends = friends.filter(f => 
@@ -33,9 +32,7 @@ router.get('/list', authMiddleware, async (req, res) => {
       );
     }
 
-    // 获取每个好友的在线状态和当前角色
-    const onlineStatusMap = req.app.get('onlineUsers') || new Map();
-    
+    // 获取在线状态（需要从 app.js 获取 onlineUsers，暂时返回 false）
     const friendList = friends.map(f => ({
       id: f._id,
       friend: {
@@ -50,10 +47,9 @@ router.get('/list', authMiddleware, async (req, res) => {
       isStarred: f.isStarred,
       lastInteractionAt: f.lastInteractionAt,
       createdAt: f.createdAt,
-      isOnline: onlineStatusMap.has(f.friendId._id.toString())
+      isOnline: false // 暂时返回 false，后续可从全局 Map 获取
     }));
 
-    // 按分组整理
     const grouped = {};
     friendList.forEach(f => {
       if (!grouped[f.group]) grouped[f.group] = [];
@@ -72,19 +68,17 @@ router.get('/list', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取好友申请列表
+// ========== 获取好友申请列表 ==========
 router.get('/requests', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 收到的申请
     const received = await FriendRequest.find({
       toUserId: userId,
       status: 'pending',
       expiresAt: { $gt: new Date() }
     }).populate('fromUserId', 'username email avatar role');
 
-    // 发出的申请
     const sent = await FriendRequest.find({
       fromUserId: userId,
       status: 'pending'
@@ -124,7 +118,7 @@ router.get('/requests', authMiddleware, async (req, res) => {
   }
 });
 
-// 发送好友申请
+// ========== 发送好友申请 ==========
 router.post('/request', authMiddleware, async (req, res) => {
   try {
     const { toUserId, message } = req.body;
@@ -138,15 +132,18 @@ router.post('/request', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: '不能添加自己为好友' });
     }
 
-    // 检查目标用户是否存在
     const targetUser = await User.findById(toUserId);
     if (!targetUser) {
       return res.status(404).json({ success: false, message: '用户不存在' });
     }
 
     // 检查是否已经是好友
-    const isAlreadyFriend = await Friend.isFriend(fromUserId, toUserId);
-    if (isAlreadyFriend) {
+    const existingFriend = await Friend.findOne({
+      userId: fromUserId,
+      friendId: toUserId,
+      status: 'accepted'
+    });
+    if (existingFriend) {
       return res.status(400).json({ success: false, message: '已经是好友了' });
     }
 
@@ -166,7 +163,6 @@ router.post('/request', authMiddleware, async (req, res) => {
       }
     }
 
-    // 创建申请
     const request = new FriendRequest({
       fromUserId,
       toUserId,
@@ -175,10 +171,10 @@ router.post('/request', authMiddleware, async (req, res) => {
 
     await request.save();
 
-    // 通过Socket通知对方
+    // 通过 Socket 通知对方
     const io = req.app.get('io');
     if (io) {
-      emitToUser(io, toUserId, 'friend-request-received', {
+      emitToUser(toUserId, 'friend-request-received', {
         id: request._id,
         fromUser: {
           id: req.user.id,
@@ -201,11 +197,11 @@ router.post('/request', authMiddleware, async (req, res) => {
   }
 });
 
-// 处理好友申请（同意/拒绝）
+// ========== 处理好友申请（同意/拒绝） ==========
 router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
   try {
     const { requestId } = req.params;
-    const { action } = req.body; // 'accept' or 'reject'
+    const { action } = req.body;
     const userId = req.user.id;
 
     const request = await FriendRequest.findById(requestId);
@@ -213,7 +209,6 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, message: '申请不存在' });
     }
 
-    // 验证权限：只有接收者可以处理
     if (request.toUserId.toString() !== userId) {
       return res.status(403).json({ success: false, message: '无权处理此申请' });
     }
@@ -229,7 +224,6 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
     }
 
     if (action === 'accept') {
-      // 创建双向好友关系
       const friend1 = new Friend({
         userId: request.fromUserId,
         friendId: request.toUserId,
@@ -243,22 +237,17 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
 
       await Promise.all([friend1.save(), friend2.save()]);
 
-      // 更新申请状态
       request.status = 'accepted';
       await request.save();
 
-      // 获取对方用户信息
       const fromUser = await User.findById(request.fromUserId).select('username avatar');
 
-      // 通过Socket通知对方
-      const io = req.app.get('io');
-      if (io) {
-        emitToUser(io, request.fromUserId.toString(), 'friend-request-accepted', {
-          userId: request.toUserId,
-          username: req.user.username,
-          avatar: req.user.avatar
-        });
-      }
+      // 通过 Socket 通知对方
+      emitToUser(request.fromUserId.toString(), 'friend-request-accepted', {
+        userId: request.toUserId,
+        username: req.user.username,
+        avatar: req.user.avatar
+      });
 
       res.json({
         success: true,
@@ -286,13 +275,12 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
   }
 });
 
-// 删除好友
+// ========== 删除好友 ==========
 router.delete('/:friendId', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const { friendId } = req.params;
 
-    // 删除双向关系
     await Friend.deleteMany({
       $or: [
         { userId, friendId },
@@ -300,7 +288,6 @@ router.delete('/:friendId', authMiddleware, async (req, res) => {
       ]
     });
 
-    // 删除相关的好友申请记录
     await FriendRequest.deleteMany({
       $or: [
         { fromUserId: userId, toUserId: friendId },
@@ -308,13 +295,9 @@ router.delete('/:friendId', authMiddleware, async (req, res) => {
       ]
     });
 
-    // 通过Socket通知对方
-    const io = req.app.get('io');
-    if (io) {
-      emitToUser(io, friendId, 'friend-removed', {
-        friendId: userId
-      });
-    }
+    emitToUser(friendId, 'friend-removed', {
+      friendId: userId
+    });
 
     res.json({
       success: true,
@@ -326,7 +309,7 @@ router.delete('/:friendId', authMiddleware, async (req, res) => {
   }
 });
 
-// 修改好友备注/分组
+// ========== 修改好友备注/分组 ==========
 router.put('/:friendId', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -355,15 +338,15 @@ router.put('/:friendId', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取好友动态（用于Feed页入口）
+// ========== 获取好友动态 ==========
 router.get('/feed-posts', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 10;
 
-    // 获取所有好友ID
-    const friendIds = await Friend.getFriendIds(userId);
-    
+    const friendships = await Friend.find({ userId, status: 'accepted' }).select('friendId');
+    const friendIds = friendships.map(f => f.friendId);
+
     if (friendIds.length === 0) {
       return res.json({
         success: true,
@@ -372,7 +355,6 @@ router.get('/feed-posts', authMiddleware, async (req, res) => {
       });
     }
 
-    // 获取好友的最新动态
     const posts = await Post.find({
       userId: { $in: friendIds },
       isDeleted: { $ne: true }
@@ -382,7 +364,6 @@ router.get('/feed-posts', authMiddleware, async (req, res) => {
     .populate('userId', 'username avatar')
     .populate('personaId', 'name displayName avatar');
 
-    // 检查是否有新动态（相比上次查看时间）
     const lastFeedView = req.user.lastFeedViewAt || new Date(0);
     const hasNewPosts = posts.some(post => post.createdAt > lastFeedView);
 
@@ -398,7 +379,7 @@ router.get('/feed-posts', authMiddleware, async (req, res) => {
   }
 });
 
-// 更新最后查看Feed的时间
+// ========== 标记 Feed 已查看 ==========
 router.post('/feed-viewed', authMiddleware, async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, {
@@ -411,7 +392,7 @@ router.post('/feed-viewed', authMiddleware, async (req, res) => {
   }
 });
 
-// 搜索用户（添加好友用）
+// ========== 搜索用户 ==========
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { q } = req.query;
@@ -421,7 +402,6 @@ router.get('/search', authMiddleware, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // 搜索用户（排除自己）
     const users = await User.find({
       _id: { $ne: userId },
       username: { $regex: q, $options: 'i' }
@@ -429,8 +409,9 @@ router.get('/search', authMiddleware, async (req, res) => {
     .select('username email avatar role')
     .limit(20);
 
-    // 获取每个用户的好友状态
-    const friendIds = await Friend.getFriendIds(userId);
+    const friendships = await Friend.find({ userId, status: 'accepted' }).select('friendId');
+    const friendIds = friendships.map(f => f.friendId.toString());
+
     const pendingRequests = await FriendRequest.find({
       $or: [
         { fromUserId: userId, status: 'pending' },
@@ -475,4 +456,4 @@ router.get('/search', authMiddleware, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

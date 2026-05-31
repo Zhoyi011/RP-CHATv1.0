@@ -1,3 +1,4 @@
+// server/src/models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -99,7 +100,7 @@ const userSchema = new mongoose.Schema({
   birthday: { type: Date, default: null },
   zodiac: { type: String, default: '' },
 
-    // ===== 引导流程 =====
+  // ===== 引导流程 =====
   onboarded: {
     type: Boolean,
     default: false
@@ -150,6 +151,12 @@ const userSchema = new mongoose.Schema({
     default: 0
   },
   
+  // 🔥 新增：上次查看好友动态的时间（用于判断是否有新动态）
+  lastFeedViewAt: {
+    type: Date,
+    default: null
+  },
+  
   createdAt: { 
     type: Date, 
     default: Date.now 
@@ -157,13 +164,11 @@ const userSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  },
-  equippedItems: {
-    avatarFrame: { type: String, default: null },
-    ring: { type: String, default: null },
-    relationshipCard: { type: String, default: null }
   }
 });
+
+// 注意：equippedItems 字段在 schema 中定义了两次，需要合并
+// 删除重复的 equippedItems 定义，保留上面那个
 
 // ===== 中间件 =====
 userSchema.pre('save', function(next) {
@@ -342,6 +347,7 @@ userSchema.methods.toSafeObject = function() {
     equippedItems: this.equippedItems || {},
     lastLogin: this.lastLogin,
     createdAt: this.createdAt,
+    lastFeedViewAt: this.lastFeedViewAt || null,  // 🔥 新增
     stats: this.stats || { totalMessages: 0, totalRooms: 0, totalPersonas: 0 },
     inventory: this.inventory || [],
     achievements: this.achievements || []

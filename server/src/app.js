@@ -408,13 +408,12 @@ const io = require('socket.io')(server, {
 // 🔥 关键：将 io 实例挂载到 app，供路由使用
 app.set('io', io);
 
-// 🔥 新增：辅助函数 - 向指定用户发送 Socket 事件
-const emitToUser = (io, userId, event, data) => {
-  io.to(`user:${userId}`).emit(event, data);
-};
+// 🔥 新增：导入 socketHelper 并设置 io 实例
+const { setIo } = require('./utils/socketHelper');
+setIo(io);
+console.log('✅ [app] Socket.IO 实例已注册到 socketHelper');
 
-// 导出供其他模块使用
-module.exports.emitToUser = emitToUser;
+// 注意：不再导出 emitToUser，改用 socketHelper 中的
 
 const onlineUsers = new Map();
 const roomOnlineCount = new Map();
@@ -463,7 +462,7 @@ io.use(socketMaintenanceMiddleware);
 io.on('connection', (socket) => {
   console.log(`🟢 [Socket] 新客户端连接: ${socket.id}`);
   
-  // 🔥 新增：从 handshake 中获取 userId 并加入个人房间
+  // 🔥 从 handshake 中获取 userId 并加入个人房间
   const userId = socket.handshake.auth.userId;
   if (userId) {
     socket.join(`user:${userId}`);
@@ -666,7 +665,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     clearInterval(heartbeat);
     
-    // 🔥 新增：离开个人房间
+    // 离开个人房间
     const userId = socket.handshake.auth.userId;
     if (userId) {
       socket.leave(`user:${userId}`);
