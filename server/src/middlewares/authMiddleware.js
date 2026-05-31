@@ -11,14 +11,13 @@ const authMiddleware = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
     const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
-    
     const decoded = jwt.verify(token, secret);
     const user = await User.findById(decoded.userId);
-    
+
     if (!user) {
       return res.status(401).json({ error: '用户不存在' });
     }
-    
+
     req.user = user;
     next();
   } catch (error) {

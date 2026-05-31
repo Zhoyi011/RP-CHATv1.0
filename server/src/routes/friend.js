@@ -1,7 +1,7 @@
 // server/src/routes/friend.js
 import express from 'express';
 import mongoose from 'mongoose';
-import authMiddleware from '../middleware/authMiddleware.js';
+import authMiddleware from '../middlewares/authMiddleware.js';
 import Friend from '../models/Friend.js';
 import FriendRequest from '../models/FriendRequest.js';
 import User from '../models/User.js';
