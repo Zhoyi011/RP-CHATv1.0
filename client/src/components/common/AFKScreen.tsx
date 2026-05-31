@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { useAFK } from '../../contexts/AFKContext';
 import { useResponsive } from '../../hooks/useResponsive';
+import { DraggableAFKStatus } from './DraggableAFKStatus';
 
 interface AFKScreenProps {
   children: React.ReactNode;
@@ -147,6 +148,14 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   const [lockIconRotate, setLockIconRotate] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState(false);
   
+  // 视频控制状态
+  const [isVideoPaused, setIsVideoPaused] = useState(false);
+  const [isRepeating, setIsRepeating] = useState(false);
+  
+  // 🔥 使用 ref 避免闭包问题和重复初始化
+  const isVideoPausedRef = useRef(false);
+  const isInitializedRef = useRef(false);
+  
   const wallpapers = (isMobile && !isTablet) ? MOBILE_WALLPAPERS : DESKTOP_WALLPAPERS;
   const totalCount = wallpapers.length;
   
@@ -161,8 +170,15 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   const progressCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const forceTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const healthCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mainLoopTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCountRef = useRef<number>(0);
   const lastCurrentTimeRef = useRef<number>(0);
+  const videoStartTimeRef = useRef<number>(0);
+
+  // 同步暂停状态到 ref
+  useEffect(() => {
+    isVideoPausedRef.current = isVideoPaused;
+  }, [isVideoPaused]);
 
   // 监听来自 DraggableAFKStatus 的事件
   useEffect(() => {
@@ -224,8 +240,11 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       setPassword('');
       setError(false);
       setLockIconRotate(false);
+      setIsVideoPaused(false);
+      setIsRepeating(false);
       retryCountRef.current = 0;
       setVideoLoadError(false);
+      isInitializedRef.current = false;
     }
   }, [isAFK]);
 
@@ -233,9 +252,15 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     return layer === 'A' ? videoASrc.current : videoBSrc.current;
   }, []);
 
-  // 🔥 强制播放视频（放在最前面，供其他函数调用）
+  // 强制播放视频（使用 ref 避免闭包问题）
   const forcePlayVideo = useCallback((video: HTMLVideoElement, retry = 0) => {
     if (!video) return;
+    
+    // 使用 ref 避免闭包问题
+    if (isVideoPausedRef.current) {
+      console.log('⏸️ 视频处于暂停状态，不自动播放');
+      return;
+    }
     
     if (!video.src || video.src === '') {
       if (retry < 3) {
@@ -253,6 +278,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
             console.log('🎬 视频播放成功');
             retryCountRef.current = 0;
             setVideoLoadError(false);
+            videoStartTimeRef.current = Date.now();
           })
           .catch((e: Error) => {
             console.log(`🎬 播放失败 (${retry + 1}/3):`, e.message);
@@ -297,76 +323,94 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     video.pause();
     video.src = videoUrl;
     video.load();
+    video.loop = isRepeating;
     video.style.opacity = layer === activeLayerRef.current ? '1' : '0';
     video.onerror = () => handleVideoError(new Event('error') as any);
     
-    if (shouldPlay) {
+    if (shouldPlay && !isVideoPaused) {
       const handleCanPlay = () => {
         video.removeEventListener('canplay', handleCanPlay);
-        forcePlayVideo(video);
+        if (!isVideoPaused) {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(e => console.log('播放失败:', e));
+          }
+        }
       };
       video.addEventListener('canplay', handleCanPlay);
       setTimeout(() => {
         video.removeEventListener('canplay', handleCanPlay);
-        forcePlayVideo(video);
+        if (!isVideoPaused) {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(e => console.log('播放失败:', e));
+          }
+        }
       }, 1000);
     }
-  }, [getVideoByLayer, forcePlayVideo, handleVideoError]);
+  }, [getVideoByLayer, handleVideoError, isRepeating, isVideoPaused]);
 
-  // 清除强制切换定时器
-  const clearForceTransitionTimer = useCallback(() => {
+  // 清除所有定时器
+  const clearAllTimers = useCallback(() => {
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
     if (forceTransitionTimerRef.current) {
       clearTimeout(forceTransitionTimerRef.current);
       forceTransitionTimerRef.current = null;
     }
-  }, []);
-
-  // 启动强制切换定时器（40秒后强制切换）
-  const startForceTransitionTimer = useCallback(() => {
-    clearForceTransitionTimer();
-    forceTransitionTimerRef.current = setTimeout(() => {
-      if (!isTransitioning && isAFK) {
-        console.log('⏰ 超时保底：40秒未切换，强制切换到下一个视频');
-        performSmoothTransition();
-      }
-    }, 40000);
-  }, [clearForceTransitionTimer, isTransitioning, isAFK]);
-
-  // 🔥 视频健康检查（检测卡顿和暂停）
-  const startHealthCheck = useCallback(() => {
-    if (healthCheckRef.current) clearInterval(healthCheckRef.current);
-    
-    healthCheckRef.current = setInterval(() => {
-      const currentVideo = getVideoByLayer(activeLayerRef.current);
-      if (!currentVideo || !isAFK || isTransitioning) return;
-      
-      // 检查视频是否应该正在播放
-      if (!currentVideo.paused && !currentVideo.ended) {
-        const currentTime = currentVideo.currentTime;
-        // 如果 3 秒内 currentTime 没有变化，说明视频卡住了
-        if (lastCurrentTimeRef.current === currentTime && currentTime > 0) {
-          console.log('⚠️ 健康检查：视频卡住了，尝试恢复播放');
-          forcePlayVideo(currentVideo);
-        }
-        lastCurrentTimeRef.current = currentTime;
-      } else if (currentVideo.paused && !currentVideo.ended && currentVideo.readyState >= 2) {
-        // 视频意外暂停（不是用户暂停，也不是结束）
-        console.log('⚠️ 健康检查：视频意外暂停，尝试恢复播放');
-        forcePlayVideo(currentVideo);
-      }
-    }, 3000);
-  }, [getVideoByLayer, forcePlayVideo, isAFK, isTransitioning]);
-
-  const stopHealthCheck = useCallback(() => {
+    if (progressCheckRef.current) {
+      clearInterval(progressCheckRef.current);
+      progressCheckRef.current = null;
+    }
     if (healthCheckRef.current) {
       clearInterval(healthCheckRef.current);
       healthCheckRef.current = null;
     }
+    if (mainLoopTimerRef.current) {
+      clearInterval(mainLoopTimerRef.current);
+      mainLoopTimerRef.current = null;
+    }
   }, []);
+
+  // 强制切换视频
+  const forceSwitchVideo = useCallback(() => {
+    if (isTransitioning) {
+      console.log('🔄 切换中，跳过强制切换');
+      return;
+    }
+    if (!isAFK) {
+      console.log('🚪 不在 AFK 模式，跳过切换');
+      return;
+    }
+    if (isRepeating) {
+      console.log('🔄 循环播放模式，跳过自动切换');
+      return;
+    }
+    if (isVideoPaused) {
+      console.log('⏸️ 视频处于暂停状态，跳过切换');
+      return;
+    }
+    
+    console.log('⏰ 主循环：强制切换到下一个视频');
+    performSmoothTransition();
+  }, [isTransitioning, isAFK, isRepeating, isVideoPaused]);
+
+  // 启动主循环
+  const startMainLoop = useCallback(() => {
+    if (mainLoopTimerRef.current) clearInterval(mainLoopTimerRef.current);
+    
+    mainLoopTimerRef.current = setInterval(() => {
+      forceSwitchVideo();
+    }, 180000);
+    console.log('🎬 主循环已启动，每 3 分钟强制切换');
+  }, [forceSwitchVideo]);
 
   // 预加载下一个视频
   const preloadNextVideo = useCallback(() => {
     if (isTransitioning) return;
+    if (isRepeating) return;
     
     const nextIdx = (currentIndex + 1) % totalCount;
     if (nextIdx === nextIndex) return;
@@ -379,12 +423,16 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       console.log(`📥 预加载下一个视频: ${nextIdx + 1}/${totalCount} 到 ${backupLayer} 层`);
       loadVideoToLayer(backupLayer, nextVideoUrl);
     }
-  }, [currentIndex, nextIndex, totalCount, wallpapers, loadVideoToLayer, isTransitioning]);
+  }, [currentIndex, nextIndex, totalCount, wallpapers, loadVideoToLayer, isTransitioning, isRepeating]);
 
   // 执行平滑切换
   const performSmoothTransition = useCallback(() => {
     if (isTransitioning) {
       console.log('🔄 已有切换进行中，跳过');
+      return;
+    }
+    if (isRepeating) {
+      console.log('🔄 循环播放模式，跳过切换');
       return;
     }
     
@@ -404,12 +452,16 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     }
     
     if (newVideo.readyState < 2) {
-      console.log('⏳ 新视频未就绪，等待 500ms 后重试');
+      console.log('⏳ 新视频未就绪，尝试重新加载');
+      const currentVideoUrl = wallpapers[nextIdx];
+      if (currentVideoUrl) {
+        loadVideoToLayer(newLayer, currentVideoUrl, true);
+      }
       setTimeout(() => {
         if (!isTransitioning) {
           performSmoothTransition();
         }
-      }, 500);
+      }, 1000);
       return;
     }
     
@@ -418,9 +470,11 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     newVideo.currentTime = 0;
     newVideo.style.opacity = '1';
     
-    const playPromise = newVideo.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(e => console.log('新视频播放失败:', e));
+    if (!isVideoPaused) {
+      const playPromise = newVideo.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => console.log('新视频播放失败:', e));
+      }
     }
     
     if (oldVideo) {
@@ -440,7 +494,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       
       const backupLayer = activeLayerRef.current === 'A' ? 'B' : 'A';
       const nextVideoUrl = wallpapers[afterNextIdx];
-      if (nextVideoUrl) {
+      if (nextVideoUrl && !isRepeating) {
         loadVideoToLayer(backupLayer, nextVideoUrl);
       }
       
@@ -448,17 +502,23 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       console.log('✅ 视频切换完成');
       
       const currentVideo = getVideoByLayer(activeLayerRef.current);
-      if (currentVideo && !currentVideo.paused && isAFK) {
-        startProgressCheck(currentVideo);
+      if (currentVideo && !currentVideo.paused && isAFK && !isVideoPaused) {
+        videoStartTimeRef.current = Date.now();
       }
     }, 500);
-  }, [currentIndex, nextIndex, totalCount, wallpapers, getVideoByLayer, loadVideoToLayer, isTransitioning, isAFK]);
+  }, [currentIndex, nextIndex, totalCount, wallpapers, getVideoByLayer, loadVideoToLayer, isTransitioning, isAFK, isRepeating, isVideoPaused]);
 
   // 进度检查
   const startProgressCheck = useCallback((video: HTMLVideoElement) => {
     if (progressCheckRef.current) clearInterval(progressCheckRef.current);
     
-    startForceTransitionTimer();
+    if (forceTransitionTimerRef.current) clearTimeout(forceTransitionTimerRef.current);
+    forceTransitionTimerRef.current = setTimeout(() => {
+      if (!isTransitioning && isAFK && !isRepeating && !isVideoPaused) {
+        console.log('⏰ 超时保底：35秒未切换，强制切换');
+        performSmoothTransition();
+      }
+    }, 35000);
     
     progressCheckRef.current = setInterval(() => {
       const currentVideo = getVideoByLayer(activeLayerRef.current);
@@ -471,24 +531,63 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       
       const remaining = duration - currentTime;
       
-      if (remaining <= 3 && remaining > 0 && !isTransitioning) {
+      if (remaining <= 3 && remaining > 0 && !isTransitioning && !isRepeating) {
         preloadNextVideo();
       }
       
-      if (remaining <= 0.3 && remaining > -0.5 && !isTransitioning) {
+      if (remaining <= 0.3 && remaining > -0.5 && !isTransitioning && !isRepeating) {
         console.log(`🎬 进度检测：剩余 ${remaining.toFixed(2)} 秒，准备切换`);
         performSmoothTransition();
       }
     }, 200);
-  }, [getVideoByLayer, isTransitioning, performSmoothTransition, preloadNextVideo, startForceTransitionTimer]);
+  }, [getVideoByLayer, isTransitioning, isAFK, isRepeating, isVideoPaused, performSmoothTransition, preloadNextVideo]);
 
   const stopProgressCheck = useCallback(() => {
     if (progressCheckRef.current) {
       clearInterval(progressCheckRef.current);
       progressCheckRef.current = null;
     }
-    clearForceTransitionTimer();
-  }, [clearForceTransitionTimer]);
+    if (forceTransitionTimerRef.current) {
+      clearTimeout(forceTransitionTimerRef.current);
+      forceTransitionTimerRef.current = null;
+    }
+  }, []);
+
+  // 视频健康检查
+  const startHealthCheck = useCallback(() => {
+    if (healthCheckRef.current) clearInterval(healthCheckRef.current);
+    
+    healthCheckRef.current = setInterval(() => {
+      const currentVideo = getVideoByLayer(activeLayerRef.current);
+      if (!currentVideo || !isAFK || isTransitioning) return;
+      if (isVideoPaused) return;
+      
+      if (!currentVideo.paused && !currentVideo.ended) {
+        const currentTime = currentVideo.currentTime;
+        if (lastCurrentTimeRef.current === currentTime && currentTime > 0) {
+          console.log('⚠️ 健康检查：视频卡住了，尝试恢复');
+          const playPromise = currentVideo.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(e => console.log('恢复播放失败:', e));
+          }
+        }
+        lastCurrentTimeRef.current = currentTime;
+      } else if (currentVideo.paused && !currentVideo.ended && currentVideo.readyState >= 2 && !isVideoPaused) {
+        console.log('⚠️ 健康检查：视频意外暂停，尝试恢复');
+        const playPromise = currentVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.log('恢复播放失败:', e));
+        }
+      }
+    }, 5000);
+  }, [getVideoByLayer, isAFK, isTransitioning, isVideoPaused]);
+
+  const stopHealthCheck = useCallback(() => {
+    if (healthCheckRef.current) {
+      clearInterval(healthCheckRef.current);
+      healthCheckRef.current = null;
+    }
+  }, []);
 
   // 监听视频播放进度
   useEffect(() => {
@@ -502,7 +601,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     
     const handleEnded = () => { 
       console.log('🎬 ended 事件触发，准备切换');
-      if (!isTransitioning) {
+      if (!isTransitioning && !isRepeating) {
         performSmoothTransition();
       }
     };
@@ -528,12 +627,19 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       stopProgressCheck();
       stopHealthCheck();
     };
-  }, [getVideoByLayer, isTransitioning, performSmoothTransition, startProgressCheck, startHealthCheck, stopProgressCheck, stopHealthCheck]);
+  }, [getVideoByLayer, isTransitioning, isRepeating, performSmoothTransition, startProgressCheck, startHealthCheck, stopProgressCheck, stopHealthCheck]);
 
-  // 初始化 AFK
+  // 🔥 初始化 AFK（使用 isInitializedRef 避免重复初始化）
   useEffect(() => {
     if (isAFK && totalCount > 0) {
-      console.log(`🎬 进入 AFK，共 ${totalCount} 个壁纸`);
+      // 避免重复初始化
+      if (isInitializedRef.current) {
+        console.log('🎬 AFK 已初始化，跳过重复初始化');
+        return;
+      }
+      isInitializedRef.current = true;
+      
+      console.log(`🎬 进入 AFK，共 ${totalCount} 个壁纸，启动主循环`);
       
       activeLayerRef.current = 'A';
       setIsTransitioning(false);
@@ -542,29 +648,84 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       lastCurrentTimeRef.current = 0;
       retryCountRef.current = 0;
       setVideoLoadError(false);
+      setIsVideoPaused(false);
+      setIsRepeating(false);
       
-      stopProgressCheck();
-      stopHealthCheck();
+      clearAllTimers();
       
       loadVideoToLayer('A', wallpapers[0], true);
       
       if (totalCount > 1) {
         loadVideoToLayer('B', wallpapers[1]);
       }
-    } else {
-      stopProgressCheck();
-      stopHealthCheck();
+      
+      startMainLoop();
+    } else if (!isAFK) {
+      isInitializedRef.current = false;
+      clearAllTimers();
     }
-  }, [isAFK, totalCount, wallpapers, loadVideoToLayer, stopProgressCheck, stopHealthCheck]);
+  }, [isAFK, totalCount, wallpapers, loadVideoToLayer, startMainLoop, clearAllTimers]);
 
   // 清理定时器
   useEffect(() => {
     return () => {
-      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-      stopProgressCheck();
-      stopHealthCheck();
+      clearAllTimers();
     };
-  }, [stopProgressCheck, stopHealthCheck]);
+  }, [clearAllTimers]);
+
+  // 🔥 视频控制回调函数
+  const handlePauseToggle = useCallback((paused: boolean) => {
+    console.log('🎮 暂停/播放被调用, paused =', paused);
+    setIsVideoPaused(paused);
+    const currentVideo = getVideoByLayer(activeLayerRef.current);
+    if (currentVideo) {
+      if (paused) {
+        currentVideo.pause();
+        console.log('⏸️ 视频已暂停');
+      } else {
+        const playPromise = currentVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.log('播放失败:', e));
+        }
+        console.log('▶️ 视频已恢复');
+      }
+    }
+  }, [getVideoByLayer]);
+
+  const handleRepeatToggle = useCallback((repeating: boolean) => {
+    console.log('🔄 循环播放被调用, repeating =', repeating);
+    setIsRepeating(repeating);
+    const currentVideo = getVideoByLayer(activeLayerRef.current);
+    if (currentVideo) {
+      currentVideo.loop = repeating;
+      console.log(`🔄 循环播放: ${repeating ? '开启' : '关闭'}`);
+    }
+    if (!repeating) {
+      startMainLoop();
+    } else {
+      if (mainLoopTimerRef.current) {
+        clearInterval(mainLoopTimerRef.current);
+        mainLoopTimerRef.current = null;
+      }
+    }
+  }, [getVideoByLayer, startMainLoop]);
+
+  const handleSkip = useCallback(() => {
+    console.log('⏩ 跳过当前壁纸');
+    if (isTransitioning) return;
+    if (isRepeating) {
+      setIsRepeating(false);
+      const currentVideo = getVideoByLayer(activeLayerRef.current);
+      if (currentVideo) currentVideo.loop = false;
+    }
+    performSmoothTransition();
+  }, [isTransitioning, isRepeating, getVideoByLayer, performSmoothTransition]);
+
+  const handleShowUI = useCallback(() => {
+    console.log('📱 显示解锁界面');
+    setShowUI(true);
+    window.dispatchEvent(new CustomEvent('afkUIShown'));
+  }, []);
 
   // ESC 键处理
   useEffect(() => {
@@ -619,6 +780,18 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   return (
     <>
       {children}
+      
+      {/* 可拖拽的功能菜单锁头 */}
+      <DraggableAFKStatus 
+        size="md"
+        onPauseToggle={handlePauseToggle}
+        onRepeatToggle={handleRepeatToggle}
+        onSkip={handleSkip}
+        onShowUI={handleShowUI}
+        isVideoPaused={isVideoPaused}
+        isRepeating={isRepeating}
+      />
+      
       <AnimatePresence>
         {isAFK && wallpapers.length > 0 && (
           <motion.div
@@ -628,6 +801,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
             exit="exit"
             className="fixed inset-0 z-[9999]"
           >
+            {/* 视频层 A */}
             <video
               ref={videoASrc}
               muted
@@ -638,6 +812,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               onError={handleVideoError}
             />
             
+            {/* 视频层 B */}
             <video
               ref={videoBSrc}
               muted
@@ -648,10 +823,12 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               onError={handleVideoError}
             />
 
+            {/* 视频加载失败时的纯色背景 */}
             {videoLoadError && (
               <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800 z-[1]" />
             )}
 
+            {/* 暗色遮罩 */}
             {!videoLoadError && (
               <motion.div 
                 variants={overlayVariants}
@@ -661,6 +838,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               />
             )}
 
+            {/* UI 内容区域 */}
             <AnimatePresence>
               {showUI && (
                 <motion.div
@@ -671,11 +849,13 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                   className="relative z-10 flex items-center justify-center w-full h-full pointer-events-none"
                 >
                   <div className="text-center max-w-md mx-4 pointer-events-auto">
+                    {/* 脉冲光环容器 */}
                     <motion.div
                       variants={pulseRingVariants}
                       animate="animate"
                       className="relative mx-auto mb-6 w-24 h-24"
                     >
+                      {/* 锁头图标 */}
                       <motion.div
                         initial={{ scale: 0, rotate: -180 }}
                         animate={lockIconRotate ? { rotate: [0, -10, 10, -5, 5, 0] } : { rotate: 0 }}
@@ -688,6 +868,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                       </motion.div>
                     </motion.div>
 
+                    {/* 标题 */}
                     <motion.h2 
                       variants={titleVariants}
                       initial="hidden"
@@ -706,6 +887,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                       您的屏幕已被锁定
                     </motion.p>
 
+                    {/* 时长显示 */}
                     <motion.div 
                       variants={durationVariants}
                       initial="hidden"
@@ -717,6 +899,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                       </p>
                     </motion.div>
 
+                    {/* 密码输入区域 */}
                     <AnimatePresence mode="wait">
                       {afkPasswordEnabled && showPasswordField && (
                         <motion.div 
@@ -749,6 +932,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                       )}
                     </AnimatePresence>
 
+                    {/* 按钮区域 */}
                     <motion.div 
                       variants={buttonVariants}
                       initial="hidden"

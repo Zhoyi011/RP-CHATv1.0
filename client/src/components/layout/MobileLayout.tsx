@@ -321,7 +321,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
     >
       {/* 可拖拽的 AFK 状态锁头 */}
-      <DraggableAFKStatus size="md" />
+      
 
       {/* 顶部导航栏 */}
       <motion.div

@@ -286,7 +286,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* 🔥 可拖拽的 AFK 状态锁头（仅在挂机模式显示，可拖拽到任意位置） */}
-      <DraggableAFKStatus size="md" />
+      
 
       {/* 侧边栏 */}
       <motion.aside 

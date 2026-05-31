@@ -170,7 +170,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
       {/* 🔥 可拖拽的 AFK 状态锁头（仅在挂机模式显示） */}
-      <DraggableAFKStatus size="md" />
+      
 
       {/* 顶部导航栏 */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
