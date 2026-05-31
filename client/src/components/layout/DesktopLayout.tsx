@@ -11,8 +11,12 @@ import AvatarFrame from '../common/AvatarFrame';
 import toast from 'react-hot-toast';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
-// 🔥 使用可拖拽的 AFK 状态组件
+import { useFriend } from '../../contexts/FriendContext';
 import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
+import { AddFriendModal } from '../friends/AddFriendModal';
+import { FriendList } from '../friends/FriendList';
+import { FriendRequests } from '../friends/FriendRequests';
+import PrivateChat from '../chat/PrivateChat';
 
 interface Props {
   children: React.ReactNode;
@@ -37,6 +41,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { enterAFKManually } = useAFK();
+  const { unreadRequestCount } = useFriend();
   const [userData, setUserData] = useState<User | null>(null);
   const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
@@ -45,6 +50,13 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  
+  // 🔥 好友相关状态
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
+  const [showFriendList, setShowFriendList] = useState(false);
+  const [showFriendRequests, setShowFriendRequests] = useState(false);
+  const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string } | null>(null);
+  
   const personaMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const user = auth.currentUser;
@@ -285,8 +297,8 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* 🔥 可拖拽的 AFK 状态锁头（仅在挂机模式显示，可拖拽到任意位置） */}
-      
+      {/* 可拖拽的 AFK 状态锁头 */}
+      <DraggableAFKStatus />
 
       {/* 侧边栏 */}
       <motion.aside 
@@ -372,6 +384,72 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
 
         {/* 底部区域 */}
         <div className="border-t border-gray-100 dark:border-gray-800 p-3 space-y-2">
+          {/* 🔥 好友按钮组 */}
+          <div className="flex items-center gap-2 px-1">
+            {/* 好友列表按钮 */}
+            <button
+              onClick={() => setShowFriendList(true)}
+              onMouseEnter={() => setHoveredItem('friends')}
+              onMouseLeave={() => setHoveredItem(null)}
+              className={`relative flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 ${collapsed ? 'flex-col' : ''}`}
+              title="好友列表"
+            >
+              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              {!collapsed && <span className="text-xs">好友</span>}
+              {unreadRequestCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center animate-pulse">
+                  {unreadRequestCount > 9 ? '9+' : unreadRequestCount}
+                </span>
+              )}
+            </button>
+            
+            {/* 添加好友按钮 */}
+            <button
+              onClick={() => setShowAddFriendModal(true)}
+              onMouseEnter={() => setHoveredItem('addFriend')}
+              onMouseLeave={() => setHoveredItem(null)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg transition-all duration-200 ${collapsed ? 'flex-col' : ''}`}
+              title="添加好友"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              {!collapsed && <span className="text-xs">添加</span>}
+            </button>
+          </div>
+
+          {/* 好友申请按钮 */}
+          <button
+            onClick={() => setShowFriendRequests(true)}
+            onMouseEnter={() => setHoveredItem('requests')}
+            onMouseLeave={() => setHoveredItem(null)}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 relative ${collapsed ? 'justify-center' : ''}`}
+          >
+            <div className="relative">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {unreadRequestCount > 0 && (
+                <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center animate-pulse">
+                  {unreadRequestCount > 9 ? '9+' : unreadRequestCount}
+                </span>
+              )}
+            </div>
+            {!collapsed && (
+              <span className="text-sm text-gray-600 dark:text-gray-400 flex-1 text-left">好友申请</span>
+            )}
+            {!collapsed && unreadRequestCount > 0 && (
+              <span className="text-xs text-red-500">{unreadRequestCount}个新申请</span>
+            )}
+            {collapsed && hoveredItem === 'requests' && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-nowrap z-50">
+                好友申请
+              </div>
+            )}
+          </button>
+
           <button
             onClick={() => navigate('/changelog')}
             onMouseEnter={() => setHoveredItem('changelog')}
@@ -529,11 +607,9 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
         {/* 顶部栏 */}
         <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            {/* 页面图标 */}
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 flex items-center justify-center text-lg">
               {getPageIcon()}
             </div>
-            {/* 页面标题 */}
             <div>
               <h1 
                 className="text-lg font-semibold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 bg-clip-text text-transparent"
@@ -559,7 +635,6 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
           
           {/* 右侧状态 - 手动 AFK 按钮 */}
           <div className="flex items-center gap-2">
-            {/* 🔥 手动进入隐私保护模式按钮（灰色锁头，始终显示） */}
             <button
               onClick={() => {
                 console.log('🔒 锁头按钮被点击');
@@ -573,10 +648,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
               </svg>
             </button>
 
-            {/* 连接状态指示器 */}
             <ConnectionStatus showText={true} />
-            
-            {/* 钻石余额 */}
             <DiamondBalance size="sm" />
           </div>
         </div>
@@ -585,6 +657,75 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
           {children}
         </div>
       </main>
+
+      {/* 🔥 好友相关弹窗 */}
+      <AddFriendModal 
+        isOpen={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+        onSuccess={() => {
+          setShowAddFriendModal(false);
+          toast.success('好友申请已发送');
+        }}
+      />
+
+      {showFriendList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                好友列表
+              </h2>
+              <button
+                onClick={() => setShowFriendList(false)}
+                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <FriendList onSelectFriend={(id, name, avatar) => {
+              setShowFriendList(false);
+              setSelectedPrivateChat({ id, name, avatar });
+            }} />
+          </div>
+        </div>
+      )}
+
+      {showFriendRequests && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                好友申请
+              </h2>
+              <button
+                onClick={() => setShowFriendRequests(false)}
+                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <FriendRequests onAccept={() => setShowFriendRequests(false)} />
+          </div>
+        </div>
+      )}
+
+      <PrivateChat
+        isOpen={!!selectedPrivateChat}
+        onClose={() => setSelectedPrivateChat(null)}
+        targetUserId={selectedPrivateChat?.id || ''}
+        targetUsername={selectedPrivateChat?.name || ''}
+        targetAvatar={selectedPrivateChat?.avatar}
+      />
     </div>
   );
 };

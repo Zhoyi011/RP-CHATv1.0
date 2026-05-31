@@ -7,8 +7,13 @@ import { authApi, type User } from '../../services/api';
 import DiamondBalance from '../diamond/DiamondBalance';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
-// 🔥 使用可拖拽的 AFK 状态组件
+import { useFriend } from '../../contexts/FriendContext';
 import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
+import { AddFriendModal } from '../friends/AddFriendModal';
+import { FriendList } from '../friends/FriendList';
+import { FriendRequests } from '../friends/FriendRequests';
+import PrivateChat from '../chat/PrivateChat';
+import toast from 'react-hot-toast';
 
 interface Props {
   children: React.ReactNode;
@@ -18,6 +23,7 @@ interface NavItem {
   name: string;
   path: string;
   icon: React.ReactNode;
+  badge?: number;
 }
 
 interface CurrentPersona {
@@ -40,6 +46,13 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   
   // 🔥 获取 AFK 手动进入方法
   const { enterAFKManually } = useAFK();
+  const { unreadRequestCount } = useFriend();
+
+  // 🔥 好友相关状态
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
+  const [showFriendList, setShowFriendList] = useState(false);
+  const [showFriendRequests, setShowFriendRequests] = useState(false);
+  const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string } | null>(null);
 
   const navItems: NavItem[] = [
     {
@@ -50,6 +63,25 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       ),
+      badge: unreadCount,
+    },
+    {
+      name: '动态',
+      path: '/feed',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+        </svg>
+      ),
+    },
+    {
+      name: '主页',
+      path: '/home',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      ),
     },
     {
       name: '角色',
@@ -57,6 +89,15 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+    },
+    {
+      name: '商城',
+      path: '/shop',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.5 6M17 13l1.5 6M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
         </svg>
       ),
     },
@@ -169,8 +210,8 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
-      {/* 🔥 可拖拽的 AFK 状态锁头（仅在挂机模式显示） */}
-      
+      {/* 可拖拽的 AFK 状态锁头 */}
+      <DraggableAFKStatus />
 
       {/* 顶部导航栏 */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
@@ -190,7 +231,42 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 🔥 手动进入隐私保护模式按钮（锁头图标） */}
+          {/* 🔥 好友按钮组 */}
+          <button
+            onClick={() => setShowFriendList(true)}
+            className="relative p-2 text-gray-500 hover:text-green-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
+            title="好友列表"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => setShowAddFriendModal(true)}
+            className="p-2 text-gray-500 hover:text-purple-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
+            title="添加好友"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+          </button>
+
+          {/* 好友申请按钮带红点 */}
+          <button
+            onClick={() => setShowFriendRequests(true)}
+            className="relative p-2 text-gray-500 hover:text-yellow-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
+            title="好友申请"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            {unreadRequestCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+            )}
+          </button>
+
+          {/* 手动进入隐私保护模式按钮 */}
           <button
             onClick={() => {
               console.log('🔒 [Tablet] 锁头按钮被点击');
@@ -204,7 +280,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             </svg>
           </button>
 
-          {/* 连接状态指示器（在线/挂机/离线/异常）- 平板显示文字 */}
+          {/* 连接状态指示器 - 平板显示文字 */}
           <ConnectionStatus showText={true} />
           
           <DiamondBalance size="sm" />
@@ -276,7 +352,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
           </div>
 
           {/* 导航菜单 */}
-          <nav className="flex-1 px-4 space-y-1">
+          <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => (
               <button
                 key={item.path}
@@ -289,13 +365,61 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
               >
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
-                {item.name === '聊天' && unreadCount > 0 && !isActive(item.path) && (
+                {item.badge !== undefined && item.badge > 0 && !isActive(item.path) && (
                   <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
-                    {unreadCount > 99 ? '99+' : unreadCount}
+                    {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 )}
               </button>
             ))}
+
+            {/* 🔥 分割线 */}
+            <div className="border-t border-gray-100 my-2"></div>
+
+            {/* 🔥 好友相关菜单项 */}
+            <button
+              onClick={() => {
+                setSidebarOpen(false);
+                setShowFriendList(true);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 hover:text-green-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span className="font-medium">好友列表</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSidebarOpen(false);
+                setShowAddFriendModal(true);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 hover:text-purple-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              <span className="font-medium">添加好友</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSidebarOpen(false);
+                setShowFriendRequests(true);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 hover:text-yellow-600 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] relative"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <span className="font-medium">好友申请</span>
+              {unreadRequestCount > 0 && (
+                <span className="ml-auto px-2 py-0.5 text-xs rounded-full bg-red-500 text-white animate-pulse">
+                  {unreadRequestCount > 99 ? '99+' : unreadRequestCount}
+                </span>
+              )}
+            </button>
           </nav>
 
           {/* 底部区域 */}
@@ -349,6 +473,78 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
       <div className="flex-1 overflow-y-auto">
         {children}
       </div>
+
+      {/* 🔥 好友相关弹窗 */}
+      <AddFriendModal 
+        isOpen={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+        onSuccess={() => {
+          setShowAddFriendModal(false);
+          toast.success('好友申请已发送');
+        }}
+      />
+
+      {showFriendList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                好友列表
+              </h2>
+              <button
+                onClick={() => setShowFriendList(false)}
+                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <FriendList onSelectFriend={(id, name, avatar) => {
+              setShowFriendList(false);
+              setSelectedPrivateChat({ id, name, avatar });
+            }} />
+          </div>
+        </div>
+      )}
+
+      {showFriendRequests && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                好友申请
+                {unreadRequestCount > 0 && (
+                  <span className="text-sm text-red-500">({unreadRequestCount})</span>
+                )}
+              </h2>
+              <button
+                onClick={() => setShowFriendRequests(false)}
+                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <FriendRequests onAccept={() => setShowFriendRequests(false)} />
+          </div>
+        </div>
+      )}
+
+      <PrivateChat
+        isOpen={!!selectedPrivateChat}
+        onClose={() => setSelectedPrivateChat(null)}
+        targetUserId={selectedPrivateChat?.id || ''}
+        targetUsername={selectedPrivateChat?.name || ''}
+        targetAvatar={selectedPrivateChat?.avatar}
+      />
     </div>
   );
 };

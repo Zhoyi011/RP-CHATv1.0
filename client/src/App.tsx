@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AFKProvider } from './contexts/AFKContext';
+import { FriendProvider } from './contexts/FriendContext';  // 🔥 添加这行
 import { AFKScreen } from './components/common/AFKScreen';
 import toast, { Toaster } from 'react-hot-toast';
 import Login from './components/auth/Login';
@@ -26,7 +27,7 @@ import GroupSettings from './components/chat/GroupSettings';
 import RoomMembers from './components/chat/RoomMembers';
 import PendingRequests from './components/chat/PendingRequests';
 import MaintenancePage from './components/common/MaintenancePage';
-import { auth } from './firebase/config';
+//import { auth } from './firebase/config';
 import Wallet from './components/wallet/Wallet';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
 
@@ -364,9 +365,11 @@ function App() {
   return (
     <ThemeProvider>
       <AFKProvider>
-        <Router>
-          <AppContent />
-        </Router>
+        <FriendProvider>  {/* 🔥 添加 FriendProvider */}
+          <Router>
+            <AppContent />
+          </Router>
+        </FriendProvider>
       </AFKProvider>
     </ThemeProvider>
   );

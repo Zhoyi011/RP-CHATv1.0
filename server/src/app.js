@@ -123,16 +123,12 @@ const maintenanceInterceptor = async (req, res, next) => {
           const user = await User.findById(decoded.userId);
           
           if (user) {
-            // 获取豁免设置
             const exemptAdminSetting = await SystemSettings.findOne({ key: 'maintenance_exempt_admin' });
             const exemptAdmin = exemptAdminSetting?.value === true;
             
-            // 判断是否豁免
-            // owner 和 super_admin 永远豁免
             if (user.role === 'owner' || user.role === 'super_admin') {
               isExempt = true;
             }
-            // admin 根据设置决定是否豁免
             else if (user.role === 'admin' && exemptAdmin) {
               isExempt = true;
             }
@@ -196,6 +192,7 @@ const securityRoutes = require('./routes/security');
 const adminRoutes = require('./routes/admin');
 const redeemRoutes = require('./routes/redeem');
 const patRoutes = require('./routes/pat');
+const friendRoutes = require('./routes/friend'); // 🔥 新增：好友路由
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -319,6 +316,7 @@ app.use('/api/redeem', redeemRoutes);
 app.use('/api/admin', adminLimit, adminRoutes);
 app.use('/api/user', adminLimit, userRoutes);
 app.use('/api/pat', patRoutes);
+app.use('/api/friend', standardLimit, friendRoutes); // 🔥 新增：好友路由
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 
@@ -407,8 +405,16 @@ const io = require('socket.io')(server, {
   transports: ['websocket', 'polling']
 });
 
-// 🔥 关键：将 io 实例挂载到 app，供 pat.js 等路由使用
+// 🔥 关键：将 io 实例挂载到 app，供路由使用
 app.set('io', io);
+
+// 🔥 新增：辅助函数 - 向指定用户发送 Socket 事件
+const emitToUser = (io, userId, event, data) => {
+  io.to(`user:${userId}`).emit(event, data);
+};
+
+// 导出供其他模块使用
+module.exports.emitToUser = emitToUser;
 
 const onlineUsers = new Map();
 const roomOnlineCount = new Map();
@@ -456,6 +462,13 @@ io.use(socketMaintenanceMiddleware);
 
 io.on('connection', (socket) => {
   console.log(`🟢 [Socket] 新客户端连接: ${socket.id}`);
+  
+  // 🔥 新增：从 handshake 中获取 userId 并加入个人房间
+  const userId = socket.handshake.auth.userId;
+  if (userId) {
+    socket.join(`user:${userId}`);
+    console.log(`  📍 用户 ${userId} 加入个人房间`);
+  }
   
   socket.emit('connected', { id: socket.id, timestamp: Date.now() });
   
@@ -512,7 +525,7 @@ io.on('connection', (socket) => {
         personaId, 
         content: cleanContent, 
         isAction: isAction || false, 
-        isPat: false,  // 普通消息不是拍一拍
+        isPat: false,
         replyTo: replyToId || null 
       });
       await message.save();
@@ -532,7 +545,6 @@ io.on('connection', (socket) => {
         }
       }
       
-      // ✅ 修复：广播消息时包含 isPat、isRecalled、isDeleted 字段
       io.in(roomId).emit('new-message', {
         _id: message._id,
         content: message.content,
@@ -617,7 +629,6 @@ io.on('connection', (socket) => {
       message.deletedAt = new Date();
       await message.save();
       
-      // 只通知删除者本人
       socket.emit('message-deleted', { 
         messageId: message._id, 
         deletedAt: message.deletedAt 
@@ -654,6 +665,14 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     clearInterval(heartbeat);
+    
+    // 🔥 新增：离开个人房间
+    const userId = socket.handshake.auth.userId;
+    if (userId) {
+      socket.leave(`user:${userId}`);
+      console.log(`  📍 用户 ${userId} 离开个人房间`);
+    }
+    
     const userInfo = onlineUsers.get(socket.id);
     if (userInfo) {
       onlineUsers.delete(socket.id);

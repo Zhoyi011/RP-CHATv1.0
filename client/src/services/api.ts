@@ -651,3 +651,31 @@ export const translateApi = {
       body: JSON.stringify({ text, targetLang }),
     }),
 };
+
+// client/src/services/api.ts - 在其他类型定义附近添加
+
+export interface Post {
+  _id: string;
+  content: string;
+  images?: string[];
+  userId: {
+    _id: string;
+    username: string;
+    avatar?: string;
+  };
+  personaId?: {
+    _id: string;
+    name: string;
+    displayName?: string;
+    avatar?: string;
+  };
+  likes: string[];
+  likeCount: number;
+  commentCount: number;
+  isLiked?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted?: boolean;
+}
+
+export { request };

@@ -1,3 +1,4 @@
+// client/src/services/socket.ts
 import { io, Socket } from 'socket.io-client';
 
 console.log('🔧 [SocketService] 模块加载');
@@ -5,11 +6,15 @@ console.log('🔧 [SocketService] 模块加载');
 class SocketService {
   private socket: Socket | null = null;
 
-  connect(token: string) {
+  // 🔥 修改：添加 userId 参数
+  connect(token: string, userId?: string) {
     console.log('🔌 [SocketService] Connecting socket...');
     
     this.socket = io('https://rp-chatv1-0.onrender.com', {
-      auth: { token },
+      auth: { 
+        token,
+        userId,  // 🔥 新增：传递 userId
+      },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 10,
@@ -40,13 +45,13 @@ class SocketService {
     }
   }
 
-  // ✅ 新增：通用事件监听
+  // 通用事件监听
   on(event: string, callback: (...args: any[]) => void) {
     console.log(`👂 [SocketService] 注册事件监听: ${event}`);
     this.socket?.on(event, callback);
   }
 
-  // ✅ 新增：通用事件移除
+  // 通用事件移除
   off(event: string, callback?: (...args: any[]) => void) {
     console.log(`🔇 [SocketService] 移除事件监听: ${event}`);
     if (callback) {
@@ -56,7 +61,7 @@ class SocketService {
     }
   }
 
-  // ✅ 新增：通用事件发射
+  // 通用事件发射
   emit(event: string, ...args: any[]) {
     console.log(`📤 [SocketService] 发射事件: ${event}`, args);
     this.socket?.emit(event, ...args);
@@ -72,9 +77,9 @@ class SocketService {
     this.socket?.emit('leave-room');
   }
 
-  sendMessage(roomId: string, userId: string, personaId: string, content: string, isAction = false) {
+  sendMessage(roomId: string, userId: string, personaId: string, content: string, isAction = false, replyToId?: string, mentions?: string[]) {
     console.log(`📨 [SocketService] Sending message to ${roomId}:`, content.substring(0, 50));
-    this.socket?.emit('send-message', { roomId, userId, personaId, content, isAction });
+    this.socket?.emit('send-message', { roomId, userId, personaId, content, isAction, replyToId, mentions });
   }
 
   switchPersona(userId: string, newPersonaId: string) {
@@ -107,7 +112,23 @@ class SocketService {
     this.socket?.on('room-online-count', callback);
   }
 
-  // ✅ 新增：移除特定事件监听器
+  // 🔥 新增：好友相关事件监听
+  onFriendRequestReceived(callback: (data: any) => void) {
+    console.log(`👂 [SocketService] 注册 friend-request-received 监听`);
+    this.socket?.on('friend-request-received', callback);
+  }
+
+  onFriendRequestAccepted(callback: (data: any) => void) {
+    console.log(`👂 [SocketService] 注册 friend-request-accepted 监听`);
+    this.socket?.on('friend-request-accepted', callback);
+  }
+
+  onFriendRemoved(callback: (data: any) => void) {
+    console.log(`👂 [SocketService] 注册 friend-removed 监听`);
+    this.socket?.on('friend-removed', callback);
+  }
+
+  // 移除特定事件监听器
   offNewMessage(callback?: (message: any) => void) {
     console.log(`🔇 [SocketService] 移除 new-message 监听`);
     if (callback) {
@@ -126,19 +147,47 @@ class SocketService {
     }
   }
 
+  // 🔥 新增：移除好友事件监听
+  offFriendRequestReceived(callback?: (data: any) => void) {
+    console.log(`🔇 [SocketService] 移除 friend-request-received 监听`);
+    if (callback) {
+      this.socket?.off('friend-request-received', callback);
+    } else {
+      this.socket?.off('friend-request-received');
+    }
+  }
+
+  offFriendRequestAccepted(callback?: (data: any) => void) {
+    console.log(`🔇 [SocketService] 移除 friend-request-accepted 监听`);
+    if (callback) {
+      this.socket?.off('friend-request-accepted', callback);
+    } else {
+      this.socket?.off('friend-request-accepted');
+    }
+  }
+
+  offFriendRemoved(callback?: (data: any) => void) {
+    console.log(`🔇 [SocketService] 移除 friend-removed 监听`);
+    if (callback) {
+      this.socket?.off('friend-removed', callback);
+    } else {
+      this.socket?.off('friend-removed');
+    }
+  }
+
   removeAllListeners() {
     console.log(`🧹 [SocketService] 移除所有监听器`);
     this.socket?.removeAllListeners();
   }
 
-  // ✅ 新增：获取连接状态
+  // 获取连接状态
   isConnected(): boolean {
     const connected = this.socket?.connected || false;
     console.log(`🔌 [SocketService] 连接状态: ${connected}`);
     return connected;
   }
 
-  // ✅ 新增：获取 socket ID
+  // 获取 socket ID
   getSocketId(): string | undefined {
     const id = this.socket?.id;
     console.log(`🆔 [SocketService] Socket ID: ${id}`);

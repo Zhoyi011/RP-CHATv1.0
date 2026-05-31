@@ -1,7 +1,9 @@
+// client/src/components/chat/PrivateChat.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from '../../firebase/config';
 import { roomApi, type Message, type User } from '../../services/api';
 import { socketService } from '../../services/socket';
+import { useFriend } from '../../contexts/FriendContext';
 import { extractUrls } from '../../utils/linkParser';
 import { useLongPress } from '../../hooks/useLongPress';
 import { ContextMenu } from '../common/ContextMenu';
@@ -14,50 +16,43 @@ console.log('🔧 [PrivateChat] 组件模块加载');
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
 interface Props {
-  targetUser: User;
-  onClose?: () => void;
+  isOpen: boolean;  // 🔥 添加 isOpen 属性
+  targetUserId: string;
+  targetUsername: string;
+  targetAvatar?: string;
+  onClose: () => void;
 }
 
 // ========== 消息气泡组件 ==========
 const PrivateMessage: React.FC<{
   message: Message;
   isSelf: boolean;
-  targetUser: User;
+  targetUsername: string;
   onMessageDeleted?: (messageId: string) => void;
   onMessageRecalled?: (messageId: string, newContent: string) => void;
-}> = ({ message, isSelf, targetUser, onMessageDeleted, onMessageRecalled }) => {
+}> = ({ message, isSelf, targetUsername, onMessageDeleted, onMessageRecalled }) => {
   const urls = extractUrls(message.content);
   
-  // ✅ 右键/长按菜单状态
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
     y: number;
   }>({ visible: false, x: 0, y: 0 });
 
-  console.log(`💬 [PrivateMessage] 渲染消息: ${message._id}, isSelf=${isSelf}`);
-
-  // ✅ 回复消息
   const handleReply = useCallback(() => {
-    console.log(`💬 [PrivateMessage] 回复消息: ${message._id}`);
     toast.success(`回复功能开发中...`, { icon: '💬' });
-  }, [message._id]);
+  }, []);
 
-  // ✅ 分享消息
   const handleShare = useCallback(async () => {
-    console.log(`📤 [PrivateMessage] 分享消息: ${message._id}`);
     try {
       await navigator.clipboard.writeText(message.content);
       toast.success('消息已复制到剪贴板');
     } catch (error) {
-      console.error(`❌ [PrivateMessage] 复制失败:`, error);
       toast.error('复制失败');
     }
-  }, [message._id, message.content]);
+  }, [message.content]);
 
-  // ✅ 删除消息
   const handleDelete = useCallback(async () => {
-    console.log(`🗑️ [PrivateMessage] 删除消息: ${message._id}`);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/room/message/delete`, {
@@ -71,23 +66,17 @@ const PrivateMessage: React.FC<{
       
       const data = await response.json();
       if (response.ok) {
-        console.log(`✅ [PrivateMessage] 消息删除成功`);
         toast.success('消息已删除');
         onMessageDeleted?.(message._id);
       } else {
-        console.error(`❌ [PrivateMessage] 删除失败:`, data.error);
         toast.error(data.error || '删除失败');
       }
     } catch (error) {
-      console.error(`❌ [PrivateMessage] 删除异常:`, error);
       toast.error('删除失败');
     }
   }, [message._id, onMessageDeleted]);
 
-  // ✅ 撤回消息
   const handleRecall = useCallback(async () => {
-    console.log(`⏪ [PrivateMessage] 撤回消息: ${message._id}`);
-    
     const messageTime = new Date(message.createdAt).getTime();
     const diffMinutes = (Date.now() - messageTime) / 1000 / 60;
     
@@ -109,26 +98,20 @@ const PrivateMessage: React.FC<{
       
       const data = await response.json();
       if (response.ok) {
-        console.log(`✅ [PrivateMessage] 消息撤回成功`);
         toast.success('消息已撤回');
         onMessageRecalled?.(message._id, '该消息已被撤回');
       } else {
-        console.error(`❌ [PrivateMessage] 撤回失败:`, data.error);
         toast.error(data.error || '撤回失败');
       }
     } catch (error) {
-      console.error(`❌ [PrivateMessage] 撤回异常:`, error);
       toast.error('撤回失败');
     }
   }, [message._id, message.createdAt, onMessageRecalled]);
 
-  // ✅ 处理长按/右键
   const handleLongPress = useCallback((position: { x: number; y: number }) => {
-    console.log(`👆 [PrivateMessage] 长按/右键消息: ${message._id}, 位置: (${position.x}, ${position.y})`);
     setContextMenu({ visible: true, x: position.x, y: position.y });
-  }, [message._id]);
+  }, []);
 
-  // ✅ 获取菜单项
   const getMenuItems = useCallback((): MenuItem[] => {
     const items: MenuItem[] = [
       { key: 'reply', label: '回复', onClick: handleReply },
@@ -156,7 +139,15 @@ const PrivateMessage: React.FC<{
     return items;
   }, [isSelf, handleReply, handleShare, handleDelete, handleRecall, message.createdAt]);
 
-  // 如果消息已被撤回
+  const longPressProps = useLongPress({
+    duration: 500,
+    enableMobile: true,
+    enableContextMenu: true,
+    onLongPress: (e, pos) => {
+      if (pos) handleLongPress(pos);
+    },
+  });
+
   if (message.isRecalled) {
     return (
       <div className="flex justify-center">
@@ -172,10 +163,9 @@ const PrivateMessage: React.FC<{
       <div className={`flex items-start gap-2 animate-in slide-in-from-bottom-2 fade-in duration-300 ${
         isSelf ? 'justify-end' : ''
       }`}>
-        {/* 对方头像 */}
         {!isSelf && (
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
-            {targetUser.username.charAt(0).toUpperCase()}
+            {targetUsername.charAt(0).toUpperCase()}
           </div>
         )}
         
@@ -185,19 +175,8 @@ const PrivateMessage: React.FC<{
               {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
             
-            {/* ✅ 消息气泡 - 添加长按/右键事件 */}
             <div
-              {...useLongPress({
-                duration: 500,
-                enableMobile: true,
-                enableContextMenu: true,
-                onLongPress: (e, pos) => {
-                  if (pos) handleLongPress(pos);
-                },
-                onClick: () => {
-                  console.log(`🔘 [PrivateMessage] 点击消息: ${message._id}`);
-                },
-              })}
+              {...longPressProps}
               className={`px-3.5 py-2 rounded-2xl break-words whitespace-pre-wrap relative transition-all duration-200 ${
                 isSelf 
                   ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-tr-none shadow-md' 
@@ -217,7 +196,6 @@ const PrivateMessage: React.FC<{
           </div>
         </div>
 
-        {/* 自己头像 */}
         {isSelf && (
           <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold shadow-md">
             {auth.currentUser?.email?.charAt(0).toUpperCase() || 'U'}
@@ -225,7 +203,6 @@ const PrivateMessage: React.FC<{
         )}
       </div>
       
-      {/* ✅ 右键/长按菜单 */}
       <ContextMenu
         visible={contextMenu.visible}
         x={contextMenu.x}
@@ -239,46 +216,55 @@ const PrivateMessage: React.FC<{
 };
 
 // ========== 主组件 ==========
-const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
-  console.log(`🎨 [PrivateChat] 初始化私聊, 目标用户: ${targetUser.username}`);
+const PrivateChat: React.FC<Props> = ({ isOpen, targetUserId, targetUsername, targetAvatar, onClose }) => {
+  console.log(`🎨 [PrivateChat] 初始化私聊, 目标用户: ${targetUsername}, isOpen: ${isOpen}`);
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [isFriend, setIsFriend] = useState(false);
+  const [isCheckingFriend, setIsCheckingFriend] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const user = auth.currentUser;
-  const privateRoomId = [user?.uid, targetUser._id].sort().join('-');
+  const { friends, sendRequest } = useFriend();
+  
+  // 私聊房间ID（使用用户ID排序后拼接）
+  const privateRoomId = user && targetUserId 
+    ? [user.uid, targetUserId].sort().join('-')
+    : '';
 
   console.log(`📋 [PrivateChat] 私聊房间ID: ${privateRoomId}`);
 
-  // ✅ 消息删除回调
-  const handleMessageDeleted = useCallback((messageId: string) => {
-    console.log(`🗑️ [PrivateChat] 删除消息: ${messageId}`);
-    setMessages(prev => prev.filter(m => m._id !== messageId));
-  }, []);
-
-  // ✅ 消息撤回回调
-  const handleMessageRecalled = useCallback((messageId: string, newContent: string) => {
-    console.log(`⏪ [PrivateChat] 撤回消息: ${messageId}`);
-    setMessages(prev => prev.map(m => 
-      m._id === messageId 
-        ? { ...m, content: newContent, isRecalled: true }
-        : m
-    ));
-  }, []);
-
-  // 加载消息
+  // 检查是否是好友
   useEffect(() => {
+    if (!isOpen) return;
+    
+    const checkFriendship = () => {
+      const isFriendNow = friends.some(f => f.friend.id === targetUserId);
+      setIsFriend(isFriendNow);
+      setIsCheckingFriend(false);
+    };
+    checkFriendship();
+  }, [friends, targetUserId, isOpen]);
+
+  // 加载消息（仅好友）
+  useEffect(() => {
+    if (!isOpen || !isFriend || !privateRoomId) return;
+    
     const loadMessages = async () => {
       try {
         setLoading(true);
-        const data = await roomApi.getMessages(privateRoomId);
-        setMessages(Array.isArray(data) ? data : []);
-        console.log(`✅ [PrivateChat] 加载消息完成，数量: ${data?.length || 0}`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE}/private-chat/${targetUserId}/messages`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        setMessages(data.messages || []);
+        console.log(`✅ [PrivateChat] 加载消息完成，数量: ${data.messages?.length || 0}`);
       } catch (error) {
         console.error('❌ [PrivateChat] 加载消息失败:', error);
       } finally {
@@ -300,9 +286,7 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
       });
     };
 
-    // ✅ 监听撤回事件
     const handleMessageRecalled = (data: { messageId: string; content: string }) => {
-      console.log(`🔔 [PrivateChat] 消息被撤回: ${data.messageId}`);
       setMessages(prev => prev.map(m => 
         m._id === data.messageId 
           ? { ...m, content: data.content, isRecalled: true }
@@ -316,14 +300,15 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
     return () => {
       socketService.leaveRoom();
       socketService.off('message-recalled', handleMessageRecalled);
-      socketService.removeAllListeners();
     };
-  }, [privateRoomId, user]);
+  }, [isOpen, isFriend, privateRoomId, targetUserId, user]);
 
   // 滚动到底部
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (isOpen) {
+      scrollToBottom();
+    }
+  }, [messages, isOpen]);
 
   // 监听滚动位置
   useEffect(() => {
@@ -347,7 +332,7 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
 
   // 发送消息
   const handleSendMessage = () => {
-    if (!inputValue.trim() || !user || isSending) return;
+    if (!inputValue.trim() || !user || isSending || !isFriend) return;
 
     console.log(`📤 [PrivateChat] 发送消息: ${inputValue.substring(0, 30)}`);
     setIsSending(true);
@@ -366,7 +351,14 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
     setTimeout(() => setIsSending(false), 300);
   };
 
-  // 键盘事件
+  // 发送好友申请
+  const handleSendFriendRequest = async () => {
+    const success = await sendRequest(targetUserId, `你好，我是 ${localStorage.getItem('username') || '用户'}，想和你成为好友`);
+    if (success) {
+      toast.success('好友申请已发送');
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -376,126 +368,204 @@ const PrivateChat: React.FC<Props> = ({ targetUser, onClose }) => {
 
   const hasContent = inputValue.trim().length > 0;
 
-  return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* 聊天头部 */}
-      <div className="bg-white/90 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0 shadow-sm">
-        <button 
-          onClick={onClose}
-          className="p-1.5 hover:bg-gray-100 rounded-full transition-all duration-200 hover:rotate-90 group"
-          title="关闭私聊"
-        >
-          <svg className="w-5 h-5 text-gray-500 group-hover:text-gray-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold shadow-md">
-              {targetUser.username.charAt(0).toUpperCase()}
+  // 如果未打开，不渲染
+  if (!isOpen) return null;
+
+  // 正在检查好友状态
+  if (isCheckingFriend) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
+          <p className="text-gray-500 mt-3">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 非好友：显示添加好友界面
+  if (!isFriend) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+          <div className="bg-white/90 dark:bg-gray-800/90 border-b border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3">
+            <button 
+              onClick={onClose}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all duration-200"
+            >
+              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="relative flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold shadow-md">
+                  {targetUsername.charAt(0).toUpperCase()}
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-medium text-gray-800 dark:text-gray-200 truncate">{targetUsername}</h2>
+                <p className="text-xs text-gray-400">还不是好友</p>
+              </div>
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
           </div>
-          
-          <div className="min-w-0 flex-1">
-            <h2 className="font-medium text-gray-800 truncate">
-              {targetUser.username}
-            </h2>
-            <p className="text-xs text-green-600 font-medium">在线</p>
+
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">还不是好友</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              需要先添加 {targetUsername} 为好友才能开始私聊
+            </p>
+            <button
+              onClick={handleSendFriendRequest}
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              添加好友
+            </button>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* 消息列表 */}
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-thin relative"
-      >
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="flex items-center gap-2 text-gray-400">
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center py-12 animate-in fade-in duration-500">
-            <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-10 h-10 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            <p className="text-gray-400 font-medium">开始和 {targetUser.username} 聊天吧</p>
-            <p className="text-gray-400 text-sm mt-1">发送第一条消息打个招呼 👋</p>
-          </div>
-        ) : (
-          messages.map((msg) => {
-            const isSelf = msg.userId?.firebaseUid === user?.uid || 
-                          msg.userId?._id === user?.uid;
-            
-            return (
-              <PrivateMessage
-                key={msg._id}
-                message={msg}
-                isSelf={isSelf}
-                targetUser={targetUser}
-                onMessageDeleted={handleMessageDeleted}
-                onMessageRecalled={handleMessageRecalled}
-              />
-            );
-          })
-        )}
-        
-        {showScrollButton && (
-          <button
-            onClick={() => scrollToBottom()}
-            className="sticky bottom-2 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-full px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-all duration-200 animate-in slide-in-from-bottom-4 fade-in border border-gray-200"
-          >
-            <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
-            最新消息
-          </button>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 输入框 */}
-      <div className="bg-white/95 backdrop-blur-xl border-t border-gray-100 px-3 py-2.5 flex-shrink-0 shadow-sm">
-        <div className="flex items-end gap-1.5">
-          <input 
-            ref={inputRef}
-            type="text" 
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`发给 ${targetUser.username}...`}
-            className="flex-1 bg-gray-100 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:bg-white transition-all duration-300"
-            maxLength={2000}
-            autoFocus
-          />
+  // 好友：正常显示聊天界面
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden flex flex-col">
+        {/* 聊天头部 */}
+        <div className="bg-white/90 dark:bg-gray-800/90 border-b border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           <button 
-            onClick={handleSendMessage}
-            disabled={!hasContent || isSending}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 ${
-              hasContent && !isSending
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md hover:shadow-lg hover:from-purple-600 hover:to-pink-600 active:scale-95'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
+            onClick={onClose}
+            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-all duration-200"
           >
-            {isSending ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            )}
+            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
+          
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="relative flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-bold shadow-md">
+                {targetUsername.charAt(0).toUpperCase()}
+              </div>
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+            </div>
+            
+            <div className="min-w-0 flex-1">
+              <h2 className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                {targetUsername}
+              </h2>
+              <p className="text-xs text-green-600 font-medium">好友 · 在线</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 消息列表 */}
+        <div 
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+        >
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="flex items-center gap-2 text-gray-400">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-10 h-10 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p className="text-gray-400 font-medium">开始和 {targetUsername} 聊天吧</p>
+              <p className="text-gray-400 text-sm mt-1">发送第一条消息打个招呼 👋</p>
+            </div>
+          ) : (
+            messages.map((msg) => {
+              const isSelf = msg.userId?.firebaseUid === user?.uid || 
+                            msg.userId?._id === user?.uid;
+              
+              return (
+                <PrivateMessage
+                  key={msg._id}
+                  message={msg}
+                  isSelf={isSelf}
+                  targetUsername={targetUsername}
+                  onMessageDeleted={(msgId) => {
+                    setMessages(prev => prev.filter(m => m._id !== msgId));
+                  }}
+                  onMessageRecalled={(msgId, newContent) => {
+                    setMessages(prev => prev.map(m => 
+                      m._id === msgId 
+                        ? { ...m, content: newContent, isRecalled: true }
+                        : m
+                    ));
+                  }}
+                />
+              );
+            })
+          )}
+          
+          {showScrollButton && (
+            <button
+              onClick={() => scrollToBottom()}
+              className="sticky bottom-2 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-full px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-all"
+            >
+              <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+              最新消息
+            </button>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 输入框 */}
+        <div className="bg-white/95 dark:bg-gray-800/95 border-t border-gray-100 dark:border-gray-700 px-3 py-2.5 flex-shrink-0">
+          <div className="flex items-end gap-1.5">
+            <input 
+              ref={inputRef}
+              type="text" 
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`发给 ${targetUsername}...`}
+              className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:bg-white dark:focus:bg-gray-600 transition-all"
+              maxLength={2000}
+              autoFocus
+            />
+            <button 
+              onClick={handleSendMessage}
+              disabled={!hasContent || isSending}
+              className={`flex-shrink-0 px-4 py-2.5 rounded-2xl text-sm font-medium transition-all ${
+                hasContent && !isSending
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md hover:shadow-lg active:scale-95'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {isSending ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-以下是合并后的完整项目文档，包含所有历史内容和新完成的 AFK 系统、拍一拍修复、消息分页等更新。
+以下是合并后的完整项目文档，保留所有历史记录并新增本次 AFK 系统重构更新。
 
 ```markdown
 # RP Chat - 项目上下文文档
@@ -46,17 +46,9 @@
 | `favicon.svg` | 网站图标 |
 | `fonts/MaokenZhuyuanTi.ttf` | 猫啃珠圆体字体（全局使用） |
 | `frames/` | 头像框图片目录（.png 格式） |
-| **`wallpapers/`** | **AFK 隐私保护壁纸目录** |
-| `wallpapers/desktop/1.mp4` | 电脑端壁纸 1（~26MB） |
-| `wallpapers/desktop/2.mp4` | 电脑端壁纸 2（~38MB） |
-| `wallpapers/desktop/3.mp4` | 电脑端壁纸 3（~48MB） |
-| `wallpapers/desktop/4.mp4` | 电脑端壁纸 4（~251MB） |
-| `wallpapers/desktop/5.mp4` | 电脑端壁纸 5（~72MB） |
-| `wallpapers/desktop/6.mp4` | 电脑端壁纸 6（~189MB） |
-| `wallpapers/desktop/7.mp4` | 电脑端壁纸 7（~206MB） |
-| `wallpapers/mobile/1.mp4` | 手机端壁纸 1（~26MB） |
-| `wallpapers/mobile/2.mp4` | 手机端壁纸 2（~38MB） |
-| `wallpapers/mobile/3.mp4` | 手机端壁纸 3（~25MB） |
+| **`wallpapers/`** | **AFK 隐私保护壁纸目录（已废弃，改用 GitHub Releases 托管）** |
+
+> **注意**：由于 Vercel 部署限制（单文件最大 50MB），视频壁纸现已通过 GitHub Releases + jsDelivr CDN 托管，不再存储在 `public/wallpapers/` 目录。
 
 #### `src/` - 源代码
 
@@ -151,9 +143,8 @@
 |------|------|
 | **`AvatarFrame.tsx`** | **头像框显示（支持独立配置 scale/offset）** |
 | **`AvatarUpload.tsx`** | **头像上传弹窗（Cloudinary）** |
-| **`AFKScreen.tsx`** | **AFK 隐私保护遮挡屏幕（全屏壁纸，支持视频循环播放）** |
-| **`AFKStatus.tsx`** | **AFK 状态指示器（在线/挂机/离线/异常）** |
-| **`ConnectionStatus.tsx`** | **连接状态指示器** |
+| **`AFKScreen.tsx`** | **AFK 隐私保护遮挡屏幕（全屏壁纸，支持视频循环播放、双视频层无缝切换、主循环定时器、健康检查）** |
+| **`DraggableAFKStatus.tsx`** | **可拖拽橙色锁头控制面板 + 功能菜单（暂停/播放/循环/跳过/显示解锁界面）** |
 | `Changelog.tsx` | 更新日志展示 |
 | `ContextMenu.tsx` | 右键菜单 |
 | `CustomDatePicker.tsx` | 自定义日期选择器 |
@@ -163,6 +154,8 @@
 | `NotificationSettings.tsx` | 通知设置 |
 | **`PersonaSwitchPanel.tsx`** | **角色切换弹窗（搜索、最近使用）** |
 | `SearchPage.tsx` | 全局搜索页面 |
+
+> **注意**：`AFKStatus.tsx` 和 `ConnectionStatus.tsx` 已废弃，功能已合并到 `DraggableAFKStatus.tsx`。
 
 ---
 
@@ -270,8 +263,8 @@
 
 | 文件 | 职责 |
 |------|------|
-| `ThemeContext.tsx` | 深色/浅色模式上下文（仅 localStorage） |
-| **`AFKContext.tsx`** | **AFK 状态管理上下文（5分钟无操作自动进入，ESC退出，手动进入）** |
+| `ThemeContext.tsx` | 深色/浅色模式上下文（仅 localStorage，AFK 模式下强制锁定浅色） |
+| **`AFKContext.tsx`** | **AFK 状态管理（5分钟无操作自动进入，ESC退出，手动进入，拖拽位置记忆）** |
 
 ##### `src/hooks/`
 
@@ -476,8 +469,8 @@
 ### 14. 新用户引导流程
 注册成功 → 输入邀请码 → 引导页（用户名/昵称/生日）→ 创建角色 → 创建/加入群聊 → 进入聊天页。
 
-### 15. AFK 隐私保护流程
-用户无操作 5 分钟（开发环境 30 秒）→ AFKContext 检测 → 设置 isAFK = true → AFKScreen 全屏显示 → 播放壁纸视频（顺序循环）→ 用户按 ESC 或点击退出按钮 → 恢复界面。**手动 AFK**：点击锁头图标 → 立即进入 AFK 模式（⚠️ 当前存在 bug，遮挡层不显示）。
+### 15. AFK 隐私保护流程（新版）
+用户无操作 5 分钟（开发环境 30 秒）→ AFKContext 检测 → 设置 isAFK = true → AFKScreen 全屏显示 → 播放壁纸视频（顺序循环，双视频层无缝切换）→ 出现可拖拽橙色锁头按钮 → 点击锁头展开功能菜单（暂停/播放/循环/跳过/显示解锁界面）→ 用户按 ESC 或点击退出按钮 → 恢复界面。**手动 AFK**：点击顶部栏锁头图标 → 立即进入 AFK 模式。
 
 ---
 
@@ -586,17 +579,23 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **Discord 告警（安全事件、部署通知等）**
 - [x] **维护模式（管理员可开关，支持定时计划）**
 
-#### 🛡️ AFK 隐私保护系统
+#### 🛡️ AFK 隐私保护系统（v2.0 - 2026-05-31 重构）
 - [x] 无操作 5 分钟后自动进入隐私保护模式
 - [x] 全屏动态壁纸（支持视频/图片）
-- [x] 电脑/手机分离壁纸（7个电脑端 + 3个手机端）
+- [x] 电脑/手机分离壁纸（7个电脑端 + 2个手机端）
 - [x] 顺序循环播放（1→2→3→...→N→1）
-- [x] 双视频层无缝切换（避免空白暴露）
+- [x] 双视频层无缝切换（淡入淡出，避免空白暴露）
+- [x] 主循环定时器（3分钟强制切换，防止卡顿）
+- [x] 健康检查（每5秒检测视频状态，自动恢复播放）
 - [x] 密码保护（可选）
 - [x] 手动进入按钮（电脑端右上角锁头图标）
 - [x] ESC 键退出
+- [x] **可拖拽橙色锁头控制面板（位置记忆）**
+- [x] **功能菜单（暂停/播放/循环/跳过/显示解锁界面）**
+- [x] **毛玻璃 UI 美化（渐变 + 毛玻璃 + 脉冲光环）**
+- [x] **GitHub Releases + jsDelivr CDN 壁纸托管**
+- [x] **AFK 模式下强制锁定浅色模式**
 - [x] 连接状态指示器（在线/挂机/离线/异常）
-- [x] AFK 状态指示器
 
 #### 📱 布局与主题
 - [x] 深色模式（仅 localStorage，无系统跟随）
@@ -726,6 +725,32 @@ Title (头衔)
 
 ---
 
+## 🔌 AFK 系统自定义事件
+
+| 事件名 | 触发时机 | 用途 |
+|--------|----------|------|
+| `showAFKUI` | 点击锁头 | 显示隐私保护模式 UI |
+| `hideAFKUI` | 关闭面板 | 隐藏 UI |
+| `toggleAFKUI` | 点击锁头 | 切换 UI 显示/隐藏 |
+| `afkUIShown` | UI 显示后 | 触发自动隐藏定时器 |
+| `afkUIHidden` | UI 隐藏后 | 清除定时器 |
+
+### DraggableAFKStatus 组件 Props
+
+```tsx
+interface DraggableAFKStatusProps {
+  size?: 'sm' | 'md' | 'lg';
+  onPauseToggle?: (paused: boolean) => void;
+  onRepeatToggle?: (repeating: boolean) => void;
+  onSkip?: () => void;
+  onShowUI?: () => void;
+  isVideoPaused?: boolean;
+  isRepeating?: boolean;
+}
+```
+
+---
+
 ## 🤖 AI 维护指南
 
 > ### 给下次对话的 AI：
@@ -741,7 +766,8 @@ Title (头衔)
 > |--------|----------|
 > | 头像框配置 | `AvatarFrame.tsx` 的 `frameAdjustments` |
 > | AFK 配置 | `AFKContext.tsx` 的 `AFK_CONFIG`（超时时间） |
-> | AFK 壁纸 | `AFKScreen.tsx` 的 `DESKTOP_WALLPAPERS` / `MOBILE_WALLPAPERS` |
+> | AFK 壁纸 URL | `AFKScreen.tsx` 的 `DESKTOP_WALLPAPERS` / `MOBILE_WALLPAPERS` |
+> | AFK 锁头组件 | `DraggableAFKStatus.tsx` |
 > | Cloudinary | `CLOUDINARY_URL` 环境变量 |
 > | DeepSeek API | `aiService.js` |
 > | Socket.IO | `app.js` + `socket.ts` |
@@ -787,7 +813,8 @@ Title (头衔)
 
 | 日期 | 更新内容 |
 |------|----------|
-| **2026-05-30** | **AFK 隐私保护系统**（5分钟自动进入、全屏视频壁纸、双视频层无缝切换、电脑/手机分离壁纸、密码保护、手动AFK按钮）；**拍一拍修复**（isPat 字段存储，刷新后样式保留）；**消息分页加载**（游标分页，滚动自动加载历史）；**API 缓存问题修复**（GET 请求自动添加 _t 时间戳）；**CORS 和网络连接优化**（智能环境检测）；**Git LFS 配置**（壁纸大文件存储） |
+| **2026-05-31** | **AFK 系统完整重构 v2.0**：可拖拽橙色锁头控制面板（位置记忆）；功能菜单（暂停/播放/循环/跳过/显示解锁界面）；视频壁纸无缝循环（双视频层、主循环定时器、健康检查）；GitHub Releases + jsDelivr CDN 托管；毛玻璃 UI 美化；AFK 模式下强制锁定浅色模式；修复手动 AFK 遮挡层不显示问题；修复设置页面无限循环；修复拖拽跳跃和重复锁头问题 |
+| 2026-05-30 | AFK 隐私保护系统（5分钟自动进入、全屏视频壁纸、双视频层无缝切换、电脑/手机分离壁纸、密码保护、手动AFK按钮）；拍一拍修复（isPat 字段存储，刷新后样式保留）；消息分页加载（游标分页，滚动自动加载历史）；API 缓存问题修复（GET 请求自动添加 _t 时间戳）；CORS 和网络连接优化（智能环境检测）；Git LFS 配置（壁纸大文件存储） |
 | 2026-05-28 | 拍一拍功能（双击头像，预设/自定义动作）；充值码系统（钱包页面）；多语言翻译（Google Translate，消息内翻译）；新用户引导流程；全局编号移除（只保留同名编号）；定时维护计划；动画优化（Framer Motion）；安全中间件优化（翻译接口白名单） |
 | 2026-05-27 | 管理员豁免选项；头像上传优化；PersonaManager 头像显示；动态功能修复 |
 | 2026-05-26 | 头像框系统集成；安全系统；认证升级；@提及功能；头衔系统；群组管理修复 |
@@ -802,21 +829,35 @@ Title (头衔)
 
 | 问题 | 严重程度 | 说明 |
 |------|----------|------|
-| 手动 AFK 按钮不显示遮挡层 | 🔴 高 | `enterAFKManually` 日志正常但 `AFKScreen` 未渲染 |
+| 部分手机浏览器视频无法自动播放 | 🔴 高 | 需要用户首次交互后播放，iOS 需要 `playsInline` 属性 |
 | AFK 状态切换时短暂空白 | 🟡 中 | 视频切换时仍有极短空白（已优化但未完全解决） |
 | 手机端视频可能卡顿 | 🟡 中 | 大文件在低端手机上可能播放不流畅 |
+
+---
+
+### 🔧 本次（2026-05-31）修复的问题详情
+
+| 问题 | 解决方案 |
+|------|----------|
+| 手动 AFK 按钮不显示遮挡层 | 移除重复的 `AFKProvider` 包装 |
+| 设置页面无限循环 | 拆分 `useEffect` 依赖，添加 `useRef` 防重复 |
+| 视频播放到一半停止 | 添加主循环定时器（3分钟强制切换）+ 健康检查 |
+| 视频切换不流畅 | 优化 `readyState` 检测，增加淡入淡出时间至 500ms |
+| 橙色锁头拖拽跳跃 | 使用 `useMotionValue` 替代 React state |
+| 两个橙色锁头 | 删除布局文件中的重复 `<DraggableAFKStatus />` |
+| 视频控制功能无效 | 修复闭包问题，使用 `ref` 传递暂停状态 |
+| 夜间模式问题 | 修改 `ThemeContext.tsx` 强制锁定浅色模式 |
 
 ---
 
 *本文档由 AI 维护，每次重要更新后请同步更新*
 ```
 
-以上是合并后的完整项目文档，包含了：
-- 所有历史功能（头像框、安全系统、@提及、头衔、充值码等）
-- 新增的 AFK 隐私保护系统
-- 拍一拍修复（`isPat` 字段）
-- 消息分页加载
-- API 缓存修复
-- CORS 优化
-- Git LFS 配置
-- 当前已知问题列表
+以上是合并后的完整项目文档，保留了所有历史记录（包括 2026-05-31 之前的 AFK 系统记录），并新增了本次（2026-05-31）AFK 系统重构的详细内容：
+- 可拖拽橙色锁头控制面板
+- 功能菜单（暂停/播放/循环/跳过/显示解锁界面）
+- 视频壁纸无缝循环播放增强
+- GitHub Releases + jsDelivr CDN 托管
+- 毛玻璃 UI 美化
+- 修复的所有问题详情
+- AFK 系统自定义事件和组件 Props 说明
