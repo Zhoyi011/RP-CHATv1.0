@@ -10,11 +10,24 @@ const { emitToUser } = require('../utils/socketHelper');
 
 const router = express.Router();
 
+// ========== 辅助函数 ==========
+// 获取用户的好友ID列表
+const getFriendIds = async (userId) => {
+  const friendships = await Friend.find({ userId, status: 'accepted' }).select('friendId');
+  return friendships.map(f => f.friendId);
+};
+
+// 检查是否为好友
+const isFriend = async (userId, targetId) => {
+  const friendship = await Friend.findOne({ userId, friendId: targetId, status: 'accepted' });
+  return !!friendship;
+};
+
 // ========== 获取好友列表 ==========
 router.get('/list', authMiddleware, async (req, res) => {
   try {
     const { group, search } = req.query;
-    const userId = req.user.id;
+    const userId = req.user._id;
 
     const filter = { userId, status: 'accepted' };
     if (group && group !== 'all') {
@@ -32,7 +45,6 @@ router.get('/list', authMiddleware, async (req, res) => {
       );
     }
 
-    // 获取在线状态（需要从 app.js 获取 onlineUsers，暂时返回 false）
     const friendList = friends.map(f => ({
       id: f._id,
       friend: {
@@ -47,7 +59,7 @@ router.get('/list', authMiddleware, async (req, res) => {
       isStarred: f.isStarred,
       lastInteractionAt: f.lastInteractionAt,
       createdAt: f.createdAt,
-      isOnline: false // 暂时返回 false，后续可从全局 Map 获取
+      isOnline: false
     }));
 
     const grouped = {};
@@ -71,7 +83,7 @@ router.get('/list', authMiddleware, async (req, res) => {
 // ========== 获取好友申请列表 ==========
 router.get('/requests', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
 
     const received = await FriendRequest.find({
       toUserId: userId,
@@ -122,13 +134,13 @@ router.get('/requests', authMiddleware, async (req, res) => {
 router.post('/request', authMiddleware, async (req, res) => {
   try {
     const { toUserId, message } = req.body;
-    const fromUserId = req.user.id;
+    const fromUserId = req.user._id;
 
     if (!toUserId) {
       return res.status(400).json({ success: false, message: '缺少目标用户ID' });
     }
 
-    if (fromUserId === toUserId) {
+    if (fromUserId.toString() === toUserId) {
       return res.status(400).json({ success: false, message: '不能添加自己为好友' });
     }
 
@@ -156,7 +168,7 @@ router.post('/request', authMiddleware, async (req, res) => {
     });
 
     if (existingRequest) {
-      if (existingRequest.fromUserId.toString() === fromUserId) {
+      if (existingRequest.fromUserId.toString() === fromUserId.toString()) {
         return res.status(400).json({ success: false, message: '已发送过好友申请，请等待对方处理' });
       } else {
         return res.status(400).json({ success: false, message: '对方已向你发送好友申请，请去处理' });
@@ -172,19 +184,16 @@ router.post('/request', authMiddleware, async (req, res) => {
     await request.save();
 
     // 通过 Socket 通知对方
-    const io = req.app.get('io');
-    if (io) {
-      emitToUser(toUserId, 'friend-request-received', {
-        id: request._id,
-        fromUser: {
-          id: req.user.id,
-          username: req.user.username,
-          avatar: req.user.avatar
-        },
-        message: request.message,
-        createdAt: request.createdAt
-      });
-    }
+    emitToUser(toUserId, 'friend-request-received', {
+      id: request._id,
+      fromUser: {
+        id: req.user._id,
+        username: req.user.username,
+        avatar: req.user.avatar
+      },
+      message: request.message,
+      createdAt: request.createdAt
+    });
 
     res.json({
       success: true,
@@ -202,14 +211,14 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
   try {
     const { requestId } = req.params;
     const { action } = req.body;
-    const userId = req.user.id;
+    const userId = req.user._id;
 
     const request = await FriendRequest.findById(requestId);
     if (!request) {
       return res.status(404).json({ success: false, message: '申请不存在' });
     }
 
-    if (request.toUserId.toString() !== userId) {
+    if (request.toUserId.toString() !== userId.toString()) {
       return res.status(403).json({ success: false, message: '无权处理此申请' });
     }
 
@@ -242,7 +251,6 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
 
       const fromUser = await User.findById(request.fromUserId).select('username avatar');
 
-      // 通过 Socket 通知对方
       emitToUser(request.fromUserId.toString(), 'friend-request-accepted', {
         userId: request.toUserId,
         username: req.user.username,
@@ -278,7 +286,7 @@ router.post('/request/:requestId/handle', authMiddleware, async (req, res) => {
 // ========== 删除好友 ==========
 router.delete('/:friendId', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const { friendId } = req.params;
 
     await Friend.deleteMany({
@@ -312,7 +320,7 @@ router.delete('/:friendId', authMiddleware, async (req, res) => {
 // ========== 修改好友备注/分组 ==========
 router.put('/:friendId', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const { friendId } = req.params;
     const { nickname, group, isStarred } = req.body;
 
@@ -341,11 +349,10 @@ router.put('/:friendId', authMiddleware, async (req, res) => {
 // ========== 获取好友动态 ==========
 router.get('/feed-posts', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     const limit = parseInt(req.query.limit) || 10;
 
-    const friendships = await Friend.find({ userId, status: 'accepted' }).select('friendId');
-    const friendIds = friendships.map(f => f.friendId);
+    const friendIds = await getFriendIds(userId);
 
     if (friendIds.length === 0) {
       return res.json({
@@ -365,7 +372,7 @@ router.get('/feed-posts', authMiddleware, async (req, res) => {
     .populate('personaId', 'name displayName avatar');
 
     const lastFeedView = req.user.lastFeedViewAt || new Date(0);
-    const hasNewPosts = posts.some(post => post.createdAt > lastFeedView);
+    const hasNewPosts = posts.some(post => new Date(post.createdAt) > new Date(lastFeedView));
 
     res.json({
       success: true,
@@ -382,7 +389,7 @@ router.get('/feed-posts', authMiddleware, async (req, res) => {
 // ========== 标记 Feed 已查看 ==========
 router.post('/feed-viewed', authMiddleware, async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user.id, {
+    await User.findByIdAndUpdate(req.user._id, {
       lastFeedViewAt: new Date()
     });
     res.json({ success: true });
@@ -396,7 +403,7 @@ router.post('/feed-viewed', authMiddleware, async (req, res) => {
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { q } = req.query;
-    const userId = req.user.id;
+    const userId = req.user._id;
 
     if (!q || q.length < 2) {
       return res.json({ success: true, data: [] });
@@ -409,8 +416,7 @@ router.get('/search', authMiddleware, async (req, res) => {
     .select('username email avatar role')
     .limit(20);
 
-    const friendships = await Friend.find({ userId, status: 'accepted' }).select('friendId');
-    const friendIds = friendships.map(f => f.friendId.toString());
+    const friendIds = await getFriendIds(userId);
 
     const pendingRequests = await FriendRequest.find({
       $or: [
@@ -420,7 +426,7 @@ router.get('/search', authMiddleware, async (req, res) => {
     }).select('fromUserId toUserId status');
 
     const result = users.map(user => {
-      const isFriend = friendIds.includes(user._id.toString());
+      const isFriend = friendIds.some(id => id.toString() === user._id.toString());
       const pendingRequest = pendingRequests.find(req => 
         (req.fromUserId.toString() === user._id.toString() && req.status === 'pending') ||
         (req.toUserId.toString() === user._id.toString() && req.status === 'pending')
@@ -428,7 +434,7 @@ router.get('/search', authMiddleware, async (req, res) => {
       
       let requestStatus = null;
       if (pendingRequest) {
-        if (pendingRequest.fromUserId.toString() === userId) {
+        if (pendingRequest.fromUserId.toString() === userId.toString()) {
           requestStatus = 'sent';
         } else {
           requestStatus = 'received';
