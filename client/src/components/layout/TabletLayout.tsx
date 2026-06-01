@@ -9,9 +9,9 @@ import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
 import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
-import { AddFriendModal } from '../friends/AddFriendModal';
-import { FriendList } from '../friends/FriendList';
-import { FriendRequests } from '../friends/FriendRequests';
+import AddFriendModal from '../friends/AddFriendModal';
+import FriendList from '../friends/FriendList';
+import FriendRequests from '../friends/FriendRequests';
 import PrivateChat from '../chat/PrivateChat';
 import toast from 'react-hot-toast';
 
@@ -33,7 +33,7 @@ interface CurrentPersona {
   avatar?: string;
 }
 
-// 🔥 内部组件，使用根 AFKProvider 的 useAFK
+// 内部组件
 const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userData, setUserData] = useState<User | null>(null);
@@ -44,11 +44,10 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const user = auth.currentUser;
   
-  // 🔥 获取 AFK 手动进入方法
   const { enterAFKManually } = useAFK();
-  const { unreadRequestCount } = useFriend();
+  const { unreadCount: friendUnreadCount } = useFriend();
 
-  // 🔥 好友相关状态
+  // 好友相关状态
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [showFriendList, setShowFriendList] = useState(false);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
@@ -231,7 +230,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 🔥 好友按钮组 */}
+          {/* 好友按钮组 */}
           <button
             onClick={() => setShowFriendList(true)}
             className="relative p-2 text-gray-500 hover:text-green-600 rounded-full hover:bg-gray-100 transition-all duration-200 hover:scale-110 active:scale-90"
@@ -261,7 +260,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            {unreadRequestCount > 0 && (
+            {friendUnreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
             )}
           </button>
@@ -280,7 +279,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             </svg>
           </button>
 
-          {/* 连接状态指示器 - 平板显示文字 */}
+          {/* 连接状态指示器 */}
           <ConnectionStatus showText={true} />
           
           <DiamondBalance size="sm" />
@@ -373,10 +372,10 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
               </button>
             ))}
 
-            {/* 🔥 分割线 */}
+            {/* 分割线 */}
             <div className="border-t border-gray-100 my-2"></div>
 
-            {/* 🔥 好友相关菜单项 */}
+            {/* 好友相关菜单项 */}
             <button
               onClick={() => {
                 setSidebarOpen(false);
@@ -414,9 +413,9 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               <span className="font-medium">好友申请</span>
-              {unreadRequestCount > 0 && (
+              {friendUnreadCount > 0 && (
                 <span className="ml-auto px-2 py-0.5 text-xs rounded-full bg-red-500 text-white animate-pulse">
-                  {unreadRequestCount > 99 ? '99+' : unreadRequestCount}
+                  {friendUnreadCount > 99 ? '99+' : friendUnreadCount}
                 </span>
               )}
             </button>
@@ -474,19 +473,15 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
         {children}
       </div>
 
-      {/* 🔥 好友相关弹窗 */}
+      {/* 好友相关弹窗 */}
       <AddFriendModal 
         isOpen={showAddFriendModal}
         onClose={() => setShowAddFriendModal(false)}
-        onSuccess={() => {
-          setShowAddFriendModal(false);
-          toast.success('好友申请已发送');
-        }}
       />
 
       {showFriendList && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+          <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-xl">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -503,25 +498,28 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 </svg>
               </button>
             </div>
-            <FriendList onSelectFriend={(id, name, avatar) => {
-              setShowFriendList(false);
-              setSelectedPrivateChat({ id, name, avatar });
-            }} />
+            <FriendList 
+              onSelectFriend={(id, name, avatar) => {
+                setShowFriendList(false);
+                setSelectedPrivateChat({ id, name, avatar });
+              }}
+              onClose={() => setShowFriendList(false)}
+            />
           </div>
         </div>
       )}
 
       {showFriendRequests && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
+          <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-xl">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
                 好友申请
-                {unreadRequestCount > 0 && (
-                  <span className="text-sm text-red-500">({unreadRequestCount})</span>
+                {friendUnreadCount > 0 && (
+                  <span className="text-sm text-red-500">({friendUnreadCount})</span>
                 )}
               </h2>
               <button
@@ -533,7 +531,13 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 </svg>
               </button>
             </div>
-            <FriendRequests onAccept={() => setShowFriendRequests(false)} />
+            <FriendRequests 
+              onClose={() => setShowFriendRequests(false)}
+              onAccept={(personaId, personaName, personaAvatar) => {
+                setShowFriendRequests(false);
+                toast.success(`已添加 ${personaName} 为好友`);
+              }}
+            />
           </div>
         </div>
       )}
@@ -541,15 +545,15 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
       <PrivateChat
         isOpen={!!selectedPrivateChat}
         onClose={() => setSelectedPrivateChat(null)}
-        targetUserId={selectedPrivateChat?.id || ''}
-        targetUsername={selectedPrivateChat?.name || ''}
-        targetAvatar={selectedPrivateChat?.avatar}
+        targetPersonaId={selectedPrivateChat?.id || ''}
+        targetPersonaName={selectedPrivateChat?.name || ''}
+        targetPersonaAvatar={selectedPrivateChat?.avatar}
       />
     </div>
   );
 };
 
-// 🔥 外层组件 - 直接返回内容，不再包裹额外的 AFKProvider
+// 外层组件
 const TabletLayout: React.FC<Props> = ({ children }) => {
   return <TabletLayoutContent>{children}</TabletLayoutContent>;
 };

@@ -1,27 +1,26 @@
 // client/src/components/feed/MobileFeed.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, MoreVertical, UserPlus, Bell, BellOff } from 'lucide-react';
-import { useFriend } from '../../contexts/FriendContext';
+import { motion } from 'framer-motion';
+import { Heart, MessageCircle, MoreVertical, UserPlus, Bell } from 'lucide-react';
 import { friendApi } from '../../services/friendApi';
 import toast from 'react-hot-toast';
 
-interface Post {
+// 动态帖子类型
+interface FeedPost {
   _id: string;
   content: string;
   images?: string[];
-  userId: {
-    _id: string;
-    username: string;
-    avatar?: string;
-  };
   personaId?: {
     _id: string;
     name: string;
     displayName?: string;
     avatar?: string;
   };
-  likes: string[];
+  userId: {
+    _id: string;
+    username: string;
+    avatar?: string;
+  };
   likeCount: number;
   commentCount: number;
   isLiked?: boolean;
@@ -29,66 +28,35 @@ interface Post {
 }
 
 export const MobileFeed: React.FC = () => {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasNewPosts, setHasNewPosts] = useState(false);
-  const [lastViewTime, setLastViewTime] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 获取好友动态
-  const fetchFeedPosts = useCallback(async () => {
+  const fetchFeedPosts = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setRefreshing(true);
     try {
-      const res = await friendApi.getFriendFeedPosts(20);
+      const res = await friendApi.getFriendFeed(20);
       if (res.success) {
         setPosts(res.data);
-        setHasNewPosts(res.hasNewPosts);
-        setLastViewTime(res.lastFeedView);
       }
     } catch (error) {
       console.error('获取动态失败:', error);
+      toast.error('加载动态失败');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  // 标记动态已查看
-  const markAsViewed = useCallback(async () => {
-    if (hasNewPosts) {
-      try {
-        await friendApi.markFeedViewed();
-        setHasNewPosts(false);
-      } catch (error) {
-        console.error('标记已查看失败:', error);
-      }
-    }
-  }, [hasNewPosts]);
-
-  // 进入页面时获取动态，并标记已查看
+  // 初始加载
   useEffect(() => {
     fetchFeedPosts();
-    
-    // 滚动到顶部时标记已查看
-    const handleScroll = () => {
-      if (window.scrollY === 0 && hasNewPosts) {
-        markAsViewed();
-      }
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [fetchFeedPosts, markAsViewed, hasNewPosts]);
-
-  // 定时刷新（每30秒）
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchFeedPosts();
-    }, 30000);
-    return () => clearInterval(interval);
   }, [fetchFeedPosts]);
 
+  // 点赞
   const handleLike = async (postId: string, isLiked: boolean) => {
-    // 这里调用点赞 API
-    toast.success(isLiked ? '已取消点赞' : '点赞成功');
-    // 更新本地状态
+    // 乐观更新
     setPosts(prev => prev.map(post => 
       post._id === postId 
         ? { 
@@ -98,8 +66,13 @@ export const MobileFeed: React.FC = () => {
           }
         : post
     ));
+    
+    // TODO: 调用点赞 API
+    // await friendApi.likePost(postId);
+    toast.success(isLiked ? '已取消点赞' : '点赞成功');
   };
 
+  // 格式化时间
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -113,6 +86,16 @@ export const MobileFeed: React.FC = () => {
     if (hours < 24) return `${hours}小时前`;
     if (days < 7) return `${days}天前`;
     return date.toLocaleDateString();
+  };
+
+  // 获取显示名称
+  const getDisplayName = (post: FeedPost) => {
+    return post.personaId?.displayName || post.personaId?.name || post.userId.username;
+  };
+
+  // 获取头像
+  const getAvatar = (post: FeedPost) => {
+    return post.personaId?.avatar || post.userId.avatar || '/default-avatar.png';
   };
 
   if (loading) {
@@ -131,23 +114,17 @@ export const MobileFeed: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">好友动态</h1>
-            {/* 新动态红点 */}
-            {hasNewPosts && (
-              <div className="relative">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="absolute -top-1 -right-1 text-xs text-red-500">●</span>
-              </div>
-            )}
           </div>
           <button
-            onClick={() => fetchFeedPosts()}
+            onClick={() => fetchFeedPosts(true)}
+            disabled={refreshing}
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
-            <Bell className="w-5 h-5 text-gray-500" />
+            <Bell className={`w-5 h-5 text-gray-500 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          只显示好友的最新动态
+          只显示好友角色的最新动态
         </p>
       </div>
 
@@ -165,20 +142,20 @@ export const MobileFeed: React.FC = () => {
               key={post._id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
+              transition={{ delay: Math.min(index * 0.03, 0.5) }}
               className="bg-white dark:bg-gray-900 p-4"
             >
               {/* 用户信息 */}
               <div className="flex items-start gap-3">
                 <img
-                  src={post.personaId?.avatar || post.userId.avatar || '/default-avatar.png'}
-                  alt={post.personaId?.displayName || post.userId.username}
+                  src={getAvatar(post)}
+                  alt={getDisplayName(post)}
                   className="w-10 h-10 rounded-full object-cover"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-gray-900 dark:text-white">
-                      {post.personaId?.displayName || post.personaId?.name || post.userId.username}
+                      {getDisplayName(post)}
                     </span>
                     {post.personaId && (
                       <span className="text-xs text-gray-400">
@@ -191,7 +168,7 @@ export const MobileFeed: React.FC = () => {
                   </div>
                   
                   {/* 动态内容 */}
-                  <p className="text-gray-700 dark:text-gray-300 mt-2 whitespace-pre-wrap">
+                  <p className="text-gray-700 dark:text-gray-300 mt-2 whitespace-pre-wrap break-words">
                     {post.content}
                   </p>
                   
@@ -242,24 +219,12 @@ export const MobileFeed: React.FC = () => {
         )}
       </div>
 
-      {/* 新动态提示条 */}
-      <AnimatePresence>
-        {hasNewPosts && window.scrollY > 100 && (
-          <motion.button
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            onClick={() => {
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-              markAsViewed();
-            }}
-            className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-purple-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 z-20"
-          >
-            <Bell className="w-4 h-4" />
-            有新动态
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {/* 加载更多提示 */}
+      {posts.length > 0 && (
+        <div className="text-center py-4">
+          <p className="text-xs text-gray-400">—— 已经到底了 ——</p>
+        </div>
+      )}
     </div>
   );
 };

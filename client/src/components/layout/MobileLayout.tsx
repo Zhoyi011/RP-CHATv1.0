@@ -15,9 +15,9 @@ import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
 import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
-import { AddFriendModal } from '../friends/AddFriendModal';
-import { FriendList } from '../friends/FriendList';
-import { FriendRequests } from '../friends/FriendRequests';
+import AddFriendModal from '../friends/AddFriendModal';
+import FriendList from '../friends/FriendList';
+import FriendRequests from '../friends/FriendRequests';
 import PrivateChat from '../chat/PrivateChat';
 
 interface Props {
@@ -31,7 +31,7 @@ interface TabItem {
   activeIcon?: React.ReactNode;
 }
 
-// 辅助函数：从 URL 中提取头像框文件名
+// 辅助函数
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
@@ -42,37 +42,22 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
 // ========== 动画变体 ==========
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1,
-    transition: { duration: 0.3 }
-  }
+  visible: { opacity: 1, transition: { duration: 0.3 } }
 };
 
 const headerVariants: Variants = {
   hidden: { y: -20, opacity: 0 },
-  visible: { 
-    y: 0, 
-    opacity: 1,
-    transition: { type: "spring", damping: 25, stiffness: 300 }
-  }
+  visible: { y: 0, opacity: 1, transition: { type: "spring", damping: 25, stiffness: 300 } }
 };
 
 const tabBarVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
-  visible: { 
-    y: 0, 
-    opacity: 1,
-    transition: { type: "spring", damping: 25, stiffness: 300, delay: 0.1 }
-  }
+  visible: { y: 0, opacity: 1, transition: { type: "spring", damping: 25, stiffness: 300, delay: 0.1 } }
 };
 
 const menuItemVariants: Variants = {
   hidden: { x: -20, opacity: 0 },
-  visible: (i: number) => ({ 
-    x: 0, 
-    opacity: 1,
-    transition: { delay: i * 0.05, duration: 0.3 }
-  }),
+  visible: (i: number) => ({ x: 0, opacity: 1, transition: { delay: i * 0.05, duration: 0.3 } }),
   tap: { scale: 0.97 }
 };
 
@@ -84,14 +69,8 @@ const overlayVariants: Variants = {
 
 const drawerVariants: Variants = {
   hidden: { x: '-100%' },
-  visible: { 
-    x: 0,
-    transition: { type: "spring", damping: 25, stiffness: 200 }
-  },
-  exit: { 
-    x: '-100%',
-    transition: { type: "spring", damping: 25, stiffness: 200 }
-  }
+  visible: { x: 0, transition: { type: "spring", damping: 25, stiffness: 200 } },
+  exit: { x: '-100%', transition: { type: "spring", damping: 25, stiffness: 200 } }
 };
 
 const tabVariants: Variants = {
@@ -101,13 +80,116 @@ const tabVariants: Variants = {
 
 const badgeVariants: Variants = {
   initial: { scale: 0 },
-  animate: { 
-    scale: 1,
-    transition: { type: "spring", stiffness: 500, damping: 30 }
-  }
+  animate: { scale: 1, transition: { type: "spring", stiffness: 500, damping: 30 } }
 };
 
-// 🔥 内部组件
+// ========== 联系人菜单弹窗（智能定位） ==========
+const ContactMenuModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onFriendList: () => void;
+  onAddFriend: () => void;
+  onFriendRequests: () => void;
+  unreadCount: number;
+  anchorRect?: DOMRect | null;
+}> = ({ isOpen, onClose, onFriendList, onAddFriend, onFriendRequests, unreadCount, anchorRect }) => {
+  const [position, setPosition] = useState({ top: 0, right: 8, left: undefined as number | undefined });
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen && anchorRect && menuRef.current) {
+      const menuWidth = menuRef.current.offsetWidth;
+      const windowWidth = window.innerWidth;
+      
+      // 计算从右边展开的位置
+      let right = windowWidth - anchorRect.right + 8;
+      let left: number | undefined = undefined;
+      
+      // 如果右边空间不够，改为从左边展开
+      if (right + menuWidth > windowWidth - 8) {
+        right = 8;
+        left = anchorRect.left - menuWidth + 8;
+        if (left && left < 8) left = 8;
+      }
+      
+      setPosition({
+        top: anchorRect.bottom + 4,
+        right: right,
+        left: left,
+      });
+    }
+  }, [isOpen, anchorRect]);
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        ref={menuRef}
+        initial={{ opacity: 0, scale: 0.9, y: -10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: -10 }}
+        transition={{ type: "spring", damping: 20, stiffness: 400, mass: 0.6 }}
+        className="fixed z-50 w-48 bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700"
+        style={{
+          top: position.top,
+          right: position.right,
+          left: position.left,
+        }}
+      >
+        <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">联系人</span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => { onFriendList(); onClose(); }}
+          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 group"
+        >
+          <div className="w-7 h-7 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="text-sm">👥</span>
+          </div>
+          <span className="text-sm text-gray-700 dark:text-gray-300">好友列表</span>
+        </button>
+
+        <button
+          onClick={() => { onAddFriend(); onClose(); }}
+          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 border-t border-gray-100 dark:border-gray-800 group"
+        >
+          <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <span className="text-sm">➕</span>
+          </div>
+          <span className="text-sm text-gray-700 dark:text-gray-300">添加好友</span>
+        </button>
+
+        <button
+          onClick={() => { onFriendRequests(); onClose(); }}
+          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 border-t border-gray-100 dark:border-gray-800 group"
+        >
+          <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center relative group-hover:scale-110 transition-transform">
+            <span className="text-sm">📨</span>
+          </div>
+          <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 text-left">好友申请</span>
+          {unreadCount > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="px-1.5 py-0.5 text-[10px] rounded-full bg-red-500 text-white font-medium shadow-sm"
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </motion.span>
+          )}
+        </button>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// ========== 主组件 ==========
 const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [userData, setUserData] = useState<User | null>(null);
@@ -120,19 +202,19 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const switchPanelRef = useRef<HTMLDivElement>(null);
   const sideMenuRef = useRef<HTMLDivElement>(null);
   const contactButtonRef = useRef<HTMLButtonElement>(null);
+  const [contactAnchorRect, setContactAnchorRect] = useState<DOMRect | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const user = auth.currentUser;
   const { isKeyboardOpen } = useKeyboardHeight();
   const { enterAFKManually } = useAFK();
-  const { unreadRequestCount } = useFriend();
+  const { unreadCount: friendUnreadCount } = useFriend();
 
-  // 🔥 好友相关状态
+  // 好友相关状态
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [showFriendList, setShowFriendList] = useState(false);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string } | null>(null);
-  const [contactMenuPosition, setContactMenuPosition] = useState({ top: 0, right: 0 });
 
   const tabs: TabItem[] = [
     {
@@ -178,17 +260,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       ),
     },
   ];
-
-  // 更新联系人菜单位置
-  const updateContactMenuPosition = useCallback(() => {
-    if (contactButtonRef.current) {
-      const rect = contactButtonRef.current.getBoundingClientRect();
-      setContactMenuPosition({
-        top: rect.bottom + 4,
-        right: window.innerWidth - rect.right,
-      });
-    }
-  }, []);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -275,7 +346,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       if (sideMenuRef.current && !sideMenuRef.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('.menu-trigger')) {
         setShowSideMenu(false);
       }
-      if (contactButtonRef.current && !contactButtonRef.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('.contact-menu')) {
+      if (contactButtonRef.current && !contactButtonRef.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('.contact-trigger')) {
         setShowContactMenu(false);
       }
     };
@@ -333,8 +404,8 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
 
-  // 菜单项列表
   const menuItems = [
+    { icon: '🔍', label: '搜索', path: '/search', color: 'from-blue-500 to-cyan-500' },
     { icon: '🎭', label: '角色管理', path: '/persona', color: 'from-purple-500 to-pink-500' },
     { icon: '🛒', label: '商城', path: '/shop', color: 'from-blue-500 to-cyan-500' },
     { icon: '💎', label: '钱包', path: '/wallet', color: 'from-amber-500 to-orange-500' },
@@ -349,7 +420,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       animate="visible"
       className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
     >
-      {/* 可拖拽的 AFK 状态锁头 */}
       <DraggableAFKStatus />
 
       {/* 顶部导航栏 */}
@@ -360,9 +430,9 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
         className="fixed top-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 z-20 safe-top"
       >
         <div className="flex items-center justify-between px-3 py-2">
-          {/* Logo 区域 */}
+          {/* Logo */}
           <motion.div 
-            className="flex items-center gap-1.5 flex-shrink-0"
+            className="flex items-center gap-1.5"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -373,155 +443,78 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
           </motion.div>
 
           {/* 右侧按钮组 */}
-          <div className="flex items-center gap-0.5">
-            {/* 🔥 联系人按钮 - Apple 风格 Contacts 图标 */}
-<div className="relative">
-  <motion.button
-    ref={contactButtonRef}
-    onClick={() => {
-      updateContactMenuPosition();
-      setShowContactMenu(!showContactMenu);
-    }}
-    className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 relative"
-    title="联系人"
-    whileHover={{ scale: 1.05 }}
-    whileTap={{ scale: 0.95 }}
-  >
-    {/* 🔥 Apple 风格 Contacts 图标（线条版，与其他图标风格一致） */}
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-      {/* 双人轮廓 - Apple Contacts 经典图标 */}
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-    {unreadRequestCount > 0 && (
-      <motion.span
-        initial={{ scale: 0 }}
-        animate={{ scale: [1, 1.2, 1] }}
-        transition={{ repeat: Infinity, duration: 1.5 }}
-        className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md"
-      />
-    )}
-  </motion.button>
+          <div className="flex items-center gap-1">
+            {/* 1. 联系人按钮 */}
+            <div className="relative">
+              <motion.button
+                ref={contactButtonRef}
+                onClick={() => {
+                  if (contactButtonRef.current) {
+                    setContactAnchorRect(contactButtonRef.current.getBoundingClientRect());
+                  }
+                  setShowContactMenu(!showContactMenu);
+                }}
+                className="contact-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-all duration-200"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="联系人"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {friendUnreadCount > 0 && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-md"
+                  />
+                )}
+              </motion.button>
 
-  {/* 联系人菜单弹窗 - 定位在按钮下方，向左对齐 */}
-  <AnimatePresence>
-    {showContactMenu && (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: -5 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: -5 }}
-        transition={{ duration: 0.15 }}
-        className="fixed z-50 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden contact-menu"
-        style={{
-          top: contactMenuPosition.top,
-          right: 'auto',
-          left: contactMenuPosition.right ? 'auto' : 'auto',
-        }}
-      >
-        {/* 菜单头部 */}
-        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">联系人</span>
-        </div>
+              <ContactMenuModal
+                isOpen={showContactMenu}
+                onClose={() => setShowContactMenu(false)}
+                onFriendList={() => setShowFriendList(true)}
+                onAddFriend={() => setShowAddFriendModal(true)}
+                onFriendRequests={() => setShowFriendRequests(true)}
+                unreadCount={friendUnreadCount}
+                anchorRect={contactAnchorRect}
+              />
+            </div>
 
-        {/* 好友列表 */}
-        <button
-          onClick={() => {
-            setShowContactMenu(false);
-            setShowFriendList(true);
-          }}
-          className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          <div className="w-6 h-6 rounded-md bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-            <span className="text-sm">👥</span>
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">好友列表</span>
-        </button>
-
-        {/* 添加好友 */}
-        <button
-          onClick={() => {
-            setShowContactMenu(false);
-            setShowAddFriendModal(true);
-          }}
-          className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
-        >
-          <div className="w-6 h-6 rounded-md bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-            <span className="text-sm">➕</span>
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">添加好友</span>
-        </button>
-
-        {/* 好友申请（带红点） */}
-        <button
-          onClick={() => {
-            setShowContactMenu(false);
-            setShowFriendRequests(true);
-          }}
-          className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
-        >
-          <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center relative">
-            <span className="text-sm">📨</span>
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 text-left">好友申请</span>
-          {unreadRequestCount > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-red-500 text-white font-medium">
-              {unreadRequestCount > 99 ? '99+' : unreadRequestCount}
-            </span>
-          )}
-        </button>
-      </motion.div>
-    )}
-  </AnimatePresence>
-</div>
-
-            {/* 手动进入隐私保护模式按钮 */}
+            {/* 2. 隐私保护锁 */}
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => {
-                console.log('🔒 [Mobile] 锁头按钮被点击');
-                enterAFKManually();
-              }}
+              whileHover={{ scale: 1.05, rotate: [0, -5, 5, 0] }}
+              whileTap={{ scale: 0.95 }}
+              onClick={enterAFKManually}
               className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-              title="立即进入隐私保护模式"
+              title="隐私模式"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </motion.button>
 
-            {/* 连接状态指示器 */}
-            <ConnectionStatus showText={false} />
-            
-            {/* 钻石余额 */}
+            {/* 3. 钻石余额 */}
             <div className="scale-90">
               <DiamondBalance size="sm" />
             </div>
-            
-            {/* 搜索按钮 */}
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => navigate('/search')}
-              className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </motion.button>
 
-            {/* 菜单按钮 */}
+            {/* 4. 菜单按钮 */}
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05, rotate: 90 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowSideMenu(true)}
               className="menu-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              title="菜单"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </motion.button>
 
-            {/* 角色切换按钮 */}
+            {/* 5. 角色切换 */}
             <div className="relative ml-0.5" ref={switchPanelRef}>
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -535,7 +528,11 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                   size="sm"
                   className="mobile-header"
                 />
-                <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full ring-1 ring-white dark:ring-gray-900" />
+                <motion.div 
+                  className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full ring-1 ring-white dark:ring-gray-900"
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                />
               </motion.button>
 
               <AnimatePresence>
@@ -587,9 +584,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 whileHover="hover"
                 onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
                 className={`flex flex-col items-center justify-center relative py-1 px-3 rounded-full transition-all duration-200 ${
-                  isActiveTab 
-                    ? 'text-blue-500' 
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  isActiveTab ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
               >
                 <div className="relative">
@@ -605,9 +600,13 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                     </motion.span>
                   )}
                 </div>
-                <span className={`text-[10px] mt-0.5 ${isActiveTab ? 'font-medium' : ''}`}>
+                <motion.span 
+                  className={`text-[10px] mt-0.5 ${isActiveTab ? 'font-medium' : ''}`}
+                  animate={isActiveTab ? { scale: [1, 1.05, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
                   {tab.name}
-                </span>
+                </motion.span>
               </motion.button>
             );
           })}
@@ -623,7 +622,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="fixed inset-0 bg-black/50 z-30"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30"
               onClick={() => setShowSideMenu(false)}
             />
             
@@ -643,17 +642,11 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20"
               >
                 <div className="flex items-center gap-3">
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <AvatarFrame
-                      avatarUrl={currentPersona?.avatar || ''}
-                      frameName={frameName}
-                      size="md"
-                      className="sidebar"
-                    />
-                  </motion.div>
+                  <AvatarFrame
+                    avatarUrl={currentPersona?.avatar || ''}
+                    frameName={frameName}
+                    size="md"
+                  />
                   <div>
                     <p className="font-semibold text-gray-800 dark:text-gray-200">
                       {currentPersona?.displayName || currentPersona?.name || '未选择角色'}
@@ -681,10 +674,18 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                     }}
                     className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition group"
                   >
-                    <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${item.color} flex items-center justify-center text-white shadow-md`}>
+                    <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${item.color} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-200`}>
                       <span className="text-sm">{item.icon}</span>
                     </div>
                     <span className="font-medium">{item.label}</span>
+                    <motion.svg 
+                      className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      initial={{ x: -5 }}
+                      whileHover={{ x: 0 }}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </motion.svg>
                   </motion.button>
                 ))}
               </div>
@@ -697,7 +698,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 className="p-4 border-t border-gray-100 dark:border-gray-800"
               >
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
+                  whileHover={{ scale: 1.02, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleLogout}
                   className="w-full py-2.5 flex items-center justify-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all duration-200"
@@ -707,76 +708,66 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                   </svg>
                   <span>退出登录</span>
                 </motion.button>
-                
-                <p className="text-[10px] text-gray-400 text-center mt-3">
-                  v1.0.0 | RP Chat
-                </p>
+                <p className="text-[10px] text-gray-400 text-center mt-3">v1.0.0 | RP Chat</p>
               </motion.div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* 🔥 好友相关弹窗 */}
-      <AddFriendModal 
-        isOpen={showAddFriendModal}
-        onClose={() => setShowAddFriendModal(false)}
-        onSuccess={() => {
-          setShowAddFriendModal(false);
-          toast.success('好友申请已发送');
-        }}
-      />
+      {/* 弹窗 */}
+      <AddFriendModal isOpen={showAddFriendModal} onClose={() => setShowAddFriendModal(false)} />
 
       {showFriendList && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
                 好友列表
               </h2>
-              <button
-                onClick={() => setShowFriendList(false)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
+              <button onClick={() => setShowFriendList(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <FriendList onSelectFriend={(id, name, avatar) => {
-              setShowFriendList(false);
-              setSelectedPrivateChat({ id, name, avatar });
-            }} />
+            <FriendList 
+              onSelectFriend={(id, name, avatar) => {
+                setShowFriendList(false);
+                setSelectedPrivateChat({ id, name, avatar });
+              }}
+              onClose={() => setShowFriendList(false)}
+            />
           </div>
         </div>
       )}
 
       {showFriendRequests && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="relative w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
                 好友申请
-                {unreadRequestCount > 0 && (
-                  <span className="text-sm text-red-500">({unreadRequestCount})</span>
+                {friendUnreadCount > 0 && (
+                  <span className="text-sm text-red-500 ml-1">({friendUnreadCount})</span>
                 )}
               </h2>
-              <button
-                onClick={() => setShowFriendRequests(false)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
+              <button onClick={() => setShowFriendRequests(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <FriendRequests onAccept={() => setShowFriendRequests(false)} />
+            <FriendRequests 
+              onClose={() => setShowFriendRequests(false)}
+              onAccept={() => setShowFriendRequests(false)}
+            />
           </div>
         </div>
       )}
@@ -784,15 +775,14 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       <PrivateChat
         isOpen={!!selectedPrivateChat}
         onClose={() => setSelectedPrivateChat(null)}
-        targetUserId={selectedPrivateChat?.id || ''}
-        targetUsername={selectedPrivateChat?.name || ''}
-        targetAvatar={selectedPrivateChat?.avatar}
+        targetPersonaId={selectedPrivateChat?.id || ''}
+        targetPersonaName={selectedPrivateChat?.name || ''}
+        targetPersonaAvatar={selectedPrivateChat?.avatar}
       />
     </motion.div>
   );
 };
 
-// 外层组件
 const MobileLayout: React.FC<Props> = ({ children }) => {
   return <MobileLayoutContent>{children}</MobileLayoutContent>;
 };

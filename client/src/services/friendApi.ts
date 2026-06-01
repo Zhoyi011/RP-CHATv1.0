@@ -1,119 +1,187 @@
 // client/src/services/friendApi.ts
 import { request } from './api';
-import type { Post, User } from './api';
 
+// ========== 类型定义 ==========
+
+// 好友角色信息
+export interface FriendPersona {
+  id: string;
+  name: string;
+  displayName?: string;
+  avatar?: string;
+  sameNameNumber?: number;
+}
+
+// 好友关系
 export interface Friend {
   id: string;
-  friend: {
-    id: string;
-    username: string;
-    email: string;
-    avatar: string;
-    role: string;
-  };
+  friend: FriendPersona;
   nickname: string | null;
   group: string;
   isStarred: boolean;
-  lastInteractionAt: string | null;
+  intimacy: number;
   createdAt: string;
-  isOnline: boolean;
 }
 
+// 好友申请中的角色信息
+export interface RequestPersona {
+  id: string;
+  name: string;
+  displayName?: string;
+  avatar?: string;
+  sameNameNumber?: number;
+}
+
+// 好友申请
 export interface FriendRequest {
   id: string;
-  fromUser?: {
-    id: string;
-    username: string;
-    email: string;
-    avatar: string;
-    role: string;
-  };
-  toUser?: {
-    id: string;
-    username: string;
-    avatar: string;
-  };
+  fromPersona?: RequestPersona;
   message: string;
   createdAt: string;
   expiresAt?: string;
 }
 
-export interface FriendFeedResponse {
-  success: boolean;
-  data: Post[];
-  hasNewPosts: boolean;
-  lastFeedView: string;
-}
-
-export interface SearchUserResult {
+// 搜索结果中的角色
+export interface SearchPersonaResult {
   id: string;
-  username: string;
-  email: string;
-  avatar: string;
-  role: string;
+  name: string;
+  displayName?: string;
+  avatar?: string;
+  sameNameNumber?: number;
+  ownerUsername?: string;
   isFriend: boolean;
   requestStatus: 'sent' | 'received' | null;
 }
 
+// 动态帖子
+export interface FeedPost {
+  _id: string;
+  content: string;
+  images?: string[];
+  personaId?: {
+    _id: string;
+    name: string;
+    displayName?: string;
+    avatar?: string;
+  };
+  userId: {
+    _id: string;
+    username: string;
+    avatar?: string;
+  };
+  likeCount: number;
+  commentCount: number;
+  isLiked?: boolean;
+  createdAt: string;
+}
+
+// API 响应类型
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
+interface FriendListResponse {
+  success: boolean;
+  data: Friend[];
+  grouped?: Record<string, Friend[]>;
+  groups?: string[];
+}
+
+interface FriendRequestsResponse {
+  success: boolean;
+  data: {
+    received: FriendRequest[];
+    sent?: FriendRequest[];
+  };
+}
+
+interface SendRequestResponse {
+  success: boolean;
+  message: string;
+}
+
+interface HandleRequestResponse {
+  success: boolean;
+  message: string;
+}
+
+interface DeleteFriendResponse {
+  success: boolean;
+  message: string;
+}
+
+interface SearchPersonasResponse {
+  success: boolean;
+  data: SearchPersonaResult[];
+}
+
+interface FeedPostsResponse {
+  success: boolean;
+  data: FeedPost[];
+}
+
+// ========== API 方法 ==========
+
 export const friendApi = {
-  // 获取好友列表
-  getFriends: (params?: { group?: string; search?: string }) => {
-    let url = '/friend/list';
-    if (params) {
-      const queryParams = new URLSearchParams();
-      if (params.group) queryParams.append('group', params.group);
-      if (params.search) queryParams.append('search', params.search);
-      const queryString = queryParams.toString();
-      if (queryString) url += `?${queryString}`;
-    }
-    return request<{ success: boolean; data: Friend[]; grouped: Record<string, Friend[]>; groups: string[] }>(url);
-  },
-  
-  // 获取好友申请列表
-  getRequests: () =>
-    request<{ success: boolean; data: { received: FriendRequest[]; sent: FriendRequest[] } }>('/friend/requests'),
-  
-  // 发送好友申请
-  sendRequest: (toUserId: string, message?: string) =>
-    request<{ success: boolean; message: string }>('/friend/request', {
+  /**
+   * 获取好友列表
+   */
+  getFriends: (): Promise<FriendListResponse> =>
+    request('/friend/list'),
+
+  /**
+   * 获取好友申请列表
+   */
+  getRequests: (): Promise<FriendRequestsResponse> =>
+    request('/friend/requests'),
+
+  /**
+   * 发送好友申请
+   * @param toPersonaId 目标角色ID
+   * @param message 附言（可选）
+   */
+  sendRequest: (toPersonaId: string, message?: string): Promise<SendRequestResponse> =>
+    request('/friend/request', {
       method: 'POST',
-      body: JSON.stringify({ toUserId, message }),
+      body: JSON.stringify({ toPersonaId, message }),
     }),
-  
-  // 处理好友申请
-  handleRequest: (requestId: string, action: 'accept' | 'reject') =>
-    request<{ success: boolean; message: string; data?: { friendId: string; username: string; avatar: string } }>(
-      `/friend/request/${requestId}/handle`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ action }),
-      }
-    ),
-  
-  // 删除好友
-  deleteFriend: (friendId: string) =>
-    request<{ success: boolean; message: string }>(`/friend/${friendId}`, {
+
+  /**
+   * 处理好友申请（同意/拒绝）
+   * @param requestId 申请ID
+   * @param action 动作：'accept' 或 'reject'
+   */
+  handleRequest: (requestId: string, action: 'accept' | 'reject'): Promise<HandleRequestResponse> =>
+    request(`/friend/request/${requestId}/handle`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    }),
+
+  /**
+   * 删除好友
+   * @param friendPersonaId 好友角色ID
+   */
+  deleteFriend: (friendPersonaId: string): Promise<DeleteFriendResponse> =>
+    request(`/friend/${friendPersonaId}`, {
       method: 'DELETE',
     }),
-  
-  // 更新好友信息
-  updateFriend: (friendId: string, data: { nickname?: string; group?: string; isStarred?: boolean }) =>
-    request<{ success: boolean; message: string; data: any }>(`/friend/${friendId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  
-  // 获取好友动态
-  getFriendFeedPosts: (limit?: number) =>
-    request<FriendFeedResponse>(`/friend/feed-posts${limit ? `?limit=${limit}` : ''}`),
-  
-  // 标记Feed已查看
-  markFeedViewed: () =>
-    request<{ success: boolean }>('/friend/feed-viewed', {
-      method: 'POST',
-    }),
-  
-  // 搜索用户
-  searchUsers: (q: string) =>
-    request<{ success: boolean; data: SearchUserResult[] }>(`/friend/search?q=${encodeURIComponent(q)}`),
+
+  /**
+   * 搜索角色（添加好友用）
+   * @param q 搜索关键词
+   */
+  searchPersonas: (q: string): Promise<SearchPersonasResponse> =>
+    request(`/friend/search-personas?q=${encodeURIComponent(q)}`),
+
+  /**
+   * 获取好友动态
+   * @param limit 数量限制，默认20
+   */
+  getFriendFeed: (limit: number = 20): Promise<FeedPostsResponse> =>
+    request(`/friend/feed-posts?limit=${limit}`),
 };
+
+// 默认导出
+export default friendApi;

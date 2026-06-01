@@ -1,32 +1,29 @@
 // client/src/contexts/FriendContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { friendApi } from '../services/friendApi';
-import type { Friend, FriendRequest, SearchUserResult } from '../services/friendApi';
+import type { Friend, FriendRequest, SearchPersonaResult } from '../services/friendApi';
 import { socketService } from '../services/socket';
 import toast from 'react-hot-toast';
 
 interface FriendContextType {
   friends: Friend[];
   friendRequests: FriendRequest[];
-  unreadRequestCount: number;
+  unreadCount: number;
   loading: boolean;
   fetchFriends: () => Promise<void>;
   fetchRequests: () => Promise<void>;
-  sendRequest: (toUserId: string, message?: string) => Promise<boolean>;
+  sendRequest: (toPersonaId: string, message?: string) => Promise<boolean>;
   acceptRequest: (requestId: string) => Promise<boolean>;
   rejectRequest: (requestId: string) => Promise<boolean>;
-  removeFriend: (friendId: string) => Promise<boolean>;
-  updateFriend: (friendId: string, data: { nickname?: string; group?: string; isStarred?: boolean }) => Promise<boolean>;
-  searchUsers: (q: string) => Promise<SearchUserResult[]>;
+  removeFriend: (friendPersonaId: string) => Promise<boolean>;
+  searchPersonas: (q: string) => Promise<SearchPersonaResult[]>;
 }
 
 const FriendContext = createContext<FriendContextType | undefined>(undefined);
 
 export const useFriend = () => {
   const context = useContext(FriendContext);
-  if (!context) {
-    throw new Error('useFriend must be used within FriendProvider');
-  }
+  if (!context) throw new Error('useFriend must be used within FriendProvider');
   return context;
 };
 
@@ -37,16 +34,15 @@ interface FriendProviderProps {
 export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
-  const [unreadRequestCount, setUnreadRequestCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // 获取好友列表
   const fetchFriends = useCallback(async () => {
     setLoading(true);
     try {
       const res = await friendApi.getFriends();
-      if (res.success) {
-        setFriends(res.data);
-      }
+      if (res.success) setFriends(res.data);
     } catch (error) {
       console.error('获取好友列表失败:', error);
     } finally {
@@ -54,21 +50,23 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // 获取好友申请
   const fetchRequests = useCallback(async () => {
     try {
       const res = await friendApi.getRequests();
       if (res.success) {
         setFriendRequests(res.data.received);
-        setUnreadRequestCount(res.data.received.length);
+        setUnreadCount(res.data.received.length);
       }
     } catch (error) {
       console.error('获取好友申请失败:', error);
     }
   }, []);
 
-  const sendRequest = useCallback(async (toUserId: string, message?: string) => {
+  // 发送好友申请
+  const sendRequest = useCallback(async (toPersonaId: string, message?: string) => {
     try {
-      const res = await friendApi.sendRequest(toUserId, message);
+      const res = await friendApi.sendRequest(toPersonaId, message);
       if (res.success) {
         toast.success(res.message);
         return true;
@@ -80,6 +78,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // 同意申请
   const acceptRequest = useCallback(async (requestId: string) => {
     try {
       const res = await friendApi.handleRequest(requestId, 'accept');
@@ -96,6 +95,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, [fetchFriends, fetchRequests]);
 
+  // 拒绝申请
   const rejectRequest = useCallback(async (requestId: string) => {
     try {
       const res = await friendApi.handleRequest(requestId, 'reject');
@@ -111,9 +111,10 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, [fetchRequests]);
 
-  const removeFriend = useCallback(async (friendId: string) => {
+  // 删除好友
+  const removeFriend = useCallback(async (friendPersonaId: string) => {
     try {
-      const res = await friendApi.deleteFriend(friendId);
+      const res = await friendApi.deleteFriend(friendPersonaId);
       if (res.success) {
         toast.success(res.message);
         await fetchFriends();
@@ -126,66 +127,37 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, [fetchFriends]);
 
-  const updateFriend = useCallback(async (friendId: string, data: { nickname?: string; group?: string; isStarred?: boolean }) => {
-    try {
-      const res = await friendApi.updateFriend(friendId, data);
-      if (res.success) {
-        toast.success('更新成功');
-        await fetchFriends();
-        return true;
-      }
-      return false;
-    } catch (error: any) {
-      toast.error(error.message || '更新失败');
-      return false;
-    }
-  }, [fetchFriends]);
-
-  const searchUsers = useCallback(async (q: string) => {
+  // 搜索角色
+  const searchPersonas = useCallback(async (q: string) => {
     if (q.length < 2) return [];
     try {
-      const res = await friendApi.searchUsers(q);
-      if (res.success) {
-        return res.data;
-      }
+      const res = await friendApi.searchPersonas(q);
+      if (res.success) return res.data;
       return [];
     } catch (error) {
-      console.error('搜索用户失败:', error);
+      console.error('搜索失败:', error);
       return [];
     }
   }, []);
 
-  // Socket 事件监听
+  // Socket 事件
   useEffect(() => {
-    const handleRequestReceived = (data: any) => {
-      console.log('收到好友申请:', data);
-      // 修复：使用 toast.success 而不是 toast.info
-      toast.success(`${data.fromUser?.username || '用户'} 向你发送了好友申请`);
+    const onRequestReceived = () => {
+      toast.success('收到新的好友申请');
       fetchRequests();
-      setUnreadRequestCount(prev => prev + 1);
+      setUnreadCount(prev => prev + 1);
     };
-    
-    const handleRequestAccepted = (data: any) => {
-      console.log('好友申请被接受:', data);
-      toast.success(`${data.username} 接受了你的好友申请`);
+    const onRequestAccepted = () => {
+      toast.success('好友申请已被接受');
       fetchFriends();
     };
-    
-    const handleFriendRemoved = (data: any) => {
-      console.log('好友被删除:', data);
-      toast.success('对方删除了好友关系');
-      fetchFriends();
-    };
-    
-    // 使用 socketService 注册事件
-    socketService.onFriendRequestReceived(handleRequestReceived);
-    socketService.onFriendRequestAccepted(handleRequestAccepted);
-    socketService.onFriendRemoved(handleFriendRemoved);
-    
+
+    socketService.on('friend-request-received', onRequestReceived);
+    socketService.on('friend-request-accepted', onRequestAccepted);
+
     return () => {
-      socketService.offFriendRequestReceived(handleRequestReceived);
-      socketService.offFriendRequestAccepted(handleRequestAccepted);
-      socketService.offFriendRemoved(handleFriendRemoved);
+      socketService.off('friend-request-received', onRequestReceived);
+      socketService.off('friend-request-accepted', onRequestAccepted);
     };
   }, [fetchFriends, fetchRequests]);
 
@@ -200,7 +172,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
       value={{
         friends,
         friendRequests,
-        unreadRequestCount,
+        unreadCount,
         loading,
         fetchFriends,
         fetchRequests,
@@ -208,8 +180,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
         acceptRequest,
         rejectRequest,
         removeFriend,
-        updateFriend,
-        searchUsers,
+        searchPersonas,
       }}
     >
       {children}

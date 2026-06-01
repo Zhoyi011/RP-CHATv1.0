@@ -1,18 +1,18 @@
 // server/src/models/FriendRequest.js
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const friendRequestSchema = new mongoose.Schema({
-  // 发送者
-  fromUserId: {
+  // 发送申请的角色
+  fromPersonaId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Persona',
     required: true,
     index: true
   },
-  // 接收者
-  toUserId: {
+  // 接收申请的角色
+  toPersonaId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Persona',
     required: true,
     index: true
   },
@@ -27,7 +27,6 @@ const friendRequestSchema = new mongoose.Schema({
     enum: ['pending', 'accepted', 'rejected', 'canceled'],
     default: 'pending'
   },
-  // 过期时间（7天未处理自动过期）
   expiresAt: {
     type: Date,
     default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -42,23 +41,12 @@ const friendRequestSchema = new mongoose.Schema({
   }
 });
 
-// 复合唯一索引：防止重复申请
-friendRequestSchema.index({ fromUserId: 1, toUserId: 1, status: 1 }, { unique: true });
+friendRequestSchema.index({ fromPersonaId: 1, toPersonaId: 1, status: 1 }, { unique: true });
 
-// 查询待处理申请
-friendRequestSchema.statics.getPendingRequests = async function(userId) {
-  return this.find({
-    toUserId: userId,
-    status: 'pending',
-    expiresAt: { $gt: new Date() }
-  }).populate('fromUserId', 'username email avatar');
-};
-
-// 自动更新 updatedAt
 friendRequestSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
 });
 
 const FriendRequest = mongoose.model('FriendRequest', friendRequestSchema);
-export default FriendRequest;
+module.exports = FriendRequest;

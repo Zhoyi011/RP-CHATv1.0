@@ -1,16 +1,18 @@
 // server/src/models/Friend.js
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const friendSchema = new mongoose.Schema({
-  userId: {
+  // 发起好友关系的角色
+  personaId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Persona',
     required: true,
     index: true
   },
-  friendId: {
+  // 目标好友角色
+  friendPersonaId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Persona',
     required: true,
     index: true
   },
@@ -19,13 +21,13 @@ const friendSchema = new mongoose.Schema({
     enum: ['pending', 'accepted', 'blocked', 'rejected'],
     default: 'accepted'
   },
-  // 备注名
+  // 备注名（角色给好友起的昵称）
   nickname: {
     type: String,
     maxlength: 20,
     default: null
   },
-  // 分组（默认"我的好友"）
+  // 分组
   group: {
     type: String,
     default: '我的好友'
@@ -35,7 +37,13 @@ const friendSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // 创建时间（成为好友的时间）
+  // 亲密度（可选，用于扩展）
+  intimacy: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -47,27 +55,27 @@ const friendSchema = new mongoose.Schema({
   }
 });
 
-// 复合唯一索引，防止重复好友关系
-friendSchema.index({ userId: 1, friendId: 1 }, { unique: true });
+// 复合唯一索引：防止重复好友关系
+friendSchema.index({ personaId: 1, friendPersonaId: 1 }, { unique: true });
 
-// 查询辅助方法：获取用户的所有好友ID
-friendSchema.statics.getFriendIds = async function(userId) {
+// 查询辅助：获取角色的所有好友ID
+friendSchema.statics.getFriendPersonaIds = async function(personaId) {
   const friendships = await this.find({
-    userId,
+    personaId,
     status: 'accepted'
-  }).select('friendId');
-  return friendships.map(f => f.friendId);
+  }).select('friendPersonaId');
+  return friendships.map(f => f.friendPersonaId);
 };
 
-// 检查是否为好友
-friendSchema.statics.isFriend = async function(userId, targetId) {
+// 查询辅助：检查两个角色是否为好友
+friendSchema.statics.areFriends = async function(personaId, targetPersonaId) {
   const friendship = await this.findOne({
-    userId,
-    friendId: targetId,
+    personaId,
+    friendPersonaId: targetPersonaId,
     status: 'accepted'
   });
   return !!friendship;
 };
 
 const Friend = mongoose.model('Friend', friendSchema);
-export default Friend;
+module.exports = Friend;
