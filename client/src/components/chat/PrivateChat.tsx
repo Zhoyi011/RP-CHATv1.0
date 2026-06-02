@@ -16,10 +16,18 @@ interface Props {
   targetPersonaId: string;
   targetPersonaName: string;
   targetPersonaAvatar?: string;
+  targetPersonaNumber?: number;
   onClose: () => void;
 }
 
-const PrivateChat: React.FC<Props> = ({ isOpen, targetPersonaId, targetPersonaName, targetPersonaAvatar, onClose }) => {
+const PrivateChat: React.FC<Props> = ({ 
+  isOpen, 
+  targetPersonaId, 
+  targetPersonaName, 
+  targetPersonaAvatar,
+  targetPersonaNumber,
+  onClose 
+}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(true);
@@ -28,6 +36,7 @@ const PrivateChat: React.FC<Props> = ({ isOpen, targetPersonaId, targetPersonaNa
   const [isChecking, setIsChecking] = useState(true);
   const [currentPersona, setCurrentPersona] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const user = auth.currentUser;
   const { friends, sendRequest } = useFriend();
@@ -152,7 +161,12 @@ const PrivateChat: React.FC<Props> = ({ isOpen, targetPersonaId, targetPersonaNa
             </button>
             <AvatarFrame avatarUrl={targetPersonaAvatar || ''} frameName={null} size="md" />
             <div>
-              <h2 className="font-medium text-gray-900 dark:text-white">{targetPersonaName}</h2>
+              <div className="flex items-center gap-1">
+                <h2 className="font-medium text-gray-900 dark:text-white">{targetPersonaName}</h2>
+                {targetPersonaNumber && (
+                  <span className="text-xs text-gray-400">#{targetPersonaNumber}</span>
+                )}
+              </div>
               <p className="text-xs text-gray-400">还不是好友</p>
             </div>
           </div>
@@ -177,20 +191,25 @@ const PrivateChat: React.FC<Props> = ({ isOpen, targetPersonaId, targetPersonaNa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl flex flex-col overflow-hidden">
-        {/* 头部 */}
+        {/* 头部 - 只显示角色信息 */}
         <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-800/90">
           <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
             <X className="w-5 h-5 text-gray-500" />
           </button>
           <AvatarFrame avatarUrl={targetPersonaAvatar || ''} frameName={null} size="md" />
           <div>
-            <h2 className="font-medium text-gray-900 dark:text-white">{targetPersonaName}</h2>
+            <div className="flex items-center gap-1">
+              <h2 className="font-medium text-gray-900 dark:text-white">{targetPersonaName}</h2>
+              {targetPersonaNumber && (
+                <span className="text-xs text-gray-400">#{targetPersonaNumber}</span>
+              )}
+            </div>
             <p className="text-xs text-green-600 dark:text-green-400">好友 · 在线</p>
           </div>
         </div>
 
         {/* 消息列表 */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-3">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />

@@ -1,13 +1,13 @@
 // client/src/components/friends/FriendList.tsx
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useFriend } from '../../contexts/FriendContext';
 import AvatarFrame from '../common/AvatarFrame';
 import { Star, MessageCircle, MoreVertical, Trash2, Search, Users, StarOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface FriendListProps {
-  onSelectFriend: (personaId: string, personaName: string, personaAvatar?: string) => void;
+  onSelectFriend: (personaId: string, personaName: string, personaAvatar?: string, personaNumber?: number) => void;
   onClose: () => void;
 }
 
@@ -46,7 +46,7 @@ const FriendList: React.FC<FriendListProps> = ({ onSelectFriend, onClose }) => {
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Users className="w-5 h-5" />
-          好友列表 ({friends.length})
+          好友 ({friends.length})
         </h2>
         <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
           <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +85,12 @@ const FriendList: React.FC<FriendListProps> = ({ onSelectFriend, onClose }) => {
               >
                 <div 
                   className="flex items-center gap-3 flex-1 cursor-pointer"
-                  onClick={() => onSelectFriend(friend.friend.id, displayName, friend.friend.avatar)}
+                  onClick={() => onSelectFriend(
+                    friend.friend.id, 
+                    displayName, 
+                    friend.friend.avatar,
+                    friend.friend.sameNameNumber
+                  )}
                 >
                   <AvatarFrame avatarUrl={friend.friend.avatar || ''} frameName={null} size="md" />
                   <div>
@@ -93,15 +98,23 @@ const FriendList: React.FC<FriendListProps> = ({ onSelectFriend, onClose }) => {
                       {friend.isStarred && <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />}
                       <span className="font-medium text-gray-900 dark:text-white">{displayName}</span>
                     </div>
+                    {friend.friend.sameNameNumber && (
+                      <p className="text-xs text-gray-400">#{friend.friend.sameNameNumber}</p>
+                    )}
                     {friend.nickname && (
-                      <p className="text-xs text-gray-400">@{friend.friend.displayName || friend.friend.name}</p>
+                      <p className="text-xs text-gray-400">备注: {friend.nickname}</p>
                     )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => onSelectFriend(friend.friend.id, displayName, friend.friend.avatar)}
+                    onClick={() => onSelectFriend(
+                      friend.friend.id, 
+                      displayName, 
+                      friend.friend.avatar,
+                      friend.friend.sameNameNumber
+                    )}
                     className="p-2 rounded-full text-gray-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20"
                     title="发消息"
                   >

@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AFKProvider } from './contexts/AFKContext';
-import { FriendProvider } from './contexts/FriendContext';  // 🔥 添加这行
+import { FriendProvider } from './contexts/FriendContext';
 import { AFKScreen } from './components/common/AFKScreen';
 import toast, { Toaster } from 'react-hot-toast';
 import Login from './components/auth/Login';
@@ -27,7 +27,6 @@ import GroupSettings from './components/chat/GroupSettings';
 import RoomMembers from './components/chat/RoomMembers';
 import PendingRequests from './components/chat/PendingRequests';
 import MaintenancePage from './components/common/MaintenancePage';
-//import { auth } from './firebase/config';
 import Wallet from './components/wallet/Wallet';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
 
@@ -127,7 +126,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         const userData = await response.json();
         
         if (!userData.hasAccess) {
-          console.warn('⚠️ 用户没有访问权限（无邀请码）:', userData.username);
+          console.warn('⚠️ 用户没有访问权限（无邀请码）');
           localStorage.removeItem('token');
           localStorage.removeItem('lastUsedPersonaId');
           setIsAuthenticated(false);
@@ -169,7 +168,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 function AppContent() {
-  const { isMaintenance, maintenanceMessage, maintenanceEndTime, checking, userRole } = useMaintenanceCheck();
+  const { isMaintenance, maintenanceMessage, maintenanceEndTime, checking } = useMaintenanceCheck();
   const [theme, setTheme] = React.useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved;
@@ -207,7 +206,6 @@ function AppContent() {
 
   return (
     <AFKScreen>
-      {/* Toaster 全局配置 */}
       <Toaster 
         position="top-center"
         reverseOrder={false}
@@ -217,23 +215,14 @@ function AppContent() {
           success: {
             duration: 2000,
             icon: '✅',
-            style: {
-              background: '#10b981',
-              color: '#fff',
-            },
+            style: { background: '#10b981', color: '#fff' },
           },
           error: {
             duration: 3000,
             icon: '❌',
-            style: {
-              background: '#ef4444',
-              color: '#fff',
-            },
+            style: { background: '#ef4444', color: '#fff' },
           },
-          loading: {
-            duration: Infinity,
-            icon: '⏳',
-          },
+          loading: { duration: Infinity, icon: '⏳' },
           style: {
             background: '#363636',
             color: '#fff',
@@ -365,7 +354,7 @@ function App() {
   return (
     <ThemeProvider>
       <AFKProvider>
-        <FriendProvider>  {/* 🔥 添加 FriendProvider */}
+        <FriendProvider>
           <Router>
             <AppContent />
           </Router>

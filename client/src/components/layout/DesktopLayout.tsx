@@ -12,7 +12,6 @@ import toast from 'react-hot-toast';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
-import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
 import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
@@ -297,8 +296,6 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* 可拖拽的 AFK 状态锁头 */}
-      <DraggableAFKStatus />
 
       {/* 侧边栏 */}
       <motion.aside 

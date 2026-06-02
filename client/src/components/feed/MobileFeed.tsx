@@ -2,30 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, MessageCircle, MoreVertical, UserPlus, Bell } from 'lucide-react';
-import { friendApi } from '../../services/friendApi';
+import { friendApi, type FeedPost } from '../../services/friendApi';
+import AvatarFrame from '../common/AvatarFrame';
 import toast from 'react-hot-toast';
-
-// 动态帖子类型
-interface FeedPost {
-  _id: string;
-  content: string;
-  images?: string[];
-  personaId?: {
-    _id: string;
-    name: string;
-    displayName?: string;
-    avatar?: string;
-  };
-  userId: {
-    _id: string;
-    username: string;
-    avatar?: string;
-  };
-  likeCount: number;
-  commentCount: number;
-  isLiked?: boolean;
-  createdAt: string;
-}
 
 export const MobileFeed: React.FC = () => {
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -66,9 +45,6 @@ export const MobileFeed: React.FC = () => {
           }
         : post
     ));
-    
-    // TODO: 调用点赞 API
-    // await friendApi.likePost(postId);
     toast.success(isLiked ? '已取消点赞' : '点赞成功');
   };
 
@@ -90,12 +66,7 @@ export const MobileFeed: React.FC = () => {
 
   // 获取显示名称
   const getDisplayName = (post: FeedPost) => {
-    return post.personaId?.displayName || post.personaId?.name || post.userId.username;
-  };
-
-  // 获取头像
-  const getAvatar = (post: FeedPost) => {
-    return post.personaId?.avatar || post.userId.avatar || '/default-avatar.png';
+    return post.personaId?.displayName || post.personaId?.name || '未知角色';
   };
 
   if (loading) {
@@ -145,21 +116,21 @@ export const MobileFeed: React.FC = () => {
               transition={{ delay: Math.min(index * 0.03, 0.5) }}
               className="bg-white dark:bg-gray-900 p-4"
             >
-              {/* 用户信息 */}
+              {/* 角色信息 - 只显示角色，不显示用户 */}
               <div className="flex items-start gap-3">
-                <img
-                  src={getAvatar(post)}
-                  alt={getDisplayName(post)}
-                  className="w-10 h-10 rounded-full object-cover"
+                <AvatarFrame
+                  avatarUrl={post.personaId?.avatar || ''}
+                  frameName={null}
+                  size="md"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-gray-900 dark:text-white">
                       {getDisplayName(post)}
                     </span>
-                    {post.personaId && (
+                    {post.personaId?.sameNameNumber && (
                       <span className="text-xs text-gray-400">
-                        @{post.userId.username}
+                        #{post.personaId.sameNameNumber}
                       </span>
                     )}
                     <span className="text-xs text-gray-400">

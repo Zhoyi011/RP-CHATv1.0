@@ -3,14 +3,16 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFriend } from '../../contexts/FriendContext';
 import AvatarFrame from '../common/AvatarFrame';
-import { Check, X, Clock, UserPlus } from 'lucide-react';
+import { Check, X, Clock, UserPlus, MessageCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface FriendRequestsProps {
   onClose: () => void;
-  onAccept?: (personaId: string, personaName: string, personaAvatar?: string) => void;
+  onAccept?: (personaId: string, personaName: string, personaAvatar?: string, personaNumber?: number) => void;
+  onMessage?: (personaId: string, personaName: string, personaAvatar?: string, personaNumber?: number) => void;
 }
 
-const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept }) => {
+const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMessage }) => {
   const { friendRequests, acceptRequest, rejectRequest, loading } = useFriend();
   const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -19,7 +21,7 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept }) =>
     const success = await acceptRequest(requestId);
     setProcessingId(null);
     if (success && onAccept && fromPersona) {
-      onAccept(fromPersona.id, fromPersona.displayName || fromPersona.name, fromPersona.avatar);
+      onAccept(fromPersona.id, fromPersona.displayName || fromPersona.name, fromPersona.avatar, fromPersona.sameNameNumber);
     }
   };
 
@@ -50,7 +52,6 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept }) =>
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-      {/* 头部 */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <UserPlus className="w-5 h-5" />
@@ -63,53 +64,67 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept }) =>
         </button>
       </div>
 
-      {/* 列表 */}
       <div className="flex-1 overflow-y-auto">
         {friendRequests.length === 0 ? (
           <div className="text-center py-12 text-gray-500">暂无好友申请</div>
         ) : (
-          friendRequests.map((request) => (
-            <motion.div
-              key={request.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-4 border-b border-gray-100 dark:border-gray-800"
-            >
-              <div className="flex items-start gap-3">
-                <AvatarFrame avatarUrl={request.fromPersona?.avatar || ''} frameName={null} size="md" />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900 dark:text-white">
-                    {request.fromPersona?.displayName || request.fromPersona?.name}
+          friendRequests.map((request) => {
+            const fromPersona = request.fromPersona;
+            const displayName = fromPersona?.displayName || fromPersona?.name || '未知角色';
+            return (
+              <motion.div
+                key={request.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="p-4 border-b border-gray-100 dark:border-gray-800"
+              >
+                <div className="flex items-start gap-3">
+                  <AvatarFrame avatarUrl={fromPersona?.avatar || ''} frameName={null} size="md" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium text-gray-900 dark:text-white">{displayName}</span>
+                      {fromPersona?.sameNameNumber && (
+                        <span className="text-xs text-gray-400">#{fromPersona.sameNameNumber}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">{request.message}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+                      <Clock className="w-3 h-3" />
+                      {formatTime(request.createdAt)}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">{request.message}</p>
-                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                    <Clock className="w-3 h-3" />
-                    {formatTime(request.createdAt)}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleAccept(request.id, request.fromPersona)}
-                    disabled={processingId === request.id}
-                    className="p-2 rounded-full bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
-                  >
-                    {processingId === request.id ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Check className="w-5 h-5" />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAccept(request.id, fromPersona)}
+                      disabled={processingId === request.id}
+                      className="p-2 rounded-full bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
+                    >
+                      {processingId === request.id ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Check className="w-5 h-5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleReject(request.id)}
+                      disabled={processingId === request.id}
+                      className="p-2 rounded-full bg-gray-300 text-gray-700 hover:bg-gray-400 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    {onMessage && (
+                      <button
+                        onClick={() => onMessage(fromPersona.id, displayName, fromPersona.avatar, fromPersona.sameNameNumber)}
+                        className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                      </button>
                     )}
-                  </button>
-                  <button
-                    onClick={() => handleReject(request.id)}
-                    disabled={processingId === request.id}
-                    className="p-2 rounded-full bg-gray-300 text-gray-700 hover:bg-gray-400 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))
+              </motion.div>
+            );
+          })
         )}
       </div>
     </div>

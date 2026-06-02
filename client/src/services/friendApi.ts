@@ -23,7 +23,7 @@ export interface Friend {
   createdAt: string;
 }
 
-// 好友申请中的角色信息
+// 好友申请中的角色
 export interface RequestPersona {
   id: string;
   name: string;
@@ -35,7 +35,7 @@ export interface RequestPersona {
 // 好友申请
 export interface FriendRequest {
   id: string;
-  fromPersona?: RequestPersona;
+  fromPersona: RequestPersona;
   message: string;
   createdAt: string;
   expiresAt?: string;
@@ -48,7 +48,6 @@ export interface SearchPersonaResult {
   displayName?: string;
   avatar?: string;
   sameNameNumber?: number;
-  ownerUsername?: string;
   isFriend: boolean;
   requestStatus: 'sent' | 'received' | null;
 }
@@ -63,11 +62,7 @@ export interface FeedPost {
     name: string;
     displayName?: string;
     avatar?: string;
-  };
-  userId: {
-    _id: string;
-    username: string;
-    avatar?: string;
+    sameNameNumber?: number;
   };
   likeCount: number;
   commentCount: number;
@@ -82,59 +77,19 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-interface FriendListResponse {
-  success: boolean;
-  data: Friend[];
-  grouped?: Record<string, Friend[]>;
-  groups?: string[];
-}
-
-interface FriendRequestsResponse {
-  success: boolean;
-  data: {
-    received: FriendRequest[];
-    sent?: FriendRequest[];
-  };
-}
-
-interface SendRequestResponse {
-  success: boolean;
-  message: string;
-}
-
-interface HandleRequestResponse {
-  success: boolean;
-  message: string;
-}
-
-interface DeleteFriendResponse {
-  success: boolean;
-  message: string;
-}
-
-interface SearchPersonasResponse {
-  success: boolean;
-  data: SearchPersonaResult[];
-}
-
-interface FeedPostsResponse {
-  success: boolean;
-  data: FeedPost[];
-}
-
 // ========== API 方法 ==========
 
 export const friendApi = {
   /**
    * 获取好友列表
    */
-  getFriends: (): Promise<FriendListResponse> =>
+  getFriends: (): Promise<ApiResponse<Friend[]>> =>
     request('/friend/list'),
 
   /**
    * 获取好友申请列表
    */
-  getRequests: (): Promise<FriendRequestsResponse> =>
+  getRequests: (): Promise<ApiResponse<FriendRequest[]>> =>
     request('/friend/requests'),
 
   /**
@@ -142,7 +97,7 @@ export const friendApi = {
    * @param toPersonaId 目标角色ID
    * @param message 附言（可选）
    */
-  sendRequest: (toPersonaId: string, message?: string): Promise<SendRequestResponse> =>
+  sendRequest: (toPersonaId: string, message?: string): Promise<ApiResponse<null>> =>
     request('/friend/request', {
       method: 'POST',
       body: JSON.stringify({ toPersonaId, message }),
@@ -153,7 +108,7 @@ export const friendApi = {
    * @param requestId 申请ID
    * @param action 动作：'accept' 或 'reject'
    */
-  handleRequest: (requestId: string, action: 'accept' | 'reject'): Promise<HandleRequestResponse> =>
+  handleRequest: (requestId: string, action: 'accept' | 'reject'): Promise<ApiResponse<null>> =>
     request(`/friend/request/${requestId}/handle`, {
       method: 'POST',
       body: JSON.stringify({ action }),
@@ -163,7 +118,7 @@ export const friendApi = {
    * 删除好友
    * @param friendPersonaId 好友角色ID
    */
-  deleteFriend: (friendPersonaId: string): Promise<DeleteFriendResponse> =>
+  deleteFriend: (friendPersonaId: string): Promise<ApiResponse<null>> =>
     request(`/friend/${friendPersonaId}`, {
       method: 'DELETE',
     }),
@@ -172,16 +127,15 @@ export const friendApi = {
    * 搜索角色（添加好友用）
    * @param q 搜索关键词
    */
-  searchPersonas: (q: string): Promise<SearchPersonasResponse> =>
-    request(`/friend/search-personas?q=${encodeURIComponent(q)}`),
+  searchPersonas: (q: string): Promise<ApiResponse<SearchPersonaResult[]>> =>
+    request(`/friend/search?q=${encodeURIComponent(q)}`),
 
   /**
    * 获取好友动态
    * @param limit 数量限制，默认20
    */
-  getFriendFeed: (limit: number = 20): Promise<FeedPostsResponse> =>
-    request(`/friend/feed-posts?limit=${limit}`),
+  getFriendFeed: (limit: number = 20): Promise<ApiResponse<FeedPost[]>> =>
+    request(`/friend/feed?limit=${limit}`),
 };
 
-// 默认导出
 export default friendApi;

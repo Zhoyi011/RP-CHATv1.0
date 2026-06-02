@@ -37,7 +37,6 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // 获取好友列表
   const fetchFriends = useCallback(async () => {
     setLoading(true);
     try {
@@ -50,25 +49,23 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // 获取好友申请
   const fetchRequests = useCallback(async () => {
     try {
       const res = await friendApi.getRequests();
       if (res.success) {
-        setFriendRequests(res.data.received);
-        setUnreadCount(res.data.received.length);
+        setFriendRequests(res.data);
+        setUnreadCount(res.data.length);
       }
     } catch (error) {
       console.error('获取好友申请失败:', error);
     }
   }, []);
 
-  // 发送好友申请
   const sendRequest = useCallback(async (toPersonaId: string, message?: string) => {
     try {
       const res = await friendApi.sendRequest(toPersonaId, message);
       if (res.success) {
-        toast.success(res.message);
+        toast.success(res.message || '好友申请已发送');
         return true;
       }
       return false;
@@ -78,12 +75,11 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // 同意申请
   const acceptRequest = useCallback(async (requestId: string) => {
     try {
       const res = await friendApi.handleRequest(requestId, 'accept');
       if (res.success) {
-        toast.success(res.message);
+        toast.success(res.message || '已添加好友');
         await fetchFriends();
         await fetchRequests();
         return true;
@@ -95,12 +91,11 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, [fetchFriends, fetchRequests]);
 
-  // 拒绝申请
   const rejectRequest = useCallback(async (requestId: string) => {
     try {
       const res = await friendApi.handleRequest(requestId, 'reject');
       if (res.success) {
-        toast.success(res.message);
+        toast.success(res.message || '已拒绝');
         await fetchRequests();
         return true;
       }
@@ -111,12 +106,11 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, [fetchRequests]);
 
-  // 删除好友
   const removeFriend = useCallback(async (friendPersonaId: string) => {
     try {
       const res = await friendApi.deleteFriend(friendPersonaId);
       if (res.success) {
-        toast.success(res.message);
+        toast.success(res.message || '已删除好友');
         await fetchFriends();
         return true;
       }
@@ -127,7 +121,6 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, [fetchFriends]);
 
-  // 搜索角色
   const searchPersonas = useCallback(async (q: string) => {
     if (q.length < 2) return [];
     try {
@@ -142,8 +135,8 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
 
   // Socket 事件
   useEffect(() => {
-    const onRequestReceived = () => {
-      toast.success('收到新的好友申请');
+    const onRequestReceived = (data: any) => {
+      toast.success(`${data.fromPersona?.displayName || data.fromPersona?.name} 向你发送了好友申请`);
       fetchRequests();
       setUnreadCount(prev => prev + 1);
     };

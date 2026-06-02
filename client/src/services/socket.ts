@@ -6,14 +6,13 @@ console.log('🔧 [SocketService] 模块加载');
 class SocketService {
   private socket: Socket | null = null;
 
-  // 🔥 修改：添加 userId 参数
   connect(token: string, userId?: string) {
     console.log('🔌 [SocketService] Connecting socket...');
     
     this.socket = io('https://rp-chatv1-0.onrender.com', {
       auth: { 
         token,
-        userId,  // 🔥 新增：传递 userId
+        userId,
       },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -45,13 +44,11 @@ class SocketService {
     }
   }
 
-  // 通用事件监听
   on(event: string, callback: (...args: any[]) => void) {
     console.log(`👂 [SocketService] 注册事件监听: ${event}`);
     this.socket?.on(event, callback);
   }
 
-  // 通用事件移除
   off(event: string, callback?: (...args: any[]) => void) {
     console.log(`🔇 [SocketService] 移除事件监听: ${event}`);
     if (callback) {
@@ -61,7 +58,6 @@ class SocketService {
     }
   }
 
-  // 通用事件发射
   emit(event: string, ...args: any[]) {
     console.log(`📤 [SocketService] 发射事件: ${event}`, args);
     this.socket?.emit(event, ...args);
@@ -112,7 +108,7 @@ class SocketService {
     this.socket?.on('room-online-count', callback);
   }
 
-  // 🔥 新增：好友相关事件监听
+  // 好友相关事件监听
   onFriendRequestReceived(callback: (data: any) => void) {
     console.log(`👂 [SocketService] 注册 friend-request-received 监听`);
     this.socket?.on('friend-request-received', callback);
@@ -128,7 +124,7 @@ class SocketService {
     this.socket?.on('friend-removed', callback);
   }
 
-  // 移除特定事件监听器
+  // 移除消息监听
   offNewMessage(callback?: (message: any) => void) {
     console.log(`🔇 [SocketService] 移除 new-message 监听`);
     if (callback) {
@@ -147,7 +143,7 @@ class SocketService {
     }
   }
 
-  // 🔥 新增：移除好友事件监听
+  // 移除好友事件监听
   offFriendRequestReceived(callback?: (data: any) => void) {
     console.log(`🔇 [SocketService] 移除 friend-request-received 监听`);
     if (callback) {
@@ -180,22 +176,15 @@ class SocketService {
     this.socket?.removeAllListeners();
   }
 
-  // 获取连接状态
   isConnected(): boolean {
-    const connected = this.socket?.connected || false;
-    console.log(`🔌 [SocketService] 连接状态: ${connected}`);
-    return connected;
+    return this.socket?.connected || false;
   }
 
-  // 获取 socket ID
   getSocketId(): string | undefined {
-    const id = this.socket?.id;
-    console.log(`🆔 [SocketService] Socket ID: ${id}`);
-    return id;
+    return this.socket?.id;
   }
 }
 
-// 导出单例
 export const socketService = new SocketService();
 
 console.log('✅ [SocketService] 模块加载完成');

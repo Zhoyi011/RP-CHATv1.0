@@ -41,6 +41,7 @@ const friendRequestSchema = new mongoose.Schema({
   }
 });
 
+// 复合唯一索引：防止重复申请
 friendRequestSchema.index({ fromPersonaId: 1, toPersonaId: 1, status: 1 }, { unique: true });
 
 friendRequestSchema.pre('save', function(next) {
@@ -49,4 +50,4 @@ friendRequestSchema.pre('save', function(next) {
 });
 
 const FriendRequest = mongoose.model('FriendRequest', friendRequestSchema);
-module.exports = FriendRequest;
+module.exports = FriendRequest; 

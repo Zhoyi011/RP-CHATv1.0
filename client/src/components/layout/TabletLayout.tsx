@@ -8,7 +8,6 @@ import DiamondBalance from '../diamond/DiamondBalance';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
-import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
 import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
@@ -210,7 +209,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
       {/* 可拖拽的 AFK 状态锁头 */}
-      <DraggableAFKStatus />
+      
 
       {/* 顶部导航栏 */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">

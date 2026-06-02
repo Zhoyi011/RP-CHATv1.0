@@ -37,7 +37,7 @@ const friendSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // 亲密度（可选，用于扩展）
+  // 亲密度
   intimacy: {
     type: Number,
     default: 0,
@@ -48,7 +48,6 @@ const friendSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  // 最后互动时间
   lastInteractionAt: {
     type: Date,
     default: null

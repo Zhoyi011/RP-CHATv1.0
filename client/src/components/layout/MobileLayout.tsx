@@ -14,7 +14,6 @@ import toast from 'react-hot-toast';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
-import { DraggableAFKStatus } from '../common/DraggableAFKStatus';
 import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
@@ -420,7 +419,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       animate="visible"
       className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
     >
-      <DraggableAFKStatus />
+      
 
       {/* 顶部导航栏 */}
       <motion.div
