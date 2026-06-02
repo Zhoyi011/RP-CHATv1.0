@@ -1,8 +1,7 @@
 // client/src/components/layout/MobileLayout.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { Variants } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { authApi, type User, type Persona } from '../../services/api';
 import { roomApi } from '../../services/api';
@@ -18,6 +17,7 @@ import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
 import PrivateChat from '../chat/PrivateChat';
+import { Users, UserPlus, Mail, Menu, X, Home, MessageCircle, Newspaper, Bell, Lock, Search, LogOut, Settings, User as UserIcon, ShoppingBag, Wallet } from 'lucide-react';
 
 interface Props {
   children: React.ReactNode;
@@ -55,7 +55,7 @@ const tabBarVariants: Variants = {
 };
 
 const menuItemVariants: Variants = {
-  hidden: { x: -20, opacity: 0 },
+  hidden: (i: number) => ({ x: -20, opacity: 0 }),
   visible: (i: number) => ({ x: 0, opacity: 1, transition: { delay: i * 0.05, duration: 0.3 } }),
   tap: { scale: 0.97 }
 };
@@ -82,7 +82,13 @@ const badgeVariants: Variants = {
   animate: { scale: 1, transition: { type: "spring", stiffness: 500, damping: 30 } }
 };
 
-// ========== 联系人菜单弹窗（智能定位） ==========
+const contactMenuVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.9, y: -10 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", damping: 20, stiffness: 400, mass: 0.6 } },
+  exit: { opacity: 0, scale: 0.9, y: -10 }
+};
+
+// ========== 联系人菜单弹窗 ==========
 const ContactMenuModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -100,11 +106,9 @@ const ContactMenuModal: React.FC<{
       const menuWidth = menuRef.current.offsetWidth;
       const windowWidth = window.innerWidth;
       
-      // 计算从右边展开的位置
       let right = windowWidth - anchorRect.right + 8;
       let left: number | undefined = undefined;
       
-      // 如果右边空间不够，改为从左边展开
       if (right + menuWidth > windowWidth - 8) {
         right = 8;
         left = anchorRect.left - menuWidth + 8;
@@ -125,10 +129,10 @@ const ContactMenuModal: React.FC<{
     <AnimatePresence>
       <motion.div
         ref={menuRef}
-        initial={{ opacity: 0, scale: 0.9, y: -10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9, y: -10 }}
-        transition={{ type: "spring", damping: 20, stiffness: 400, mass: 0.6 }}
+        variants={contactMenuVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
         className="fixed z-50 w-48 bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700"
         style={{
           top: position.top,
@@ -138,9 +142,7 @@ const ContactMenuModal: React.FC<{
       >
         <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+            <Users className="w-3.5 h-3.5 text-blue-500" />
             <span className="text-xs font-medium text-gray-700 dark:text-gray-300">联系人</span>
           </div>
         </div>
@@ -150,7 +152,7 @@ const ContactMenuModal: React.FC<{
           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 group"
         >
           <div className="w-7 h-7 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <span className="text-sm">👥</span>
+            <Users className="w-4 h-4 text-green-600 dark:text-green-400" />
           </div>
           <span className="text-sm text-gray-700 dark:text-gray-300">好友列表</span>
         </button>
@@ -160,7 +162,7 @@ const ContactMenuModal: React.FC<{
           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 border-t border-gray-100 dark:border-gray-800 group"
         >
           <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <span className="text-sm">➕</span>
+            <UserPlus className="w-4 h-4 text-purple-600 dark:text-purple-400" />
           </div>
           <span className="text-sm text-gray-700 dark:text-gray-300">添加好友</span>
         </button>
@@ -170,7 +172,7 @@ const ContactMenuModal: React.FC<{
           className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 border-t border-gray-100 dark:border-gray-800 group"
         >
           <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center relative group-hover:scale-110 transition-transform">
-            <span className="text-sm">📨</span>
+            <Mail className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 text-left">好友申请</span>
           {unreadCount > 0 && (
@@ -194,6 +196,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [userData, setUserData] = useState<User | null>(null);
   const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
+  const [myPersonas, setMyPersonas] = useState<Persona[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showSwitchPanel, setShowSwitchPanel] = useState(false);
   const [showSideMenu, setShowSideMenu] = useState(false);
@@ -213,50 +216,46 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [showFriendList, setShowFriendList] = useState(false);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
-  const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string } | null>(null);
+  const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string; number?: number } | null>(null);
+
+  // 获取用户所有角色
+  useEffect(() => {
+    const fetchMyPersonas = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/persona/my', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setMyPersonas(data.filter((p: Persona) => p.status === 'approved'));
+        }
+      } catch (error) {
+        console.error('获取角色列表失败:', error);
+      }
+    };
+    fetchMyPersonas();
+  }, []);
 
   const tabs: TabItem[] = [
     {
       name: '聊天',
       path: '/chat',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      ),
-      activeIcon: (
-        <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      ),
+      icon: <MessageCircle className="w-5 h-5" />,
+      activeIcon: <MessageCircle className="w-5 h-5 fill-current" />,
     },
     {
       name: '动态',
       path: '/feed',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-        </svg>
-      ),
-      activeIcon: (
-        <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-        </svg>
-      ),
+      icon: <Newspaper className="w-5 h-5" />,
+      activeIcon: <Newspaper className="w-5 h-5 fill-current" />,
     },
     {
       name: '主页',
       path: '/home',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      ),
-      activeIcon: (
-        <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      ),
+      icon: <Home className="w-5 h-5" />,
+      activeIcon: <Home className="w-5 h-5 fill-current" />,
     },
   ];
 
@@ -404,12 +403,11 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
 
   const menuItems = [
-    { icon: '🔍', label: '搜索', path: '/search', color: 'from-blue-500 to-cyan-500' },
-    { icon: '🎭', label: '角色管理', path: '/persona', color: 'from-purple-500 to-pink-500' },
-    { icon: '🛒', label: '商城', path: '/shop', color: 'from-blue-500 to-cyan-500' },
-    { icon: '💎', label: '钱包', path: '/wallet', color: 'from-amber-500 to-orange-500' },
-    { icon: '⚙️', label: '账号设置', path: '/settings', color: 'from-gray-500 to-gray-600' },
-    { icon: '📋', label: '更新日志', path: '/changelog', color: 'from-emerald-500 to-teal-500' },
+    { icon: <Search className="w-4 h-4" />, label: '搜索', path: '/search', color: 'from-blue-500 to-cyan-500' },
+    { icon: <UserIcon className="w-4 h-4" />, label: '角色管理', path: '/persona', color: 'from-purple-500 to-pink-500' },
+    { icon: <ShoppingBag className="w-4 h-4" />, label: '商城', path: '/shop', color: 'from-blue-500 to-cyan-500' },
+    { icon: <Wallet className="w-4 h-4" />, label: '钱包', path: '/wallet', color: 'from-amber-500 to-orange-500' },
+    { icon: <Settings className="w-4 h-4" />, label: '账号设置', path: '/settings', color: 'from-gray-500 to-gray-600' },
   ];
 
   return (
@@ -419,8 +417,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       animate="visible"
       className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
     >
-      
-
       {/* 顶部导航栏 */}
       <motion.div
         variants={headerVariants}
@@ -443,7 +439,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-1">
-            {/* 1. 联系人按钮 */}
+            {/* 联系人按钮 */}
             <div className="relative">
               <motion.button
                 ref={contactButtonRef}
@@ -458,9 +454,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 whileTap={{ scale: 0.95 }}
                 title="联系人"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+                <Users className="w-4 h-4" />
                 {friendUnreadCount > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
@@ -482,7 +476,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               />
             </div>
 
-            {/* 2. 隐私保护锁 */}
+            {/* 隐私保护锁 */}
             <motion.button
               whileHover={{ scale: 1.05, rotate: [0, -5, 5, 0] }}
               whileTap={{ scale: 0.95 }}
@@ -490,17 +484,15 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               title="隐私模式"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+              <Lock className="w-4 h-4" />
             </motion.button>
 
-            {/* 3. 钻石余额 */}
+            {/* 钻石余额 */}
             <div className="scale-90">
               <DiamondBalance size="sm" />
             </div>
 
-            {/* 4. 菜单按钮 */}
+            {/* 菜单按钮 */}
             <motion.button
               whileHover={{ scale: 1.05, rotate: 90 }}
               whileTap={{ scale: 0.95 }}
@@ -508,12 +500,10 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               className="menu-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               title="菜单"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <Menu className="w-4 h-4" />
             </motion.button>
 
-            {/* 5. 角色切换 */}
+            {/* 角色切换 */}
             <div className="relative ml-0.5" ref={switchPanelRef}>
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -674,7 +664,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                     className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition group"
                   >
                     <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${item.color} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-200`}>
-                      <span className="text-sm">{item.icon}</span>
+                      {item.icon}
                     </div>
                     <span className="font-medium">{item.label}</span>
                     <motion.svg 
@@ -702,9 +692,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                   onClick={handleLogout}
                   className="w-full py-2.5 flex items-center justify-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all duration-200"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
+                  <LogOut className="w-4 h-4" />
                   <span>退出登录</span>
                 </motion.button>
                 <p className="text-[10px] text-gray-400 text-center mt-3">v1.0.0 | RP Chat</p>
@@ -715,61 +703,50 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       </AnimatePresence>
 
       {/* 弹窗 */}
-      <AddFriendModal isOpen={showAddFriendModal} onClose={() => setShowAddFriendModal(false)} />
+      <AddFriendModal 
+        isOpen={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
+        availablePersonas={myPersonas}
+      />
 
-      {showFriendList && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                好友列表
-              </h2>
-              <button onClick={() => setShowFriendList(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <FriendList 
-              onSelectFriend={(id, name, avatar) => {
-                setShowFriendList(false);
-                setSelectedPrivateChat({ id, name, avatar });
-              }}
-              onClose={() => setShowFriendList(false)}
-            />
+      <AnimatePresence>
+        {showFriendList && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden"
+            >
+              <FriendList 
+                onSelectFriend={(id, name, avatar, number) => {
+                  setShowFriendList(false);
+                  setSelectedPrivateChat({ id, name, avatar, number });
+                }}
+                onClose={() => setShowFriendList(false)}
+              />
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {showFriendRequests && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                好友申请
-                {friendUnreadCount > 0 && (
-                  <span className="text-sm text-red-500 ml-1">({friendUnreadCount})</span>
-                )}
-              </h2>
-              <button onClick={() => setShowFriendRequests(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <FriendRequests 
-              onClose={() => setShowFriendRequests(false)}
-              onAccept={() => setShowFriendRequests(false)}
-            />
+      <AnimatePresence>
+        {showFriendRequests && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md h-[500px] bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden"
+            >
+              <FriendRequests 
+                onClose={() => setShowFriendRequests(false)}
+                onAccept={() => setShowFriendRequests(false)}
+              />
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       <PrivateChat
         isOpen={!!selectedPrivateChat}
@@ -777,6 +754,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
         targetPersonaId={selectedPrivateChat?.id || ''}
         targetPersonaName={selectedPrivateChat?.name || ''}
         targetPersonaAvatar={selectedPrivateChat?.avatar}
+        targetPersonaNumber={selectedPrivateChat?.number}
       />
     </motion.div>
   );

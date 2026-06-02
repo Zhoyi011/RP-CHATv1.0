@@ -178,7 +178,7 @@ router.get('/search', requirePersona, async (req, res) => {
   }
 });
 
-// ========== 4. 发送好友申请（带冷却限制） ==========
+// ========== 4. 发送好友申请（统一30分钟冷却） ==========
 router.post('/request', requirePersona, async (req, res) => {
   try {
     const { toPersonaId, message } = req.body;
@@ -188,7 +188,6 @@ router.post('/request', requirePersona, async (req, res) => {
       return res.status(400).json({ success: false, message: '缺少目标角色ID' });
     }
 
-    // 允许同账户的不同角色加好友，只禁止加自己
     if (fromPersonaId.toString() === toPersonaId) {
       return res.status(400).json({ success: false, message: '不能添加自己为好友' });
     }
@@ -212,56 +211,23 @@ router.post('/request', requirePersona, async (req, res) => {
       return res.status(400).json({ success: false, message: '已经是好友了' });
     }
 
-    // 检查是否有待处理的申请
-    const existingPendingRequest = await FriendRequest.findOne({
+    // 🔥 检查30分钟内是否发送过申请（无论状态）
+    const recentRequest = await FriendRequest.findOne({
       fromPersonaId,
       toPersonaId,
-      status: 'pending'
+      createdAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) }
     });
-    if (existingPendingRequest) {
-      return res.status(400).json({ success: false, message: '已发送过好友申请，请等待对方处理' });
-    }
 
-    // 检查是否有被拒绝的申请（30分钟冷却）
-    const rejectedRequest = await FriendRequest.findOne({
-      fromPersonaId,
-      toPersonaId,
-      status: 'rejected'
-    }).sort({ updatedAt: -1 });
-
-    if (rejectedRequest) {
+    if (recentRequest) {
       const now = new Date();
-      const lastRejectedTime = new Date(rejectedRequest.updatedAt);
-      const minutesSinceRejection = (now - lastRejectedTime) / (1000 * 60);
+      const lastTime = new Date(recentRequest.createdAt);
+      const minutesSince = Math.floor((now - lastTime) / (1000 * 60));
+      const remaining = 30 - minutesSince;
       
-      if (minutesSinceRejection < 30) {
-        const remainingMinutes = Math.ceil(30 - minutesSinceRejection);
-        return res.status(429).json({ 
-          success: false, 
-          message: `对方拒绝了你的好友申请，请 ${remainingMinutes} 分钟后再次尝试` 
-        });
-      }
-    }
-
-    // 检查是否有被取消/过期的申请（30分钟冷却）
-    const canceledRequest = await FriendRequest.findOne({
-      fromPersonaId,
-      toPersonaId,
-      status: { $in: ['canceled'] }
-    }).sort({ updatedAt: -1 });
-
-    if (canceledRequest) {
-      const now = new Date();
-      const lastCancelTime = new Date(canceledRequest.updatedAt);
-      const minutesSinceCancel = (now - lastCancelTime) / (1000 * 60);
-      
-      if (minutesSinceCancel < 30) {
-        const remainingMinutes = Math.ceil(30 - minutesSinceCancel);
-        return res.status(429).json({ 
-          success: false, 
-          message: `申请已过期，请 ${remainingMinutes} 分钟后再次尝试` 
-        });
-      }
+      return res.status(429).json({ 
+        success: false, 
+        message: `请 ${remaining} 分钟后再次尝试添加好友` 
+      });
     }
 
     const request = new FriendRequest({
