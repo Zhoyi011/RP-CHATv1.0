@@ -84,7 +84,7 @@ const Friend = mongoose.model('Friend', friendSchema);
         const indexes = await collection.indexes();
         for (const index of indexes) {
           if (index.name === 'userId_1_friendId_1' ||
-              (index.key && index.key.userId !== undefined)) {
+              (index.key && (index.key.userId !== undefined || index.key.friendId !== undefined))) {
             await collection.dropIndex(index.name);
             console.log('✅ [Friend] 已删除旧索引:', index.name);
           }
