@@ -21,23 +21,19 @@ const friendSchema = new mongoose.Schema({
     enum: ['pending', 'accepted', 'blocked', 'rejected'],
     default: 'accepted'
   },
-  // 备注名（角色给好友起的昵称）
   nickname: {
     type: String,
     maxlength: 20,
     default: null
   },
-  // 分组
   group: {
     type: String,
     default: '我的好友'
   },
-  // 是否星标好友
   isStarred: {
     type: Boolean,
     default: false
   },
-  // 亲密度
   intimacy: {
     type: Number,
     default: 0,
@@ -52,12 +48,14 @@ const friendSchema = new mongoose.Schema({
     type: Date,
     default: null
   }
+}, {
+  autoIndex: true
 });
 
-// 复合唯一索引：防止重复好友关系
+// 复合唯一索引
 friendSchema.index({ personaId: 1, friendPersonaId: 1 }, { unique: true });
 
-// 查询辅助：获取角色的所有好友ID
+// 查询辅助
 friendSchema.statics.getFriendPersonaIds = async function(personaId) {
   const friendships = await this.find({
     personaId,
@@ -66,7 +64,6 @@ friendSchema.statics.getFriendPersonaIds = async function(personaId) {
   return friendships.map(f => f.friendPersonaId);
 };
 
-// 查询辅助：检查两个角色是否为好友
 friendSchema.statics.areFriends = async function(personaId, targetPersonaId) {
   const friendship = await this.findOne({
     personaId,
@@ -77,4 +74,28 @@ friendSchema.statics.areFriends = async function(personaId, targetPersonaId) {
 };
 
 const Friend = mongoose.model('Friend', friendSchema);
+
+// 删除旧索引
+(async () => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const collection = mongoose.connection.collection('friends');
+      if (collection) {
+        const indexes = await collection.indexes();
+        for (const index of indexes) {
+          if (index.name === 'userId_1_friendId_1' ||
+              (index.key && index.key.userId !== undefined)) {
+            await collection.dropIndex(index.name);
+            console.log('✅ [Friend] 已删除旧索引:', index.name);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    if (err.code !== 27) {
+      console.log('⚠️ [Friend] 删除旧索引时出错:', err.message);
+    }
+  }
+})();
+
 module.exports = Friend;
