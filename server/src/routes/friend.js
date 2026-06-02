@@ -178,7 +178,7 @@ router.get('/search', requirePersona, async (req, res) => {
   }
 });
 
-// ========== 4. 发送好友申请 ==========
+// ========== 4. 发送好友申请（带冷却限制） ==========
 router.post('/request', requirePersona, async (req, res) => {
   try {
     const { toPersonaId, message } = req.body;
@@ -213,18 +213,54 @@ router.post('/request', requirePersona, async (req, res) => {
     }
 
     // 检查是否有待处理的申请
-    const existingRequest = await FriendRequest.findOne({
-      $or: [
-        { fromPersonaId, toPersonaId, status: 'pending' },
-        { fromPersonaId: toPersonaId, toPersonaId: fromPersonaId, status: 'pending' }
-      ]
+    const existingPendingRequest = await FriendRequest.findOne({
+      fromPersonaId,
+      toPersonaId,
+      status: 'pending'
     });
+    if (existingPendingRequest) {
+      return res.status(400).json({ success: false, message: '已发送过好友申请，请等待对方处理' });
+    }
 
-    if (existingRequest) {
-      if (existingRequest.fromPersonaId.toString() === fromPersonaId.toString()) {
-        return res.status(400).json({ success: false, message: '已发送过好友申请，请等待对方处理' });
-      } else {
-        return res.status(400).json({ success: false, message: '对方已向你发送好友申请，请去处理' });
+    // 检查是否有被拒绝的申请（30分钟冷却）
+    const rejectedRequest = await FriendRequest.findOne({
+      fromPersonaId,
+      toPersonaId,
+      status: 'rejected'
+    }).sort({ updatedAt: -1 });
+
+    if (rejectedRequest) {
+      const now = new Date();
+      const lastRejectedTime = new Date(rejectedRequest.updatedAt);
+      const minutesSinceRejection = (now - lastRejectedTime) / (1000 * 60);
+      
+      if (minutesSinceRejection < 30) {
+        const remainingMinutes = Math.ceil(30 - minutesSinceRejection);
+        return res.status(429).json({ 
+          success: false, 
+          message: `对方拒绝了你的好友申请，请 ${remainingMinutes} 分钟后再次尝试` 
+        });
+      }
+    }
+
+    // 检查是否有被取消/过期的申请（30分钟冷却）
+    const canceledRequest = await FriendRequest.findOne({
+      fromPersonaId,
+      toPersonaId,
+      status: { $in: ['canceled'] }
+    }).sort({ updatedAt: -1 });
+
+    if (canceledRequest) {
+      const now = new Date();
+      const lastCancelTime = new Date(canceledRequest.updatedAt);
+      const minutesSinceCancel = (now - lastCancelTime) / (1000 * 60);
+      
+      if (minutesSinceCancel < 30) {
+        const remainingMinutes = Math.ceil(30 - minutesSinceCancel);
+        return res.status(429).json({ 
+          success: false, 
+          message: `申请已过期，请 ${remainingMinutes} 分钟后再次尝试` 
+        });
       }
     }
 
@@ -318,7 +354,7 @@ router.post('/request/:requestId/handle', requirePersona, async (req, res) => {
       res.json({ success: true, message: '已添加好友' });
     } else if (action === 'reject') {
       request.status = 'rejected';
-      await request.save();
+      await request.save();  // 会自动更新 updatedAt
       res.json({ success: true, message: '已拒绝好友申请' });
     } else {
       res.status(400).json({ success: false, message: '无效的操作' });
