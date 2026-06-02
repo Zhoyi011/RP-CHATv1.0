@@ -25,6 +25,7 @@ const getCurrentPersona = async (req) => {
     const active = await ActivePersona.findOne({ userId: decoded.userId }).populate('personaId');
     return active?.personaId || null;
   } catch (error) {
+    console.error('获取当前角色失败:', error);
     return null;
   }
 };
@@ -39,9 +40,7 @@ const requirePersona = async (req, res, next) => {
   next();
 };
 
-// ========== API ==========
-
-// 获取好友列表（基于当前角色）
+// ========== 1. 获取好友列表 ==========
 router.get('/list', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
@@ -76,7 +75,7 @@ router.get('/list', requirePersona, async (req, res) => {
   }
 });
 
-// 获取好友申请列表
+// ========== 2. 获取好友申请列表 ==========
 router.get('/requests', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
@@ -108,7 +107,7 @@ router.get('/requests', requirePersona, async (req, res) => {
   }
 });
 
-// 搜索角色（添加好友用）
+// ========== 3. 搜索角色（添加好友用） ==========
 router.get('/search', requirePersona, async (req, res) => {
   try {
     const { q } = req.query;
@@ -118,7 +117,7 @@ router.get('/search', requirePersona, async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    // 搜索角色（只显示已批准的角色）
+    // 搜索角色（只显示已批准的角色，排除自己）
     const personas = await Persona.find({
       _id: { $ne: currentPersonaId },
       status: 'approved',
@@ -179,7 +178,7 @@ router.get('/search', requirePersona, async (req, res) => {
   }
 });
 
-// 发送好友申请
+// ========== 4. 发送好友申请 ==========
 router.post('/request', requirePersona, async (req, res) => {
   try {
     const { toPersonaId, message } = req.body;
@@ -238,8 +237,8 @@ router.post('/request', requirePersona, async (req, res) => {
     await request.save();
 
     // 通知目标角色的主人
-    const targetUser = await targetPersona.populate('userId');
-    if (targetUser.userId) {
+    const targetUser = await Persona.findById(toPersonaId).populate('userId');
+    if (targetUser && targetUser.userId) {
       emitToUser(targetUser.userId._id.toString(), 'friend-request-received', {
         id: request._id,
         fromPersona: {
@@ -261,7 +260,7 @@ router.post('/request', requirePersona, async (req, res) => {
   }
 });
 
-// 处理好友申请
+// ========== 5. 处理好友申请（同意/拒绝） ==========
 router.post('/request/:requestId/handle', requirePersona, async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -279,6 +278,12 @@ router.post('/request/:requestId/handle', requirePersona, async (req, res) => {
 
     if (request.status !== 'pending') {
       return res.status(400).json({ success: false, message: '申请已处理' });
+    }
+
+    if (request.expiresAt < new Date()) {
+      request.status = 'canceled';
+      await request.save();
+      return res.status(400).json({ success: false, message: '申请已过期' });
     }
 
     if (action === 'accept') {
@@ -301,8 +306,8 @@ router.post('/request/:requestId/handle', requirePersona, async (req, res) => {
 
       // 通知申请者
       const fromPersona = await Persona.findById(request.fromPersonaId);
-      const fromUser = await fromPersona.populate('userId');
-      if (fromUser.userId) {
+      const fromUser = await Persona.findById(request.fromPersonaId).populate('userId');
+      if (fromUser && fromUser.userId) {
         emitToUser(fromUser.userId._id.toString(), 'friend-request-accepted', {
           personaId: request.toPersonaId,
           personaName: req.persona.displayName || req.persona.name,
@@ -324,7 +329,7 @@ router.post('/request/:requestId/handle', requirePersona, async (req, res) => {
   }
 });
 
-// 删除好友
+// ========== 6. 删除好友 ==========
 router.delete('/:friendPersonaId', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
@@ -351,7 +356,7 @@ router.delete('/:friendPersonaId', requirePersona, async (req, res) => {
   }
 });
 
-// 获取好友动态
+// ========== 7. 获取好友动态 ==========
 router.get('/feed', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
