@@ -83,6 +83,7 @@ const handleEmailLogin = async (e: React.FormEvent) => {
     
     if (response.ok) {
       localStorage.setItem('token', data.token);
+      localStorage.setItem('userId', data.user._id);
       toast.success('登录成功');
       
       // 👇 修改跳转逻辑
@@ -136,6 +137,7 @@ const handleGoogleLogin = async () => {
     
     if (response.ok) {
       localStorage.setItem('token', data.token);
+      localStorage.setItem('userId', data.user._id);
       toast.success('登录成功');
       
       // 👇 修改跳转逻辑

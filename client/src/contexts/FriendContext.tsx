@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 interface FriendContextType {
   friends: Friend[];
-  friendRequests: FriendRequest[];
+  requests: FriendRequest[];
   unreadCount: number;
   loading: boolean;
   fetchFriends: () => Promise<void>;
@@ -27,25 +27,18 @@ export const useFriend = () => {
   return context;
 };
 
-interface FriendProviderProps {
-  children: ReactNode;
-}
-
-export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
+export const FriendProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchFriends = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await friendApi.getFriends();
       if (res.success) setFriends(res.data);
     } catch (error) {
-      console.error('获取好友列表失败:', error);
-    } finally {
-      setLoading(false);
+      console.error('获取好友失败:', error);
     }
   }, []);
 
@@ -53,11 +46,11 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     try {
       const res = await friendApi.getRequests();
       if (res.success) {
-        setFriendRequests(res.data);
+        setRequests(res.data);
         setUnreadCount(res.data.length);
       }
     } catch (error) {
-      console.error('获取好友申请失败:', error);
+      console.error('获取申请失败:', error);
     }
   }, []);
 
@@ -65,7 +58,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     try {
       const res = await friendApi.sendRequest(toPersonaId, message);
       if (res.success) {
-        toast.success(res.message || '好友申请已发送');
+        toast.success(res.message);
         return true;
       }
       return false;
@@ -79,7 +72,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     try {
       const res = await friendApi.handleRequest(requestId, 'accept');
       if (res.success) {
-        toast.success(res.message || '已添加好友');
+        toast.success(res.message);
         await fetchFriends();
         await fetchRequests();
         return true;
@@ -95,7 +88,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     try {
       const res = await friendApi.handleRequest(requestId, 'reject');
       if (res.success) {
-        toast.success(res.message || '已拒绝');
+        toast.success(res.message);
         await fetchRequests();
         return true;
       }
@@ -110,7 +103,7 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     try {
       const res = await friendApi.deleteFriend(friendPersonaId);
       if (res.success) {
-        toast.success(res.message || '已删除好友');
+        toast.success(res.message);
         await fetchFriends();
         return true;
       }
@@ -133,21 +126,24 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Socket 事件
+  // Socket 监听
   useEffect(() => {
     const onRequestReceived = (data: any) => {
+      console.log('📨 收到好友申请:', data);
       toast.success(`${data.fromPersona?.displayName || data.fromPersona?.name} 向你发送了好友申请`);
       fetchRequests();
       setUnreadCount(prev => prev + 1);
     };
-    const onRequestAccepted = () => {
+    
+    const onRequestAccepted = (data: any) => {
+      console.log('📨 申请被接受:', data);
       toast.success('好友申请已被接受');
       fetchFriends();
     };
-
+    
     socketService.on('friend-request-received', onRequestReceived);
     socketService.on('friend-request-accepted', onRequestAccepted);
-
+    
     return () => {
       socketService.off('friend-request-received', onRequestReceived);
       socketService.off('friend-request-accepted', onRequestAccepted);
@@ -158,24 +154,22 @@ export const FriendProvider: React.FC<FriendProviderProps> = ({ children }) => {
   useEffect(() => {
     fetchFriends();
     fetchRequests();
-  }, [fetchFriends, fetchRequests]);
+  }, []);
 
   return (
-    <FriendContext.Provider
-      value={{
-        friends,
-        friendRequests,
-        unreadCount,
-        loading,
-        fetchFriends,
-        fetchRequests,
-        sendRequest,
-        acceptRequest,
-        rejectRequest,
-        removeFriend,
-        searchPersonas,
-      }}
-    >
+    <FriendContext.Provider value={{
+      friends,
+      requests,
+      unreadCount,
+      loading,
+      fetchFriends,
+      fetchRequests,
+      sendRequest,
+      acceptRequest,
+      rejectRequest,
+      removeFriend,
+      searchPersonas,
+    }}>
       {children}
     </FriendContext.Provider>
   );

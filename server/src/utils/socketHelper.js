@@ -10,7 +10,7 @@ function emitToUser(userId, event, data) {
   if (ioInstance) {
     ioInstance.to(`user:${userId}`).emit(event, data);
   } else {
-    console.warn(`⚠️ [socketHelper] Socket.IO 实例未设置，无法发送事件: ${event}`);
+    console.warn(`⚠️ [socketHelper] Socket.IO 实例未设置`);
   }
 }
 

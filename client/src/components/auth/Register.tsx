@@ -73,6 +73,7 @@ const Register = () => {
       
       if (response.ok) {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('userId', data.user._id);
         toast.success('注册成功！请使用邀请码激活账号');
         navigate('/invite');
       } else {

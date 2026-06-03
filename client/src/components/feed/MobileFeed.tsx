@@ -15,6 +15,7 @@ export const MobileFeed: React.FC = () => {
   const fetchFeedPosts = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     try {
+      // 注意：需要先在 friendApi 中添加 getFriendFeed 方法
       const res = await friendApi.getFriendFeed(20);
       if (res.success) {
         setPosts(res.data);

@@ -911,6 +911,12 @@ const ChatHome = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
+            // 🔥 获取用户信息并保存 userId
+    const userInfo = await authApi.getCurrentUser();
+    if (userInfo && userInfo._id) {
+      localStorage.setItem('userId', userInfo._id);
+      console.log('✅ 已保存 userId:', userInfo._id);
+    }
         const [roomsRes, personasData, activePersonaRes] = await Promise.all([
           fetch(`${API_BASE}/room/my-rooms`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
           personaApi.getMyPersonas(),
@@ -991,6 +997,7 @@ const ChatHome = () => {
   useEffect(() => {
     if (!authChecked || !user) return;
     const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
     if (!token) return;
     socketService.connect(token, user?.uid);  // ✅ 传递 userId
 

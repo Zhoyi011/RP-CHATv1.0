@@ -3,13 +3,14 @@ const express = require('express');
 const Friend = require('../models/Friend');
 const FriendRequest = require('../models/FriendRequest');
 const Persona = require('../models/Persona');
-const { emitToUser } = require('../utils/socketHelper');
+const User = require('../models/User');
+const Post = require('../models/Post');
 
 const router = express.Router();
 
 // ========== 辅助函数 ==========
 
-// 从 token 获取当前用户和激活的角色
+// 从 token 获取当前角色
 const getCurrentPersona = async (req) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -20,12 +21,11 @@ const getCurrentPersona = async (req) => {
     const jwt = require('jsonwebtoken');
     const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
     const decoded = jwt.verify(token, secret);
-    
     const ActivePersona = require('../models/ActivePersona');
     const active = await ActivePersona.findOne({ userId: decoded.userId }).populate('personaId');
     return active?.personaId || null;
   } catch (error) {
-    console.error('获取当前角色失败:', error);
+    console.error('获取角色失败:', error);
     return null;
   }
 };
@@ -45,14 +45,10 @@ router.get('/list', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
     
-    const friends = await Friend.find({ 
-      personaId, 
-      status: 'accepted' 
-    })
-    .populate('friendPersonaId', 'name displayName avatar sameNameNumber')
-    .sort({ isStarred: -1, intimacy: -1, createdAt: -1 });
-
-    const friendList = friends.map(f => ({
+    const friends = await Friend.find({ personaId })
+      .populate('friendPersonaId', 'name displayName avatar sameNameNumber');
+    
+    const list = friends.map(f => ({
       id: f._id,
       friend: {
         id: f.friendPersonaId._id,
@@ -61,14 +57,10 @@ router.get('/list', requirePersona, async (req, res) => {
         avatar: f.friendPersonaId.avatar,
         sameNameNumber: f.friendPersonaId.sameNameNumber
       },
-      nickname: f.nickname,
-      group: f.group,
-      isStarred: f.isStarred,
-      intimacy: f.intimacy,
       createdAt: f.createdAt
     }));
-
-    res.json({ success: true, data: friendList });
+    
+    res.json({ success: true, data: list });
   } catch (error) {
     console.error('获取好友列表失败:', error);
     res.status(500).json({ success: false, message: '服务器错误' });
@@ -79,14 +71,13 @@ router.get('/list', requirePersona, async (req, res) => {
 router.get('/requests', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
-
-    const received = await FriendRequest.find({
-      toPersonaId: personaId,
-      status: 'pending',
-      expiresAt: { $gt: new Date() }
+    
+    const requests = await FriendRequest.find({ 
+      toPersonaId: personaId, 
+      status: 'pending' 
     }).populate('fromPersonaId', 'name displayName avatar sameNameNumber');
-
-    const formatted = received.map(r => ({
+    
+    const list = requests.map(r => ({
       id: r._id,
       fromPersona: {
         id: r.fromPersonaId._id,
@@ -96,28 +87,27 @@ router.get('/requests', requirePersona, async (req, res) => {
         sameNameNumber: r.fromPersonaId.sameNameNumber
       },
       message: r.message,
-      createdAt: r.createdAt,
-      expiresAt: r.expiresAt
+      createdAt: r.createdAt
     }));
-
-    res.json({ success: true, data: formatted });
+    
+    res.json({ success: true, data: list });
   } catch (error) {
-    console.error('获取好友申请失败:', error);
+    console.error('获取申请列表失败:', error);
     res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
-// ========== 3. 搜索角色（添加好友用） ==========
+// ========== 3. 搜索角色 ==========
 router.get('/search', requirePersona, async (req, res) => {
   try {
     const { q } = req.query;
     const currentPersonaId = req.persona._id;
-
+    
     if (!q || q.length < 2) {
       return res.json({ success: true, data: [] });
     }
-
-    // 搜索角色（只显示已批准的角色，排除自己）
+    
+    // 搜索角色
     const personas = await Persona.find({
       _id: { $ne: currentPersonaId },
       status: 'approved',
@@ -125,17 +115,12 @@ router.get('/search', requirePersona, async (req, res) => {
         { name: { $regex: q, $options: 'i' } },
         { displayName: { $regex: q, $options: 'i' } }
       ]
-    })
-    .select('name displayName avatar sameNameNumber')
-    .limit(20);
-
+    }).limit(20);
+    
     // 获取好友关系
-    const friendIds = await Friend.find({ 
-      personaId: currentPersonaId, 
-      status: 'accepted' 
-    }).select('friendPersonaId');
-    const friendIdSet = new Set(friendIds.map(f => f.friendPersonaId.toString()));
-
+    const friends = await Friend.find({ personaId: currentPersonaId }).select('friendPersonaId');
+    const friendIds = new Set(friends.map(f => f.friendPersonaId.toString()));
+    
     // 获取待处理申请
     const pendingRequests = await FriendRequest.find({
       $or: [
@@ -143,105 +128,101 @@ router.get('/search', requirePersona, async (req, res) => {
         { toPersonaId: currentPersonaId, status: 'pending' }
       ]
     });
-
-    const result = personas.map(persona => {
-      const isFriend = friendIdSet.has(persona._id.toString());
-      const pending = pendingRequests.find(req => 
-        req.fromPersonaId.toString() === persona._id.toString() ||
-        req.toPersonaId.toString() === persona._id.toString()
+    
+    const result = personas.map(p => {
+      const isFriend = friendIds.has(p._id.toString());
+      const pendingFromMe = pendingRequests.some(r => 
+        r.fromPersonaId.toString() === currentPersonaId.toString() && 
+        r.toPersonaId.toString() === p._id.toString()
+      );
+      const pendingToMe = pendingRequests.some(r => 
+        r.fromPersonaId.toString() === p._id.toString() && 
+        r.toPersonaId.toString() === currentPersonaId.toString()
       );
       
       let requestStatus = null;
-      if (pending) {
-        if (pending.fromPersonaId.toString() === currentPersonaId.toString()) {
-          requestStatus = 'sent';
-        } else {
-          requestStatus = 'received';
-        }
-      }
-
+      if (pendingFromMe) requestStatus = 'sent';
+      if (pendingToMe) requestStatus = 'received';
+      
       return {
-        id: persona._id,
-        name: persona.name,
-        displayName: persona.displayName,
-        avatar: persona.avatar,
-        sameNameNumber: persona.sameNameNumber,
+        id: p._id,
+        name: p.name,
+        displayName: p.displayName,
+        avatar: p.avatar,
+        sameNameNumber: p.sameNameNumber,
         isFriend,
         requestStatus
       };
     });
-
+    
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('搜索角色失败:', error);
+    console.error('搜索失败:', error);
     res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
-// ========== 4. 发送好友申请（统一30分钟冷却） ==========
+// ========== 4. 发送好友申请 ==========
 router.post('/request', requirePersona, async (req, res) => {
   try {
     const { toPersonaId, message } = req.body;
     const fromPersonaId = req.persona._id;
-
+    
+    console.log('📝 发送申请:', { fromPersonaId, toPersonaId });
+    
+    // 验证
     if (!toPersonaId) {
-      return res.status(400).json({ success: false, message: '缺少目标角色ID' });
+      return res.status(400).json({ success: false, message: '缺少目标角色' });
     }
-
+    
     if (fromPersonaId.toString() === toPersonaId) {
-      return res.status(400).json({ success: false, message: '不能添加自己为好友' });
+      return res.status(400).json({ success: false, message: '不能添加自己' });
     }
-
+    
+    // 检查目标角色是否存在
     const targetPersona = await Persona.findById(toPersonaId);
     if (!targetPersona) {
       return res.status(404).json({ success: false, message: '角色不存在' });
     }
-
-    if (targetPersona.status !== 'approved') {
-      return res.status(400).json({ success: false, message: '该角色尚未通过审核' });
-    }
-
+    
     // 检查是否已经是好友
     const existingFriend = await Friend.findOne({
-      personaId: fromPersonaId,
-      friendPersonaId: toPersonaId,
-      status: 'accepted'
+      $or: [
+        { personaId: fromPersonaId, friendPersonaId: toPersonaId },
+        { personaId: toPersonaId, friendPersonaId: fromPersonaId }
+      ]
     });
     if (existingFriend) {
       return res.status(400).json({ success: false, message: '已经是好友了' });
     }
-
-    // 🔥 检查30分钟内是否发送过申请（无论状态）
-    const recentRequest = await FriendRequest.findOne({
-      fromPersonaId,
-      toPersonaId,
-      createdAt: { $gt: new Date(Date.now() - 30 * 60 * 1000) }
+    
+    // 检查是否有待处理的申请
+    const existingRequest = await FriendRequest.findOne({
+      $or: [
+        { fromPersonaId, toPersonaId, status: 'pending' },
+        { fromPersonaId: toPersonaId, toPersonaId: fromPersonaId, status: 'pending' }
+      ]
     });
-
-    if (recentRequest) {
-      const now = new Date();
-      const lastTime = new Date(recentRequest.createdAt);
-      const minutesSince = Math.floor((now - lastTime) / (1000 * 60));
-      const remaining = 30 - minutesSince;
-      
-      return res.status(429).json({ 
-        success: false, 
-        message: `请 ${remaining} 分钟后再次尝试添加好友` 
-      });
+    
+    if (existingRequest) {
+      return res.status(400).json({ success: false, message: '已有待处理的好友申请' });
     }
-
+    
+    // 创建申请
     const request = new FriendRequest({
       fromPersonaId,
       toPersonaId,
-      message: message || '请求添加你为好友'
+      message: message || '想和你成为好友'
     });
-
+    
     await request.save();
-
-    // 通知目标角色的主人
-    const targetUser = await Persona.findById(toPersonaId).populate('userId');
-    if (targetUser && targetUser.userId) {
-      emitToUser(targetUser.userId._id.toString(), 'friend-request-received', {
+    
+    // 通知目标用户
+    const targetUser = await User.findById(targetPersona.userId);
+    const io = req.app.get('io');
+    
+    if (targetUser && io) {
+      io.to(`user:${targetUser._id}`).emit('friend-request-received', {
         id: request._id,
         fromPersona: {
           id: req.persona._id,
@@ -253,80 +234,68 @@ router.post('/request', requirePersona, async (req, res) => {
         message: request.message,
         createdAt: request.createdAt
       });
+      console.log('✅ 通知已发送到用户:', targetUser._id);
     }
-
-    res.json({ success: true, message: '好友申请已发送', data: request });
+    
+    res.json({ success: true, message: '好友申请已发送' });
   } catch (error) {
-    console.error('发送好友申请失败:', error);
+    console.error('发送申请失败:', error);
     res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
 
-// ========== 5. 处理好友申请（同意/拒绝） ==========
+// ========== 5. 处理好友申请 ==========
 router.post('/request/:requestId/handle', requirePersona, async (req, res) => {
   try {
     const { requestId } = req.params;
     const { action } = req.body;
     const personaId = req.persona._id;
-
+    
     const request = await FriendRequest.findById(requestId);
     if (!request) {
       return res.status(404).json({ success: false, message: '申请不存在' });
     }
-
+    
     if (request.toPersonaId.toString() !== personaId.toString()) {
-      return res.status(403).json({ success: false, message: '无权处理此申请' });
+      return res.status(403).json({ success: false, message: '无权处理' });
     }
-
+    
     if (request.status !== 'pending') {
       return res.status(400).json({ success: false, message: '申请已处理' });
     }
-
-    if (request.expiresAt < new Date()) {
-      request.status = 'canceled';
-      await request.save();
-      return res.status(400).json({ success: false, message: '申请已过期' });
-    }
-
+    
     if (action === 'accept') {
       // 创建双向好友关系
-      const friend1 = new Friend({
-        personaId: request.fromPersonaId,
-        friendPersonaId: request.toPersonaId,
-        status: 'accepted'
-      });
-      const friend2 = new Friend({
-        personaId: request.toPersonaId,
-        friendPersonaId: request.fromPersonaId,
-        status: 'accepted'
-      });
-
-      await Promise.all([friend1.save(), friend2.save()]);
-
+      await Friend.create([
+        { personaId: request.fromPersonaId, friendPersonaId: request.toPersonaId },
+        { personaId: request.toPersonaId, friendPersonaId: request.fromPersonaId }
+      ]);
+      
       request.status = 'accepted';
       await request.save();
-
+      
       // 通知申请者
       const fromPersona = await Persona.findById(request.fromPersonaId);
-      const fromUser = await Persona.findById(request.fromPersonaId).populate('userId');
-      if (fromUser && fromUser.userId) {
-        emitToUser(fromUser.userId._id.toString(), 'friend-request-accepted', {
+      const fromUser = await User.findById(fromPersona.userId);
+      const io = req.app.get('io');
+      
+      if (fromUser && io) {
+        io.to(`user:${fromUser._id}`).emit('friend-request-accepted', {
           personaId: request.toPersonaId,
-          personaName: req.persona.displayName || req.persona.name,
-          personaAvatar: req.persona.avatar
+          personaName: req.persona.displayName || req.persona.name
         });
       }
-
+      
       res.json({ success: true, message: '已添加好友' });
     } else if (action === 'reject') {
       request.status = 'rejected';
-      await request.save();  // 会自动更新 updatedAt
-      res.json({ success: true, message: '已拒绝好友申请' });
+      await request.save();
+      res.json({ success: true, message: '已拒绝申请' });
     } else {
-      res.status(400).json({ success: false, message: '无效的操作' });
+      res.status(400).json({ success: false, message: '无效操作' });
     }
   } catch (error) {
-    console.error('处理好友申请失败:', error);
+    console.error('处理申请失败:', error);
     res.status(500).json({ success: false, message: '服务器错误' });
   }
 });
@@ -336,21 +305,14 @@ router.delete('/:friendPersonaId', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
     const { friendPersonaId } = req.params;
-
+    
     await Friend.deleteMany({
       $or: [
         { personaId, friendPersonaId },
         { personaId: friendPersonaId, friendPersonaId: personaId }
       ]
     });
-
-    await FriendRequest.deleteMany({
-      $or: [
-        { fromPersonaId: personaId, toPersonaId: friendPersonaId },
-        { fromPersonaId: friendPersonaId, toPersonaId: personaId }
-      ]
-    });
-
+    
     res.json({ success: true, message: '已删除好友' });
   } catch (error) {
     console.error('删除好友失败:', error);
@@ -363,19 +325,16 @@ router.get('/feed', requirePersona, async (req, res) => {
   try {
     const personaId = req.persona._id;
     const limit = parseInt(req.query.limit) || 20;
-
-    const friends = await Friend.find({ 
-      personaId, 
-      status: 'accepted' 
-    }).select('friendPersonaId');
     
+    // 获取好友列表
+    const friends = await Friend.find({ personaId }).select('friendPersonaId');
     const friendIds = friends.map(f => f.friendPersonaId);
-
+    
     if (friendIds.length === 0) {
       return res.json({ success: true, data: [] });
     }
-
-    const Post = require('../models/Post');
+    
+    // 获取好友的动态
     const posts = await Post.find({
       personaId: { $in: friendIds },
       isDeleted: { $ne: true }
@@ -383,7 +342,7 @@ router.get('/feed', requirePersona, async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate('personaId', 'name displayName avatar sameNameNumber');
-
+    
     res.json({ success: true, data: posts });
   } catch (error) {
     console.error('获取好友动态失败:', error);

@@ -1,6 +1,5 @@
 // client/src/components/friends/FriendRequests.tsx
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { useFriend } from '../../contexts/FriendContext';
 import AvatarFrame from '../common/AvatarFrame';
 import { Check, X, Clock, UserPlus, MessageCircle } from 'lucide-react';
@@ -8,20 +7,20 @@ import toast from 'react-hot-toast';
 
 interface FriendRequestsProps {
   onClose: () => void;
-  onAccept?: (personaId: string, personaName: string, personaAvatar?: string, personaNumber?: number) => void;
-  onMessage?: (personaId: string, personaName: string, personaAvatar?: string, personaNumber?: number) => void;
+  onAccept?: (personaId: string, personaName: string, personaAvatar?: string) => void;
+  onMessage?: (personaId: string, personaName: string, personaAvatar?: string) => void;
 }
 
 const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMessage }) => {
-  const { friendRequests, acceptRequest, rejectRequest, loading } = useFriend();
+  const { requests, acceptRequest, rejectRequest } = useFriend();
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const handleAccept = async (requestId: string, fromPersona: any) => {
-    setProcessingId(requestId);
-    const success = await acceptRequest(requestId);
+  const handleAccept = async (request: any) => {
+    setProcessingId(request.id);
+    const success = await acceptRequest(request.id);
     setProcessingId(null);
-    if (success && onAccept && fromPersona) {
-      onAccept(fromPersona.id, fromPersona.displayName || fromPersona.name, fromPersona.avatar, fromPersona.sameNameNumber);
+    if (success && onAccept) {
+      onAccept(request.fromPersona.id, request.fromPersona.displayName || request.fromPersona.name, request.fromPersona.avatar);
     }
   };
 
@@ -35,29 +34,25 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMe
     const date = new Date(dateStr);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days === 0) return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-    if (days === 1) return '昨天';
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return '刚刚';
+    if (minutes < 60) return `${minutes}分钟前`;
+    if (hours < 24) return `${hours}小时前`;
     if (days < 7) return `${days}天前`;
     return date.toLocaleDateString();
   };
 
-  if (loading && friendRequests.length === 0) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+      <div className="flex items-center justify-between p-4 border-b">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
           <UserPlus className="w-5 h-5" />
-          好友申请 ({friendRequests.length})
+          好友申请 ({requests.length})
         </h2>
-        <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+        <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100">
           <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -65,28 +60,20 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMe
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {friendRequests.length === 0 ? (
+        {requests.length === 0 ? (
           <div className="text-center py-12 text-gray-500">暂无好友申请</div>
         ) : (
-          friendRequests.map((request) => {
-            const fromPersona = request.fromPersona;
-            const displayName = fromPersona?.displayName || fromPersona?.name || '未知角色';
+          requests.map((request) => {
+            const displayName = request.fromPersona.displayName || request.fromPersona.name;
             return (
-              <motion.div
-                key={request.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="p-4 border-b border-gray-100 dark:border-gray-800"
-              >
+              <div key={request.id} className="p-4 border-b hover:bg-gray-50">
                 <div className="flex items-start gap-3">
-                  <AvatarFrame avatarUrl={fromPersona?.avatar || ''} frameName={null} size="md" />
+                  <AvatarFrame avatarUrl={request.fromPersona.avatar || ''} frameName={null} size="md" />
                   <div className="flex-1">
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium text-gray-900 dark:text-white">{displayName}</span>
-                      {fromPersona?.sameNameNumber && (
-                        <span className="text-xs text-gray-400">#{fromPersona.sameNameNumber}</span>
-                      )}
-                    </div>
+                    <div className="font-medium">{displayName}</div>
+                    {request.fromPersona.sameNameNumber && (
+                      <div className="text-xs text-gray-400">#{request.fromPersona.sameNameNumber}</div>
+                    )}
                     <p className="text-sm text-gray-500 mt-1">{request.message}</p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
                       <Clock className="w-3 h-3" />
@@ -95,7 +82,7 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMe
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleAccept(request.id, fromPersona)}
+                      onClick={() => handleAccept(request)}
                       disabled={processingId === request.id}
                       className="p-2 rounded-full bg-green-500 text-white hover:bg-green-600 disabled:opacity-50"
                     >
@@ -108,13 +95,13 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMe
                     <button
                       onClick={() => handleReject(request.id)}
                       disabled={processingId === request.id}
-                      className="p-2 rounded-full bg-gray-300 text-gray-700 hover:bg-gray-400 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                      className="p-2 rounded-full bg-gray-300 text-gray-700 hover:bg-gray-400 disabled:opacity-50"
                     >
                       <X className="w-5 h-5" />
                     </button>
                     {onMessage && (
                       <button
-                        onClick={() => onMessage(fromPersona.id, displayName, fromPersona.avatar, fromPersona.sameNameNumber)}
+                        onClick={() => onMessage(request.fromPersona.id, displayName, request.fromPersona.avatar)}
                         className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600"
                       >
                         <MessageCircle className="w-5 h-5" />
@@ -122,7 +109,7 @@ const FriendRequests: React.FC<FriendRequestsProps> = ({ onClose, onAccept, onMe
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })
         )}

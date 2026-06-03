@@ -1,3 +1,4 @@
+// client/src/services/api.ts
 // API 基础配置
 import toast from 'react-hot-toast';
 
@@ -13,6 +14,14 @@ const getToken = (): string | null => {
 
 // 全局跳转标志，防止重复跳转
 let isRedirecting = false;
+let redirectTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 判断是否在登录页或注册页
+const isAuthPage = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  return path === '/' || path === '/login' || path === '/register' || path === '/invite';
+};
 
 async function request<T>(
   endpoint: string,
@@ -48,17 +57,34 @@ async function request<T>(
 
     // 处理 401 未授权错误
     if (response.status === 401) {
-      console.warn('⚠️ token 无效或已过期，正在跳转登录页...');
+      console.warn('⚠️ token 无效或已过期');
       
+      // 清除本地存储
       localStorage.removeItem('token');
       localStorage.removeItem('lastUsedPersonaId');
+      localStorage.removeItem('userId');
       
+      // 如果已经在登录页，不再跳转，避免无限循环
+      if (isAuthPage()) {
+        console.log('📍 已在登录页，不重复跳转');
+        throw new Error('登录已过期，请重新登录');
+      }
+      
+      // 防止重复跳转
       if (!isRedirecting && typeof window !== 'undefined') {
         isRedirecting = true;
+        
+        // 清除之前的定时器
+        if (redirectTimer) clearTimeout(redirectTimer);
+        
+        // 显示提示
         toast.error('登录已过期，请重新登录');
-        setTimeout(() => {
+        
+        // 延迟跳转，避免立即循环
+        redirectTimer = setTimeout(() => {
           window.location.href = '/';
           isRedirecting = false;
+          redirectTimer = null;
         }, 1500);
       }
       
@@ -272,6 +298,30 @@ export interface CreateInviteResponse {
   maxUses?: number;
 }
 
+export interface Post {
+  _id: string;
+  content: string;
+  images?: string[];
+  userId: {
+    _id: string;
+    username: string;
+    avatar?: string;
+  };
+  personaId?: {
+    _id: string;
+    name: string;
+    displayName?: string;
+    avatar?: string;
+  };
+  likes: string[];
+  likeCount: number;
+  commentCount: number;
+  isLiked?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted?: boolean;
+}
+
 // ========== 认证 API ==========
 export const authApi = {
   register: (username: string, password: string, inviteCode: string) => 
@@ -378,7 +428,6 @@ export const roomApi = {
   getMessages: (roomId: string) =>
     request<Message[]>(`/room/${roomId}/messages`),
     
-  // 🔥 关键修复：返回类型改为 { messages: Message[]; hasMore: boolean }
   getMessagesWithLimit: (roomId: string, limit = 50, before?: string) =>
     request<{ messages: Message[]; hasMore: boolean }>(`/room/${roomId}/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
     
@@ -652,30 +701,5 @@ export const translateApi = {
     }),
 };
 
-// client/src/services/api.ts - 在其他类型定义附近添加
-
-export interface Post {
-  _id: string;
-  content: string;
-  images?: string[];
-  userId: {
-    _id: string;
-    username: string;
-    avatar?: string;
-  };
-  personaId?: {
-    _id: string;
-    name: string;
-    displayName?: string;
-    avatar?: string;
-  };
-  likes: string[];
-  likeCount: number;
-  commentCount: number;
-  isLiked?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  isDeleted?: boolean;
-}
-
+// 导出 request 函数供其他模块使用
 export { request };

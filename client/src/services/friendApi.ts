@@ -16,10 +16,6 @@ export interface FriendPersona {
 export interface Friend {
   id: string;
   friend: FriendPersona;
-  nickname: string | null;
-  group: string;
-  isStarred: boolean;
-  intimacy: number;
   createdAt: string;
 }
 
@@ -38,7 +34,6 @@ export interface FriendRequest {
   fromPersona: RequestPersona;
   message: string;
   createdAt: string;
-  expiresAt?: string;
 }
 
 // 搜索结果中的角色
@@ -94,8 +89,6 @@ export const friendApi = {
 
   /**
    * 发送好友申请
-   * @param toPersonaId 目标角色ID
-   * @param message 附言（可选）
    */
   sendRequest: (toPersonaId: string, message?: string): Promise<ApiResponse<null>> =>
     request('/friend/request', {
@@ -105,8 +98,6 @@ export const friendApi = {
 
   /**
    * 处理好友申请（同意/拒绝）
-   * @param requestId 申请ID
-   * @param action 动作：'accept' 或 'reject'
    */
   handleRequest: (requestId: string, action: 'accept' | 'reject'): Promise<ApiResponse<null>> =>
     request(`/friend/request/${requestId}/handle`, {
@@ -116,7 +107,6 @@ export const friendApi = {
 
   /**
    * 删除好友
-   * @param friendPersonaId 好友角色ID
    */
   deleteFriend: (friendPersonaId: string): Promise<ApiResponse<null>> =>
     request(`/friend/${friendPersonaId}`, {
@@ -124,15 +114,13 @@ export const friendApi = {
     }),
 
   /**
-   * 搜索角色（添加好友用）
-   * @param q 搜索关键词
+   * 搜索角色
    */
   searchPersonas: (q: string): Promise<ApiResponse<SearchPersonaResult[]>> =>
     request(`/friend/search?q=${encodeURIComponent(q)}`),
 
   /**
    * 获取好友动态
-   * @param limit 数量限制，默认20
    */
   getFriendFeed: (limit: number = 20): Promise<ApiResponse<FeedPost[]>> =>
     request(`/friend/feed?limit=${limit}`),
