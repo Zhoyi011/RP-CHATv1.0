@@ -1,3 +1,4 @@
+// server/src/models/Message.js - 添加音频字段
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
@@ -24,6 +25,19 @@ const messageSchema = new mongoose.Schema({
   isAction: { 
     type: Boolean, 
     default: false
+  },
+  // ========== 语音消息相关字段（新增）==========
+  isAudio: {
+    type: Boolean,
+    default: false
+  },
+  audioUrl: {
+    type: String,
+    default: null
+  },
+  audioDuration: {
+    type: Number,  // 秒数，整数
+    default: null
   },
   // ========== 拍一拍相关字段 ==========
   isPat: { 
@@ -82,6 +96,8 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ roomId: 1, createdAt: -1 });
 messageSchema.index({ replyTo: 1 });
 messageSchema.index({ isPat: 1 });
-messageSchema.index({ isPat: 1, createdAt: -1 });  // 按时间查询拍一拍（可选）
+messageSchema.index({ isPat: 1, createdAt: -1 });
+// 语音消息索引（可选）
+messageSchema.index({ isAudio: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);

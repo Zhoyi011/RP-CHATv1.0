@@ -6,11 +6,13 @@ import { simplifiedToTraditional, traditionalToSimplified } from '../../services
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import type { Persona } from '../../services/api';
 import AvatarFrame from '../common/AvatarFrame';
+import AudioRecorderButton from './AudioRecorderButton';
 
 console.log('🔧 [ChatInput] 组件加载');
 
 interface ChatInputProps {
   onSendMessage: (content: string, isAction: boolean, personaId?: string) => void;
+  onSendAudio?: (audioBlob: Blob, duration: number) => Promise<void>;
   disabled?: boolean;
   placeholder?: string;
   roomId?: string | null;
@@ -37,6 +39,7 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
+  onSendAudio,
   disabled = false, 
   placeholder = "输入消息... ",
   roomId,
@@ -217,12 +220,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const hasContent = inputValue.trim().length > 0;
   const canSwitchPersona = roomPersonas.length > 1;
 
-  // 渲染提及高亮
-  const renderInputWithHighlight = () => {
-    // 这个函数用于预览，不是必须的
-    return inputValue;
-  };
-
   return (
     <motion.div 
       ref={containerRef}
@@ -339,6 +336,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
             )}
           </AnimatePresence>
         </div>
+
+        {/* 🎙️ 录音按钮 - 新增 */}
+        {onSendAudio && (
+          <div className="flex-shrink-0 pb-0.5">
+            <AudioRecorderButton onSendAudio={onSendAudio} disabled={disabled} />
+          </div>
+        )}
 
         {/* 简繁转换按钮 */}
         <motion.button

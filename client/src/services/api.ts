@@ -108,6 +108,136 @@ async function request<T>(
   }
 }
 
+// ========== 上传 API（包含音频） ==========
+export const uploadApi = {
+  /**
+   * 上传用户头像
+   */
+  uploadUserAvatar: (file: File): Promise<{ success: boolean; avatar: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const token = getToken();
+    
+    return fetch(`${API_BASE}/upload/user`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '上传失败');
+      return data;
+    });
+  },
+
+  /**
+   * 删除用户头像
+   */
+  deleteUserAvatar: (): Promise<{ success: boolean; message: string }> => {
+    const token = getToken();
+    return fetch(`${API_BASE}/upload/user`, {
+      method: 'DELETE',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '删除失败');
+      return data;
+    });
+  },
+
+  /**
+   * 上传角色头像
+   */
+  uploadPersonaAvatar: (personaId: string, file: File): Promise<{ success: boolean; avatar: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const token = getToken();
+    
+    return fetch(`${API_BASE}/upload/persona/${personaId}`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '上传失败');
+      return data;
+    });
+  },
+
+  /**
+   * 删除角色头像
+   */
+  deletePersonaAvatar: (personaId: string): Promise<{ success: boolean; message: string }> => {
+    const token = getToken();
+    return fetch(`${API_BASE}/upload/persona/${personaId}`, {
+      method: 'DELETE',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '删除失败');
+      return data;
+    });
+  },
+
+  /**
+   * 🎙️ 上传语音消息
+   * @param audioBlob - 录音 Blob 对象
+   * @returns { url: string } 音频文件 URL
+   */
+  uploadAudio: async (audioBlob: Blob): Promise<{ success: boolean; url: string; message: string }> => {
+    const formData = new FormData();
+    // 使用 .m4a 扩展名，确保最佳兼容性
+    const fileName = `voice_${Date.now()}.m4a`;
+    const file = new File([audioBlob], fileName, { type: 'audio/mp4' });
+    formData.append('audio', file);
+    
+    const token = getToken();
+    
+    const response = await fetch(`${API_BASE}/upload/audio`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+    
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || '音频上传失败');
+    }
+    
+    return data;
+  },
+
+  /**
+   * 删除语音消息（可选，用于撤回时清理）
+   */
+  deleteAudio: async (audioUrl: string): Promise<{ success: boolean; message: string }> => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE}/upload/audio`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: JSON.stringify({ url: audioUrl }),
+    });
+    
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || '删除失败');
+    }
+    return data;
+  },
+};
+
 // ========== 类型定义 ==========
 export interface LoginResponse {
   message: string;
@@ -196,6 +326,10 @@ export interface Message {
   content: string;
   isAction: boolean;
   isPat?: boolean;
+  // 🎙️ 语音消息字段
+  isAudio?: boolean;
+  audioUrl?: string;
+  audioDuration?: number;
   createdAt: string;
   roomId: string | { _id: string; name: string };
   personaId: {

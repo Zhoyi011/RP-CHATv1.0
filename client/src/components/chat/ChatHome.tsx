@@ -17,7 +17,7 @@ import AIChatRoom from './AIChatRoom';
 import LinkPreviewContainer from './LinkPreviewContainer';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
-import { roomApi, personaApi, authApi, type Room, type Persona, type Message, type ReplyToInfo } from '../../services/api';
+import { roomApi, personaApi, authApi, uploadApi, type Room, type Persona, type Message, type ReplyToInfo } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
 import AvatarFrame from '../common/AvatarFrame';
@@ -329,9 +329,13 @@ const MessageBubble: React.FC<{
               </div>
             )}
             
+            {/* 🎙️ 修改：传递语音消息相关属性 */}
             <TranslatableMessage 
               content={message.content}
               isOwn={isSelf}
+              isAudio={message.isAudio}
+              audioUrl={message.audioUrl}
+              audioDuration={message.audioDuration}
               className={`break-words whitespace-pre-wrap ${
                 isSelf 
                   ? '[&_a]:text-yellow-200 [&_a]:underline [&_a]:hover:text-yellow-100 [&_a]:break-all' 
@@ -825,6 +829,46 @@ const ChatHome = () => {
     });
     
     setReplyToMessage(null);
+  }, [selectedRoom, selectedPersona, user, replyToMessage]);
+
+  // ========== 🎙️ 发送语音消息 ==========
+  const handleSendAudio = useCallback(async (audioBlob: Blob, duration: number) => {
+    if (!selectedRoom || !user) {
+      toast.error('请先选择聊天室');
+      return;
+    }
+    if (!selectedPersona) {
+      toast.error('请选择发言角色');
+      return;
+    }
+    
+    try {
+      // 1. 上传音频
+      const uploadResult = await uploadApi.uploadAudio(audioBlob);
+      
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error('上传失败');
+      }
+      
+      // 2. 通过 Socket 发送语音消息
+      socketService.emit('send-message', {
+        roomId: selectedRoom._id,
+        userId: user.uid,
+        personaId: selectedPersona._id,
+        content: '[语音消息]',
+        isAction: false,
+        replyToId: replyToMessage?._id,
+        isAudio: true,
+        audioUrl: uploadResult.url,
+        audioDuration: duration,
+      });
+      
+      setReplyToMessage(null);
+      toast.success('语音消息已发送');
+    } catch (error) {
+      console.error('发送语音消息失败:', error);
+      toast.error('发送失败，请重试');
+    }
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   const loadInitialMessages = useCallback(async () => {
@@ -1377,8 +1421,10 @@ const ChatHome = () => {
           </div>
         )}
 
+        {/* 🎙️ 修改：添加 onSendAudio prop */}
         <ChatInput
           onSendMessage={handleSendMessage}
+          onSendAudio={handleSendAudio}
           disabled={!selectedRoom}
           roomId={selectedRoom?._id}
           selectedPersona={selectedPersona}
