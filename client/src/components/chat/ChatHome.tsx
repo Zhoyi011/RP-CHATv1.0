@@ -999,7 +999,9 @@ const ChatHome = () => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
     if (!token) return;
-    socketService.connect(token, user?.uid);  // ✅ 传递 userId
+
+    console.log('🔌 连接 Socket, userId:', userId);
+    socketService.connect(token, userId || undefined); // ✅ 传递 userId
 
     const handleNewMessage = (message: Message) => {
       const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
