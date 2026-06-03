@@ -10,14 +10,17 @@ import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 import AvatarFrame from '../common/AvatarFrame';
 import toast from 'react-hot-toast';
-import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
 import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
 import PrivateChat from '../chat/PrivateChat';
-import { Users, UserPlus, Mail, Menu, X, Home, MessageCircle, Newspaper, Bell, Lock, Search, LogOut, Settings, User as UserIcon, ShoppingBag, Wallet } from 'lucide-react';
+import { 
+  Users, UserPlus, Mail, Menu, Home, MessageCircle, Newspaper, 
+  Lock, Search, LogOut, Settings, User as UserIcon, ShoppingBag, Wallet,
+  ChevronRight
+} from 'lucide-react';
 
 interface Props {
   children: React.ReactNode;
@@ -30,7 +33,6 @@ interface TabItem {
   activeIcon?: React.ReactNode;
 }
 
-// 辅助函数
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
@@ -56,7 +58,7 @@ const tabBarVariants: Variants = {
 
 const menuItemVariants: Variants = {
   hidden: (i: number) => ({ x: -20, opacity: 0 }),
-  visible: (i: number) => ({ x: 0, opacity: 1, transition: { delay: i * 0.05, duration: 0.3 } }),
+  visible: (i: number) => ({ x: 0, opacity: 1, transition: { delay: i * 0.05, duration: 0.3, type: "spring" } }),
   tap: { scale: 0.97 }
 };
 
@@ -82,112 +84,9 @@ const badgeVariants: Variants = {
   animate: { scale: 1, transition: { type: "spring", stiffness: 500, damping: 30 } }
 };
 
-const contactMenuVariants: Variants = {
-  hidden: { opacity: 0, scale: 0.9, y: -10 },
-  visible: { opacity: 1, scale: 1, y: 0, transition: { type: "spring", damping: 20, stiffness: 400, mass: 0.6 } },
-  exit: { opacity: 0, scale: 0.9, y: -10 }
-};
-
-// ========== 联系人菜单弹窗 ==========
-const ContactMenuModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onFriendList: () => void;
-  onAddFriend: () => void;
-  onFriendRequests: () => void;
-  unreadCount: number;
-  anchorRect?: DOMRect | null;
-}> = ({ isOpen, onClose, onFriendList, onAddFriend, onFriendRequests, unreadCount, anchorRect }) => {
-  const [position, setPosition] = useState({ top: 0, right: 8, left: undefined as number | undefined });
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isOpen && anchorRect && menuRef.current) {
-      const menuWidth = menuRef.current.offsetWidth;
-      const windowWidth = window.innerWidth;
-      
-      let right = windowWidth - anchorRect.right + 8;
-      let left: number | undefined = undefined;
-      
-      if (right + menuWidth > windowWidth - 8) {
-        right = 8;
-        left = anchorRect.left - menuWidth + 8;
-        if (left && left < 8) left = 8;
-      }
-      
-      setPosition({
-        top: anchorRect.bottom + 4,
-        right: right,
-        left: left,
-      });
-    }
-  }, [isOpen, anchorRect]);
-
-  if (!isOpen) return null;
-
-  return (
-    <AnimatePresence>
-      <motion.div
-        ref={menuRef}
-        variants={contactMenuVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        className="fixed z-50 w-48 bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700"
-        style={{
-          top: position.top,
-          right: position.right,
-          left: position.left,
-        }}
-      >
-        <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">联系人</span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => { onFriendList(); onClose(); }}
-          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Users className="w-4 h-4 text-green-600 dark:text-green-400" />
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">好友列表</span>
-        </button>
-
-        <button
-          onClick={() => { onAddFriend(); onClose(); }}
-          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 border-t border-gray-100 dark:border-gray-800 group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <UserPlus className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">添加好友</span>
-        </button>
-
-        <button
-          onClick={() => { onFriendRequests(); onClose(); }}
-          className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 border-t border-gray-100 dark:border-gray-800 group"
-        >
-          <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center relative group-hover:scale-110 transition-transform">
-            <Mail className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 text-left">好友申请</span>
-          {unreadCount > 0 && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="px-1.5 py-0.5 text-[10px] rounded-full bg-red-500 text-white font-medium shadow-sm"
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </motion.span>
-          )}
-        </button>
-      </motion.div>
-    </AnimatePresence>
-  );
+const headerIconVariants: Variants = {
+  hover: { scale: 1.1, transition: { duration: 0.2 } },
+  tap: { scale: 0.9 }
 };
 
 // ========== 主组件 ==========
@@ -200,11 +99,8 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showSwitchPanel, setShowSwitchPanel] = useState(false);
   const [showSideMenu, setShowSideMenu] = useState(false);
-  const [showContactMenu, setShowContactMenu] = useState(false);
   const switchPanelRef = useRef<HTMLDivElement>(null);
   const sideMenuRef = useRef<HTMLDivElement>(null);
-  const contactButtonRef = useRef<HTMLButtonElement>(null);
-  const [contactAnchorRect, setContactAnchorRect] = useState<DOMRect | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const user = auth.currentUser;
@@ -344,9 +240,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       if (sideMenuRef.current && !sideMenuRef.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('.menu-trigger')) {
         setShowSideMenu(false);
       }
-      if (contactButtonRef.current && !contactButtonRef.current.contains(e.target as Node) && !(e.target as HTMLElement).closest('.contact-trigger')) {
-        setShowContactMenu(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -401,14 +294,49 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   };
 
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
+  const displayName = currentPersona?.displayName || currentPersona?.name || '未选择角色';
 
+  // 菜单项列表
   const menuItems = [
-    { icon: <Search className="w-4 h-4" />, label: '搜索', path: '/search', color: 'from-blue-500 to-cyan-500' },
-    { icon: <UserIcon className="w-4 h-4" />, label: '角色管理', path: '/persona', color: 'from-purple-500 to-pink-500' },
-    { icon: <ShoppingBag className="w-4 h-4" />, label: '商城', path: '/shop', color: 'from-blue-500 to-cyan-500' },
-    { icon: <Wallet className="w-4 h-4" />, label: '钱包', path: '/wallet', color: 'from-amber-500 to-orange-500' },
-    { icon: <Settings className="w-4 h-4" />, label: '账号设置', path: '/settings', color: 'from-gray-500 to-gray-600' },
+    { icon: <Users className="w-4 h-4" />, label: '好友列表', action: 'friends', color: 'from-green-500 to-emerald-500' },
+    { icon: <UserPlus className="w-4 h-4" />, label: '添加好友', action: 'addFriend', color: 'from-purple-500 to-pink-500' },
+    { icon: <Mail className="w-4 h-4" />, label: '好友申请', action: 'requests', color: 'from-amber-500 to-orange-500', badge: friendUnreadCount },
+    { icon: <Search className="w-4 h-4" />, label: '搜索', action: 'search', color: 'from-blue-500 to-cyan-500' },
+    { icon: <UserIcon className="w-4 h-4" />, label: '角色管理', action: 'persona', color: 'from-purple-500 to-pink-500' },
+    { icon: <ShoppingBag className="w-4 h-4" />, label: '商城', action: 'shop', color: 'from-blue-500 to-cyan-500' },
+    { icon: <Wallet className="w-4 h-4" />, label: '钱包', action: 'wallet', color: 'from-amber-500 to-orange-500' },
+    { icon: <Settings className="w-4 h-4" />, label: '账号设置', action: 'settings', color: 'from-gray-500 to-gray-600' },
   ];
+
+  const handleMenuAction = (action: string) => {
+    setShowSideMenu(false);
+    switch (action) {
+      case 'friends':
+        setShowFriendList(true);
+        break;
+      case 'addFriend':
+        setShowAddFriendModal(true);
+        break;
+      case 'requests':
+        setShowFriendRequests(true);
+        break;
+      case 'search':
+        navigate('/search');
+        break;
+      case 'persona':
+        navigate('/persona');
+        break;
+      case 'shop':
+        navigate('/shop');
+        break;
+      case 'wallet':
+        navigate('/wallet');
+        break;
+      case 'settings':
+        navigate('/settings');
+        break;
+    }
+  };
 
   return (
     <motion.div
@@ -431,7 +359,13 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <img src="/favicon.svg" alt="Logo" className="w-6 h-6" />
+            <motion.img 
+              src="/favicon.svg" 
+              alt="Logo" 
+              className="w-6 h-6"
+              variants={headerIconVariants}
+              whileHover="hover"
+            />
             <h1 className="text-sm font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
               RP Chat
             </h1>
@@ -439,47 +373,11 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-1">
-            {/* 联系人按钮 */}
-            <div className="relative">
-              <motion.button
-                ref={contactButtonRef}
-                onClick={() => {
-                  if (contactButtonRef.current) {
-                    setContactAnchorRect(contactButtonRef.current.getBoundingClientRect());
-                  }
-                  setShowContactMenu(!showContactMenu);
-                }}
-                className="contact-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-all duration-200"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                title="联系人"
-              >
-                <Users className="w-4 h-4" />
-                {friendUnreadCount > 0 && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full shadow-md"
-                  />
-                )}
-              </motion.button>
-
-              <ContactMenuModal
-                isOpen={showContactMenu}
-                onClose={() => setShowContactMenu(false)}
-                onFriendList={() => setShowFriendList(true)}
-                onAddFriend={() => setShowAddFriendModal(true)}
-                onFriendRequests={() => setShowFriendRequests(true)}
-                unreadCount={friendUnreadCount}
-                anchorRect={contactAnchorRect}
-              />
-            </div>
-
             {/* 隐私保护锁 */}
             <motion.button
-              whileHover={{ scale: 1.05, rotate: [0, -5, 5, 0] }}
-              whileTap={{ scale: 0.95 }}
+              variants={headerIconVariants}
+              whileHover="hover"
+              whileTap="tap"
               onClick={enterAFKManually}
               className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               title="隐私模式"
@@ -494,16 +392,25 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
             {/* 菜单按钮 */}
             <motion.button
-              whileHover={{ scale: 1.05, rotate: 90 }}
-              whileTap={{ scale: 0.95 }}
+              variants={headerIconVariants}
+              whileHover="hover"
+              whileTap="tap"
               onClick={() => setShowSideMenu(true)}
-              className="menu-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              className="menu-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 relative"
               title="菜单"
             >
               <Menu className="w-4 h-4" />
+              {friendUnreadCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full shadow-md"
+                />
+              )}
             </motion.button>
 
-            {/* 角色切换 */}
+            {/* 角色切换按钮 */}
             <div className="relative ml-0.5" ref={switchPanelRef}>
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -623,32 +530,37 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               exit="exit"
               className="fixed left-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-900 shadow-2xl z-40 flex flex-col"
             >
-              {/* 菜单头部 */}
+              {/* 菜单头部 - 只显示角色信息 */}
               <motion.div 
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20"
+                transition={{ delay: 0.1, type: "spring", damping: 20 }}
+                className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10"
               >
-                <div className="flex items-center gap-3">
+                <motion.div 
+                  className="flex items-center gap-3"
+                  whileHover={{ scale: 1.02 }}
+                >
                   <AvatarFrame
                     avatarUrl={currentPersona?.avatar || ''}
                     frameName={frameName}
                     size="md"
                   />
                   <div>
-                    <p className="font-semibold text-gray-800 dark:text-gray-200">
-                      {currentPersona?.displayName || currentPersona?.name || '未选择角色'}
+                    <p className="font-semibold text-gray-800 dark:text-gray-200 text-lg">
+                      {displayName}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {userData?.username || '用户'}
-                    </p>
+                    {currentPersona?.sameNameNumber && (
+                      <p className="text-xs text-gray-400">
+                        #{currentPersona.sameNameNumber}
+                      </p>
+                    )}
                   </div>
-                </div>
+                </motion.div>
               </motion.div>
 
               {/* 菜单选项 */}
-              <div className="flex-1 py-4 overflow-y-auto">
+              <div className="flex-1 py-2 overflow-y-auto">
                 {menuItems.map((item, index) => (
                   <motion.button
                     key={item.label}
@@ -657,24 +569,26 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                     initial="hidden"
                     animate="visible"
                     whileTap="tap"
-                    onClick={() => {
-                      navigate(item.path);
-                      setShowSideMenu(false);
-                    }}
-                    className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition group"
+                    onClick={() => handleMenuAction(item.action)}
+                    className="w-full px-5 py-3 flex items-center gap-3 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition group relative"
                   >
-                    <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${item.color} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-200`}>
-                      {item.icon}
-                    </div>
-                    <span className="font-medium">{item.label}</span>
-                    <motion.svg 
-                      className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                      initial={{ x: -5 }}
-                      whileHover={{ x: 0 }}
+                    <motion.div 
+                      className={`w-8 h-8 rounded-xl bg-gradient-to-r ${item.color} flex items-center justify-center text-white shadow-md`}
+                      whileHover={{ scale: 1.1 }}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </motion.svg>
+                      {item.icon}
+                    </motion.div>
+                    <span className="font-medium">{item.label}</span>
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="ml-auto px-1.5 py-0.5 text-[10px] rounded-full bg-red-500 text-white font-medium shadow-sm"
+                      >
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </motion.span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
                   </motion.button>
                 ))}
               </div>
@@ -695,7 +609,9 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                   <LogOut className="w-4 h-4" />
                   <span>退出登录</span>
                 </motion.button>
-                <p className="text-[10px] text-gray-400 text-center mt-3">v1.0.0 | RP Chat</p>
+                <p className="text-[10px] text-gray-400 text-center mt-3">
+                  v1.0.0 | RP Chat
+                </p>
               </motion.div>
             </motion.div>
           </>

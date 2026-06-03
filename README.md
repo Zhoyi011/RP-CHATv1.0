@@ -1,4 +1,4 @@
-以下是合并后的完整项目文档，保留所有历史记录并新增本次 AFK 系统重构更新。
+以下是合并后的完整项目文档，保留所有历史记录并新增好友系统（2026-05-31 至 2026-06-03）的完整内容。
 
 ```markdown
 # RP Chat - 项目上下文文档
@@ -46,7 +46,7 @@
 | `favicon.svg` | 网站图标 |
 | `fonts/MaokenZhuyuanTi.ttf` | 猫啃珠圆体字体（全局使用） |
 | `frames/` | 头像框图片目录（.png 格式） |
-| **`wallpapers/`** | **AFK 隐私保护壁纸目录（已废弃，改用 GitHub Releases 托管）** |
+| `wallpapers/` | AFK 隐私保护壁纸目录（已废弃，改用 GitHub Releases 托管） |
 
 > **注意**：由于 Vercel 部署限制（单文件最大 50MB），视频壁纸现已通过 GitHub Releases + jsDelivr CDN 托管，不再存储在 `public/wallpapers/` 目录。
 
@@ -57,7 +57,7 @@
 | 文件 | 职责 |
 |------|------|
 | `main.tsx` | React 渲染入口，导入全局样式 |
-| `App.tsx` | 应用根组件 + 路由配置 + 维护模式检测 + AFK 上下文 |
+| `App.tsx` | 应用根组件 + 路由配置 + 维护模式检测 + AFK 上下文 + FriendProvider |
 | `App.css` | 组件样式（动画、计数器等） |
 | `index.css` | 全局样式（Tailwind、字体、深色模式、动画） |
 | `vite-env.d.ts` | Vite 环境变量类型声明 |
@@ -119,7 +119,7 @@
 | `AIChat.tsx` | AI 聊天弹窗组件 |
 | `AIChatRoom.tsx` | AI 对戏主界面 |
 | `AISettings.tsx` | AI 角色设置 |
-| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页加载** |
+| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页加载，私聊 Tab 使用 FriendList** |
 | **`ChatInput.tsx`** | **消息输入框（表情、简繁转换、回复预览、@提及）** |
 | `CreateRoom.tsx` | 创建群聊弹窗 |
 | `GroupDetail.tsx` | 群聊详情页 |
@@ -129,7 +129,7 @@
 | `LinkPreviewContainer.tsx` | 链接预览容器 |
 | `PatPanel.tsx` | 拍一拍面板（双击头像触发） |
 | `PendingRequests.tsx` | 入群申请审核列表 |
-| `PrivateChat.tsx` | 私聊功能 |
+| **`PrivateChat.tsx`** | **私聊功能（基于角色 targetPersonaId，需好友关系）** |
 | `RoomMembers.tsx` | 房间成员列表 |
 | `RoomSettings.tsx` | 房间设置 |
 | `TranslatableMessage.tsx` | 可翻译消息组件（中英/多语言） |
@@ -168,13 +168,23 @@
 
 ---
 
+**`components/friends/` ⭐ 好友系统（新增）**
+
+| 文件 | 职责 |
+|------|------|
+| **`AddFriendModal.tsx`** | **两步流程：搜索角色 → 选择自己角色 → 填写理由** |
+| **`FriendList.tsx`** | **好友列表，支持发消息和删除** |
+| **`FriendRequests.tsx`** | **好友申请列表，支持同意/拒绝** |
+
+---
+
 **`components/layout/` - 布局组件**
 
 | 文件 | 职责 |
 |------|------|
-| `DesktopLayout.tsx` | 桌面端布局（侧边栏 + 左下角色切换 + 右上手动AFK按钮） |
-| `MobileLayout.tsx` | 移动端布局（顶部栏 + 底部 Tab + AFK支持） |
-| `TabletLayout.tsx` | 平板端布局（AFK支持） |
+| `DesktopLayout.tsx` | 桌面端布局（侧边栏 + 左下角色切换 + 右上手动AFK按钮 + **好友按钮组 + Framer Motion 动画**） |
+| `MobileLayout.tsx` | 移动端布局（顶部栏简化，所有功能整合到侧边菜单） |
+| `TabletLayout.tsx` | 平板端布局（顶部栏添加好友按钮，侧边菜单整合好友功能） |
 
 ---
 
@@ -207,7 +217,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| `MobileFeed.tsx` | 手机端动态页 |
+| `MobileFeed.tsx` | 手机端动态页（**好友动态，只显示角色信息**） |
 | `MobileHome.tsx` | 手机端主页（资产、签到、快捷入口） |
 
 ---
@@ -265,6 +275,7 @@
 |------|------|
 | `ThemeContext.tsx` | 深色/浅色模式上下文（仅 localStorage，AFK 模式下强制锁定浅色） |
 | **`AFKContext.tsx`** | **AFK 状态管理（5分钟无操作自动进入，ESC退出，手动进入，拖拽位置记忆）** |
+| **`FriendContext.tsx`** | **好友状态管理：列表、申请、发送、同意、拒绝、删除、搜索** |
 
 ##### `src/hooks/`
 
@@ -284,11 +295,12 @@
 
 | 文件 | 职责 |
 |------|------|
-| **`api.ts`** | **API 调用封装（核心，含 401 拦截，GET 请求自动添加 _t 时间戳防缓存）** |
+| **`api.ts`** | **API 调用封装（核心，含 401 拦截防循环，GET 请求自动添加 _t 时间戳防缓存）** |
 | `diamondApi.ts` | 钻石系统 API |
+| **`friendApi.ts`** | **完整好友 API 类型和方法** |
 | `linkPreviewApi.ts` | 链接预览 API |
 | `Notification.ts` | 浏览器通知 |
-| **`socket.ts`** | **Socket.IO 连接管理** |
+| **`socket.ts`** | **Socket.IO 连接管理（传入 userId，好友事件监听方法）** |
 | `translateApi.ts` | 简繁转换 API |
 | `agoraService.ts` | 声网语音（已放弃） |
 
@@ -331,7 +343,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| **`app.js`** | **Express 入口 + Socket.IO 配置 + 路由注册** |
+| **`app.js`** | **Express 入口 + Socket.IO 配置 + 路由注册（含 /api/friend 和 /api/private-chat）** |
 
 ##### `src/models/` - 数据模型
 
@@ -341,6 +353,8 @@
 | `Persona.js` | 角色模型 | name, displayName, description, avatar, userId, status, sameNameNumber, equipped |
 | `Room.js` | 房间模型 | name, description, createdBy, members, isPublic, requireApproval |
 | `Message.js` | 消息模型 | content, roomId, personaId, isAction, **isPat**, replyTo, isRecalled, isDeleted, mentions |
+| **`Friend.js`** | **角色间好友关系** | **personaId, friendPersonaId** |
+| **`FriendRequest.js`** | **角色间好友申请** | **fromPersonaId, toPersonaId, status, reason** |
 | `InviteCode.js` | 邀请码模型 | code, type, createdBy, usedBy, expiresAt, maxUses, usesCount |
 | `RedeemCode.js` | 充值码模型 | code, diamondAmount, createdBy, isUsed, usedBy, expiresAt |
 | `RedemptionRecord.js` | 充值记录模型 | userId, redeemCodeId, code, diamondAmount, previousBalance, newBalance |
@@ -378,6 +392,8 @@
 | `changelog.js` | GitHub 更新日志同步 |
 | `linkPreview.js` | URL 元数据抓取 |
 | `security.js` | 安全报告 |
+| **`friend.js`** | **完整好友 API：获取列表、获取申请、搜索角色、发送申请、处理申请、删除好友、获取动态** |
+| **`privateChat.js`** | **私聊路由：验证好友关系后获取消息历史** |
 
 ##### `src/middleware/` - 中间件
 
@@ -399,6 +415,12 @@
 | `uploadService.js` | Cloudinary 上传 |
 | `contentFilter.js` | 脏话过滤 |
 | `markdownService.js` | Markdown 解析 |
+
+##### `src/utils/` - 工具函数
+
+| 文件 | 职责 |
+|------|------|
+| **`socketHelper.js`** | **Socket 通知辅助函数 `emitToUser`** |
 
 ##### `src/scripts/` - 维护脚本
 
@@ -471,6 +493,9 @@
 
 ### 15. AFK 隐私保护流程（新版）
 用户无操作 5 分钟（开发环境 30 秒）→ AFKContext 检测 → 设置 isAFK = true → AFKScreen 全屏显示 → 播放壁纸视频（顺序循环，双视频层无缝切换）→ 出现可拖拽橙色锁头按钮 → 点击锁头展开功能菜单（暂停/播放/循环/跳过/显示解锁界面）→ 用户按 ESC 或点击退出按钮 → 恢复界面。**手动 AFK**：点击顶部栏锁头图标 → 立即进入 AFK 模式。
+
+### 16. 好友系统流程（新增）
+**发送申请**：用户 A 搜索角色 B → 选择自己的角色 → 填写申请理由（30字内）→ 发送 → 后端创建 FriendRequest → Socket 通知角色 B 所属用户 → 角色 B 收到实时通知。**处理申请**：角色 B 同意/拒绝 → 后端更新状态 → 同意时创建 Friend 双向关系 → 双方收到 Socket 通知。**私聊**：双方成为好友后 → 私聊 Tab 显示好友列表 → 选择好友 → 验证好友关系 → 加载历史消息 → 实时通信。
 
 ---
 
@@ -579,6 +604,18 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **Discord 告警（安全事件、部署通知等）**
 - [x] **维护模式（管理员可开关，支持定时计划）**
 
+#### 👥 好友系统（2026-06-03 完成）
+- [x] **角色间添加好友（基于 Persona 独立）**
+- [x] **好友申请 Socket 实时通知**
+- [x] **同意/拒绝好友申请**
+- [x] **删除好友**
+- [x] **角色间私聊（需好友关系）**
+- [x] **好友动态（只显示角色信息）**
+- [x] **搜索角色功能**
+- [x] **手机端/桌面端/平板端布局适配**
+- [x] **申请理由（30字限制）**
+- [x] **拒绝后重新申请冷却（30分钟）**
+
 #### 🛡️ AFK 隐私保护系统（v2.0 - 2026-05-31 重构）
 - [x] 无操作 5 分钟后自动进入隐私保护模式
 - [x] 全屏动态壁纸（支持视频/图片）
@@ -601,9 +638,10 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] 深色模式（仅 localStorage，无系统跟随）
 - [x] 响应式布局（手机/平板/桌面）
 - [x] 手机端底部 Tab（聊天/动态/主页）
-- [x] 电脑端侧边栏 + 左下角色切换
+- [x] 电脑端侧边栏 + 左下角色切换 + 好友按钮组
 - [x] 移动端键盘适配
 - [x] 手机端动态页和主页美化
+- [x] **手机端菜单按钮整合好友功能**
 
 #### 🌐 翻译功能
 - [x] 简繁转换（OpenCC）
@@ -630,9 +668,10 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **API 缓存问题修复（GET 请求自动添加 _t 时间戳）**
 - [x] **CORS 和网络连接优化（智能环境检测）**
 - [x] **Git LFS 配置（壁纸大文件存储）**
+- [x] **API 401 防循环跳转**
 
 ### ⏳ 开发中
-- [ ] 私聊功能（后端未完成）
+- [ ] 私聊功能（后端已完成，前端整合中）
 - [ ] 消息搜索（全文搜索）
 - [ ] 帖子评论功能
 - [ ] 邮箱验证（需要邮件服务）
@@ -660,7 +699,9 @@ User (用户)
 Persona (角色)
   ├── N:N → PersonaRoom (加入的房间)
   ├── 1:N → Message (发送的消息)
-  └── 1:N → Post (发布的帖子)
+  ├── 1:N → Post (发布的帖子)
+  ├── N:N → Friend (好友关系)
+  └── N:N → FriendRequest (好友申请)
 
 Room (房间)
   ├── 1:N → Message (房间消息)
@@ -678,6 +719,12 @@ SystemSettings (系统设置)
 
 Title (头衔)
   └── N:1 → Room (所属房间)
+
+Friend (好友)
+  └── personaId + friendPersonaId (复合唯一索引)
+
+FriendRequest (好友申请)
+  └── fromPersonaId + toPersonaId + status
 ```
 
 ---
@@ -707,6 +754,8 @@ Title (头衔)
 | `user-joined` | `{ userId, personaId, onlineCount }` | 用户加入 |
 | `user-left` | `{ userId }` | 用户离开 |
 | `persona-switched` | `{ userId, newPersonaId }` | 角色切换通知 |
+| **`friend-request-received`** | **`{ request }`** | **好友申请实时通知** |
+| **`friend-request-updated`** | **`{ requestId, status, fromPersonaId, toPersonaId }`** | **好友申请状态更新** |
 
 ---
 
@@ -768,6 +817,8 @@ interface DraggableAFKStatusProps {
 > | AFK 配置 | `AFKContext.tsx` 的 `AFK_CONFIG`（超时时间） |
 > | AFK 壁纸 URL | `AFKScreen.tsx` 的 `DESKTOP_WALLPAPERS` / `MOBILE_WALLPAPERS` |
 > | AFK 锁头组件 | `DraggableAFKStatus.tsx` |
+> | **好友系统** | `FriendContext.tsx` + `friendApi.ts` + `Friend.js`/`FriendRequest.js` |
+> | **Socket 通知** | `socketHelper.js` 的 `emitToUser` |
 > | Cloudinary | `CLOUDINARY_URL` 环境变量 |
 > | DeepSeek API | `aiService.js` |
 > | Socket.IO | `app.js` + `socket.ts` |
@@ -806,6 +857,12 @@ interface DraggableAFKStatusProps {
 > ### 新用户引导流程：
 > 
 > 注册 → 邀请码 → `/onboarding`（填信息）→ 创建角色 → 创建/加入群聊 → `/chat`
+> 
+> ### 好友系统部署注意事项：
+> 
+> 1. **后端**：确保 MongoDB 旧索引 `userId_1_friendId_1` 已删除
+> 2. **前端**：确保登录时保存 `userId` 到 localStorage
+> 3. **Socket**：确保连接时传入正确的 `userId`（MongoDB `_id`）
 
 ---
 
@@ -813,7 +870,8 @@ interface DraggableAFKStatusProps {
 
 | 日期 | 更新内容 |
 |------|----------|
-| **2026-05-31** | **AFK 系统完整重构 v2.0**：可拖拽橙色锁头控制面板（位置记忆）；功能菜单（暂停/播放/循环/跳过/显示解锁界面）；视频壁纸无缝循环（双视频层、主循环定时器、健康检查）；GitHub Releases + jsDelivr CDN 托管；毛玻璃 UI 美化；AFK 模式下强制锁定浅色模式；修复手动 AFK 遮挡层不显示问题；修复设置页面无限循环；修复拖拽跳跃和重复锁头问题 |
+| **2026-06-03** | **好友系统完整实现**：角色间添加好友、Socket 实时通知、好友申请/同意/拒绝/删除、角色间私聊（需好友关系）、好友动态、搜索角色、手机端/桌面端/平板端布局适配、申请理由（30字限制）、拒绝后重新申请冷却（30分钟）、修复 API 401 防循环跳转、修复 `useRef` TypeScript 错误 |
+| 2026-05-31 | AFK 系统完整重构 v2.0：可拖拽橙色锁头控制面板（位置记忆）；功能菜单（暂停/播放/循环/跳过/显示解锁界面）；视频壁纸无缝循环（双视频层、主循环定时器、健康检查）；GitHub Releases + jsDelivr CDN 托管；毛玻璃 UI 美化；AFK 模式下强制锁定浅色模式；修复手动 AFK 遮挡层不显示问题；修复设置页面无限循环；修复拖拽跳跃和重复锁头问题 |
 | 2026-05-30 | AFK 隐私保护系统（5分钟自动进入、全屏视频壁纸、双视频层无缝切换、电脑/手机分离壁纸、密码保护、手动AFK按钮）；拍一拍修复（isPat 字段存储，刷新后样式保留）；消息分页加载（游标分页，滚动自动加载历史）；API 缓存问题修复（GET 请求自动添加 _t 时间戳）；CORS 和网络连接优化（智能环境检测）；Git LFS 配置（壁纸大文件存储） |
 | 2026-05-28 | 拍一拍功能（双击头像，预设/自定义动作）；充值码系统（钱包页面）；多语言翻译（Google Translate，消息内翻译）；新用户引导流程；全局编号移除（只保留同名编号）；定时维护计划；动画优化（Framer Motion）；安全中间件优化（翻译接口白名单） |
 | 2026-05-27 | 管理员豁免选项；头像上传优化；PersonaManager 头像显示；动态功能修复 |
@@ -835,29 +893,37 @@ interface DraggableAFKStatusProps {
 
 ---
 
-### 🔧 本次（2026-05-31）修复的问题详情
+### 🔧 近期修复的问题详情
 
-| 问题 | 解决方案 |
-|------|----------|
-| 手动 AFK 按钮不显示遮挡层 | 移除重复的 `AFKProvider` 包装 |
-| 设置页面无限循环 | 拆分 `useEffect` 依赖，添加 `useRef` 防重复 |
-| 视频播放到一半停止 | 添加主循环定时器（3分钟强制切换）+ 健康检查 |
-| 视频切换不流畅 | 优化 `readyState` 检测，增加淡入淡出时间至 500ms |
-| 橙色锁头拖拽跳跃 | 使用 `useMotionValue` 替代 React state |
-| 两个橙色锁头 | 删除布局文件中的重复 `<DraggableAFKStatus />` |
-| 视频控制功能无效 | 修复闭包问题，使用 `ref` 传递暂停状态 |
-| 夜间模式问题 | 修改 `ThemeContext.tsx` 强制锁定浅色模式 |
+| 问题 | 解决方案 | 日期 |
+|------|----------|------|
+| Socket 通知失败 | Socket 连接时传入 MongoDB `_id` 而非 Firebase UID | 2026-06-03 |
+| 好友索引冲突 | 删除旧的 `userId_1_friendId_1` 索引 | 2026-06-03 |
+| 拒绝后无法再次申请 | 发送申请前删除 `rejected` 记录 | 2026-06-03 |
+| 手机端菜单按钮无反应 | 将好友功能整合到侧边菜单 | 2026-06-03 |
+| API 401 无限循环 | 添加 `isAuthPage()` 检测 | 2026-06-03 |
+| `useRef` TypeScript 错误 | `useRef<ReturnType<typeof setTimeout> \| undefined>(undefined)` | 2026-06-03 |
+| 手动 AFK 按钮不显示遮挡层 | 移除重复的 `AFKProvider` 包装 | 2026-05-31 |
+| 设置页面无限循环 | 拆分 `useEffect` 依赖，添加 `useRef` 防重复 | 2026-05-31 |
+| 视频播放到一半停止 | 添加主循环定时器（3分钟强制切换）+ 健康检查 | 2026-05-31 |
+| 视频切换不流畅 | 优化 `readyState` 检测，增加淡入淡出时间至 500ms | 2026-05-31 |
+| 橙色锁头拖拽跳跃 | 使用 `useMotionValue` 替代 React state | 2026-05-31 |
+| 两个橙色锁头 | 删除布局文件中的重复 `<DraggableAFKStatus />` | 2026-05-31 |
+| 视频控制功能无效 | 修复闭包问题，使用 `ref` 传递暂停状态 | 2026-05-31 |
+| 夜间模式问题 | 修改 `ThemeContext.tsx` 强制锁定浅色模式 | 2026-05-31 |
 
 ---
 
 *本文档由 AI 维护，每次重要更新后请同步更新*
 ```
 
-以上是合并后的完整项目文档，保留了所有历史记录（包括 2026-05-31 之前的 AFK 系统记录），并新增了本次（2026-05-31）AFK 系统重构的详细内容：
-- 可拖拽橙色锁头控制面板
-- 功能菜单（暂停/播放/循环/跳过/显示解锁界面）
-- 视频壁纸无缝循环播放增强
-- GitHub Releases + jsDelivr CDN 托管
-- 毛玻璃 UI 美化
-- 修复的所有问题详情
-- AFK 系统自定义事件和组件 Props 说明
+以上是合并后的完整项目文档，包含：
+- 所有历史功能（头像框、安全系统、@提及、头衔、充值码、AFK 系统等）
+- **新增好友系统**：完整的角色间好友功能、Socket 实时通知、私聊、好友动态、跨平台布局
+- **新增模型**：`Friend.js`、`FriendRequest.js`
+- **新增路由**：`friend.js`、`privateChat.js`
+- **新增组件**：`AddFriendModal.tsx`、`FriendList.tsx`、`FriendRequests.tsx`
+- **新增上下文**：`FriendContext.tsx`
+- **新增服务**：`friendApi.ts`、`socketHelper.js`
+- **Socket 事件**：`friend-request-received`、`friend-request-updated`
+- 近期修复的所有问题详情
