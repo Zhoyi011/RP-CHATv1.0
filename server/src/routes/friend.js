@@ -174,12 +174,10 @@ router.post('/request', requirePersona, async (req, res) => {
     if (!toPersonaId) {
       return res.status(400).json({ success: false, message: '缺少目标角色' });
     }
-    
     if (fromPersonaId.toString() === toPersonaId) {
       return res.status(400).json({ success: false, message: '不能添加自己' });
     }
     
-    // 检查目标角色是否存在
     const targetPersona = await Persona.findById(toPersonaId);
     if (!targetPersona) {
       return res.status(404).json({ success: false, message: '角色不存在' });
@@ -197,16 +195,23 @@ router.post('/request', requirePersona, async (req, res) => {
     }
     
     // 检查是否有待处理的申请
-    const existingRequest = await FriendRequest.findOne({
+    const pendingRequest = await FriendRequest.findOne({
       $or: [
         { fromPersonaId, toPersonaId, status: 'pending' },
         { fromPersonaId: toPersonaId, toPersonaId: fromPersonaId, status: 'pending' }
       ]
     });
-    
-    if (existingRequest) {
+    if (pendingRequest) {
       return res.status(400).json({ success: false, message: '已有待处理的好友申请' });
     }
+    
+    // 删除旧的拒绝记录（允许重新申请）
+    await FriendRequest.deleteMany({
+      $or: [
+        { fromPersonaId, toPersonaId, status: 'rejected' },
+        { fromPersonaId: toPersonaId, toPersonaId: fromPersonaId, status: 'rejected' }
+      ]
+    });
     
     // 创建申请
     const request = new FriendRequest({
@@ -214,13 +219,11 @@ router.post('/request', requirePersona, async (req, res) => {
       toPersonaId,
       message: message || '想和你成为好友'
     });
-    
     await request.save();
     
-    // 通知目标用户
+    // 发送 Socket 通知
     const targetUser = await User.findById(targetPersona.userId);
     const io = req.app.get('io');
-    
     if (targetUser && io) {
       io.to(`user:${targetUser._id}`).emit('friend-request-received', {
         id: request._id,

@@ -5,14 +5,12 @@ const friendSchema = new mongoose.Schema({
   personaId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Persona',
-    required: true,
-    index: true
+    required: true
   },
   friendPersonaId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Persona',
-    required: true,
-    index: true
+    required: true
   },
   createdAt: {
     type: Date,
@@ -20,32 +18,31 @@ const friendSchema = new mongoose.Schema({
   }
 });
 
-// 唯一索引：防止重复好友关系
+// 唯一索引（新）
 friendSchema.index({ personaId: 1, friendPersonaId: 1 }, { unique: true });
+
+// 禁用自动创建旧索引（如果有任何遗留 schema 定义）
+friendSchema.set('autoIndex', true);
 
 const Friend = mongoose.model('Friend', friendSchema);
 
-// 启动时删除旧索引
+// 启动时强制清理旧索引
 (async () => {
   try {
     if (mongoose.connection.readyState === 1) {
       const collection = mongoose.connection.collection('friends');
       if (collection) {
         const indexes = await collection.indexes();
-        for (const index of indexes) {
-          if (index.name === 'userId_1_friendId_1' ||
-              index.name === 'userId_1_friendId_1_unique' ||
-              (index.key && (index.key.userId !== undefined || index.key.friendId !== undefined))) {
-            await collection.dropIndex(index.name);
-            console.log('✅ [Friend] 已删除旧索引:', index.name);
+        for (const idx of indexes) {
+          if (idx.name === 'userId_1_friendId_1' || idx.name === 'userId_1' || idx.name === 'friendId_1') {
+            await collection.dropIndex(idx.name);
+            console.log(`✅ 已删除旧索引: ${idx.name}`);
           }
         }
       }
     }
   } catch (err) {
-    if (err.code !== 27) {
-      console.log('⚠️ [Friend] 删除旧索引时出错:', err.message);
-    }
+    console.error('清理旧索引失败:', err);
   }
 })();
 
