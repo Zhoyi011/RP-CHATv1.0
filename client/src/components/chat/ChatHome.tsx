@@ -1048,6 +1048,13 @@ const ChatHome = () => {
     socketService.connect(token, userId || undefined); // ✅ 传递 userId
 
     const handleNewMessage = (message: Message) => {
+      console.log('📨 [Socket] 收到新消息:', {
+        id: message._id,
+        content: message.content,
+        isAudio: message.isAudio,
+        audioUrl: message.audioUrl,
+        hasAudioUrl: !!message.audioUrl,
+      });
       const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
       if (!isSelf) {
         const frameName = getFrameNameFromUrl(message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame);

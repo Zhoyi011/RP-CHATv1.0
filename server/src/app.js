@@ -506,7 +506,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', async (data) => {
-    const { roomId, userId, personaId, content, isAction, replyToId } = data;
+    const { roomId, userId, personaId, content, isAction, replyToId, isAudio, audioUrl, audioDuration } = data;
     try {
       const User = require('./models/User');
       const user = await User.findOne({ firebaseUid: userId });
@@ -527,6 +527,9 @@ io.on('connection', (socket) => {
         content: cleanContent, 
         isAction: isAction || false, 
         isPat: false,
+        isAudio: isAudio || false,
+        audioUrl: audioUrl || null,
+        audioDuration: audioDuration || null,
         replyTo: replyToId || null 
       });
       await message.save();
@@ -556,6 +559,9 @@ io.on('connection', (socket) => {
         createdAt: message.createdAt,
         roomId,
         replyTo: replyToData,
+        isAudio: message.isAudio || false,
+        audioUrl: message.audioUrl || null,
+        audioDuration: message.audioDuration || null,
         personaId: {
           _id: persona._id,
           name: persona.name,
