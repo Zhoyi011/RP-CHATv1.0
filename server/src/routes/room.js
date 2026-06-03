@@ -450,15 +450,19 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
       }
     }
     
-    const message = new Message({
-      roomId,
-      userId: req.userId,
-      personaId: persona._id,
-      content,
-      isAction: content.startsWith('/me ') || content.startsWith('/action '),
-      isPat: false,
-      replyTo: replyToId || null
-    });
+const message = new Message({
+  roomId,
+  userId: req.userId,
+  personaId: persona._id,
+  content,
+  isAction: content.startsWith('/me ') || content.startsWith('/action '),
+  isPat: false,
+  replyTo: replyToId || null,
+  // 🎙️ 新增音频字段
+  isAudio: req.body.isAudio || false,
+  audioUrl: req.body.audioUrl || null,
+  audioDuration: req.body.audioDuration || null
+});
     
     await message.save();
     
@@ -510,6 +514,9 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
         createdAt: message.createdAt,
         roomId: message.roomId,
         replyTo: replyToData,
+        isAudio: message.isAudio || false,
+        audioUrl: message.audioUrl || null,
+        audioDuration: message.audioDuration || null,
         personaId: {
           _id: persona._id,
           name: persona.name,
