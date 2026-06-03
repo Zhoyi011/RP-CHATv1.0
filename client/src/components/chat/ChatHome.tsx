@@ -26,6 +26,7 @@ import TranslatableMessage from './TranslatableMessage';
 import PatPanel from './PatPanel';
 import { smartConvert } from '../../services/translateApi';
 import { Users, MessageCircle, Sparkles, Plus } from 'lucide-react';
+import MusicSearchModal from './MusicSearchModal';  // 🎵 新增
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -329,7 +330,6 @@ const MessageBubble: React.FC<{
               </div>
             )}
             
-            {/* 🎙️ 修改：传递语音消息相关属性 */}
             <TranslatableMessage 
               content={message.content}
               isOwn={isSelf}
@@ -624,6 +624,9 @@ const ChatHome = () => {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   
+  // 🎵 音乐搜索弹窗状态
+  const [showMusicSearch, setShowMusicSearch] = useState(false);
+  
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [oldestMessageDate, setOldestMessageDate] = useState<string | null>(null);
@@ -869,6 +872,37 @@ const ChatHome = () => {
       console.error('发送语音消息失败:', error);
       toast.error('发送失败，请重试');
     }
+  }, [selectedRoom, selectedPersona, user, replyToMessage]);
+
+  // ========== 🎵 分享音乐 ==========
+  const handleShareMusic = useCallback((music: any) => {
+    if (!selectedRoom || !user) {
+      toast.error('请先选择聊天室');
+      return;
+    }
+    if (!selectedPersona) {
+      toast.error('请选择发言角色');
+      return;
+    }
+    
+    socketService.emit('send-message', {
+      roomId: selectedRoom._id,
+      userId: user.uid,
+      personaId: selectedPersona._id,
+      content: JSON.stringify({
+        type: 'music',
+        title: music.title,
+        artist: music.artist,
+        coverUrl: music.coverUrl,
+        videoUrl: music.videoUrl,
+        platform: music.platform || 'youtube'
+      }),
+      isAction: false,
+      replyToId: replyToMessage?._id,
+    });
+    
+    toast.success(`🎵 分享歌曲: ${music.title}`);
+    setShowMusicSearch(false);
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   const loadInitialMessages = useCallback(async () => {
@@ -1428,10 +1462,10 @@ const ChatHome = () => {
           </div>
         )}
 
-        {/* 🎙️ 修改：添加 onSendAudio prop */}
         <ChatInput
           onSendMessage={handleSendMessage}
           onSendAudio={handleSendAudio}
+          onOpenMusicSearch={() => setShowMusicSearch(true)}  // 🎵 新增
           disabled={!selectedRoom}
           roomId={selectedRoom?._id}
           selectedPersona={selectedPersona}
@@ -1439,6 +1473,13 @@ const ChatHome = () => {
           onSwitchPersona={handleSwitchRoomPersona}
           onLoadRoomPersonas={loadRoomPersonas}
           placeholder="输入消息... "
+        />
+        
+        {/* 🎵 音乐搜索弹窗 */}
+        <MusicSearchModal
+          isOpen={showMusicSearch}
+          onClose={() => setShowMusicSearch(false)}
+          onSelect={handleShareMusic}
         />
       </div>
     );

@@ -13,6 +13,7 @@ console.log('🔧 [ChatInput] 组件加载');
 interface ChatInputProps {
   onSendMessage: (content: string, isAction: boolean, personaId?: string) => void;
   onSendAudio?: (audioBlob: Blob, duration: number) => Promise<void>;
+  onOpenMusicSearch?: () => void;  // 🎵 新增：打开音乐搜索
   disabled?: boolean;
   placeholder?: string;
   roomId?: string | null;
@@ -40,6 +41,7 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   onSendAudio,
+  onOpenMusicSearch,  // 🎵 新增
   disabled = false, 
   placeholder = "输入消息... ",
   roomId,
@@ -337,10 +339,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </AnimatePresence>
         </div>
 
-        {/* 🎙️ 录音按钮 - 新增 */}
+        {/* 🎙️ 录音按钮 */}
         {onSendAudio && (
           <div className="flex-shrink-0 pb-0.5">
             <AudioRecorderButton onSendAudio={onSendAudio} disabled={disabled} />
+          </div>
+        )}
+
+        {/* 🎵 音乐分享按钮 - 新增 */}
+        {onOpenMusicSearch && (
+          <div className="flex-shrink-0 pb-0.5">
+            <motion.button
+              type="button"
+              onClick={onOpenMusicSearch}
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/30 transition-all duration-200"
+              title="分享音乐"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+            </motion.button>
           </div>
         )}
 

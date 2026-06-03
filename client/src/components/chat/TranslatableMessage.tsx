@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { translateApi } from '../../services/api';
 import AudioPlayer from './AudioPlayer';
+import MusicCard from './MusicCard';  // 🎵 新增
 
 interface TranslatableMessageProps {
   content: string;
@@ -26,6 +27,21 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [targetLang, setTargetLang] = useState<string>('zh');
 
+  // 🎵 解析音乐消息
+  const tryParseMusic = () => {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.type === 'music') {
+        return parsed;
+      }
+    } catch {
+      // 不是 JSON，忽略
+    }
+    return null;
+  };
+
+  const musicData = tryParseMusic();
+
   // 获取用户设置的翻译目标语言
   useEffect(() => {
     const savedLang = localStorage.getItem('translateTargetLang');
@@ -38,6 +54,9 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
   const needsTranslation = () => {
     // 语音消息不需要翻译按钮
     if (isAudio) return false;
+    
+    // 音乐消息不需要翻译按钮
+    if (musicData) return false;
     
     // 自己的消息不显示翻译按钮
     if (isOwn) return false;
@@ -90,6 +109,22 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
       setIsLoading(false);
     }
   };
+
+  // 🎵 如果是音乐消息，渲染音乐卡片
+  if (musicData) {
+    return (
+      <div className={className}>
+        <MusicCard
+          title={musicData.title}
+          artist={musicData.artist}
+          coverUrl={musicData.coverUrl}
+          videoUrl={musicData.videoUrl}
+          platform={musicData.platform || 'youtube'}
+          isOwn={isOwn}
+        />
+      </div>
+    );
+  }
 
   // 如果是语音消息，直接渲染音频播放器
   if (isAudio && audioUrl && audioDuration) {
