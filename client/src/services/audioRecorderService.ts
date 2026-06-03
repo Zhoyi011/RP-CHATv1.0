@@ -1,5 +1,6 @@
 // client/src/services/audioRecorderService.ts
 // 支持 Web 和未来原生 APP 的统一录音服务
+// 🔥 优先使用 MP3 格式以获得最佳兼容性
 
 export interface AudioRecording {
   blob: Blob;
@@ -25,20 +26,53 @@ class WebAudioRecorder implements IAudioRecorder {
   private stream: MediaStream | null = null;
   private isRecordingFlag: boolean = false;
 
-  // 兼容性最好的 MIME 类型（M4A/AAC）
+  /**
+   * 获取最佳兼容的 MIME 类型
+   * 🔥 优先 MP3/MPEG，确保移动端和桌面端都能播放
+   */
   private getMimeType(): string {
-    const types = [
-      'audio/mp4;codecs=mp4a',  // Chrome/Firefox
-      'audio/mp4',               // Safari 降级
-      'audio/webm',              // WebM 备选
-      'audio/webm;codecs=opus',
+    // MP3 相关格式 - 最佳兼容性
+    const mp3Types = [
+      'audio/mpeg',          // 标准 MP3
+      'audio/mp3',           // MP3 别名
     ];
-    for (const type of types) {
+    
+    // 先尝试 MP3
+    for (const type of mp3Types) {
       if (MediaRecorder.isTypeSupported(type)) {
         console.log(`✅ 使用录音格式: ${type}`);
         return type;
       }
     }
+    
+    // 备选：AAC/MP4（部分浏览器支持）
+    const aacTypes = [
+      'audio/mp4;codecs=mp4a',
+      'audio/mp4',
+      'audio/aac',
+    ];
+    
+    for (const type of aacTypes) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log(`⚠️ 使用备选格式: ${type}（将转为 MP3）`);
+        return type;
+      }
+    }
+    
+    // 最后备选：WebM
+    const webmTypes = [
+      'audio/webm',
+      'audio/webm;codecs=opus',
+    ];
+    
+    for (const type of webmTypes) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log(`⚠️ 使用备选格式: ${type}（将转为 MP3）`);
+        return type;
+      }
+    }
+    
+    console.warn('⚠️ 未找到支持的录音格式，使用默认格式');
     return '';
   }
 
@@ -99,7 +133,8 @@ class WebAudioRecorder implements IAudioRecorder {
           return;
         }
 
-        const blob = new Blob(this.audioChunks, { type: this.getMimeType() || 'audio/mp4' });
+        // 🔥 强制使用 MP3 类型的 Blob（最佳兼容性）
+        const blob = new Blob(this.audioChunks, { type: 'audio/mpeg' });
         const url = URL.createObjectURL(blob);
         
         resolve({

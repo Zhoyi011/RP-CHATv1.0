@@ -189,13 +189,14 @@ export const uploadApi = {
   /**
    * 🎙️ 上传语音消息
    * @param audioBlob - 录音 Blob 对象
-   * @returns { url: string } 音频文件 URL
+   * @returns { url: string } 音频文件 URL（MP3 格式）
    */
   uploadAudio: async (audioBlob: Blob): Promise<{ success: boolean; url: string; message: string }> => {
     const formData = new FormData();
-    // 使用 .m4a 扩展名，确保最佳兼容性
-    const fileName = `voice_${Date.now()}.m4a`;
-    const file = new File([audioBlob], fileName, { type: 'audio/mp4' });
+    // 🔥 使用 .mp3 扩展名，确保最佳兼容性
+    const fileName = `voice_${Date.now()}.mp3`;
+    // 🔥 确保 MIME 类型是 audio/mpeg
+    const file = new File([audioBlob], fileName, { type: 'audio/mpeg' });
     formData.append('audio', file);
     
     const token = getToken();

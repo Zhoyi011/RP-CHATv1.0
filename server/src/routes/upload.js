@@ -139,7 +139,7 @@ router.delete('/persona/:personaId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 🎙️ 语音消息上传（新增）==========
+// ========== 🎙️ 语音消息上传（强制转为 MP3）==========
 
 /**
  * 上传语音消息
@@ -154,7 +154,6 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
       return res.status(400).json({ error: '请选择音频文件' });
     }
 
-    // 限制文件大小（10MB 已在 multer 配置中限制）
     const fileBuffer = req.file.buffer;
     const originalName = req.file.originalname || 'voice_message';
     
@@ -164,12 +163,11 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const publicId = `voice-${req.userId}-${uniqueSuffix}`;
     
-    // 上传到 Cloudinary（作为 video 类型，因为音频被视为 video 的纯音频变体）
-    // 可选参数：resource_type 设为 'video'，格式转成 m4a
+    // 🔥 强制转换为 MP3 格式（最佳兼容性）
     const result = await new Promise((resolve, reject) => {
       const cloudinary = require('cloudinary').v2;
       
-      // 确保 Cloudinary 已配置（使用环境变量）
+      // 确保 Cloudinary 已配置
       cloudinary.config({
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
         api_key: process.env.CLOUDINARY_API_KEY,
@@ -179,12 +177,15 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           resource_type: 'video',           // 音频使用 video 类型
-          format: 'm4a',                    // 统一转为 M4A（最佳兼容性）
+          format: 'mp3',                    // 🔥 强制转为 MP3
           folder: 'rp-chat/voice_messages',
           public_id: publicId,
           use_filename: false,
           unique_filename: true,
           overwrite: true,
+          // 音频质量优化
+          audio_codec: 'mp3',
+          bit_rate: 64000,                  // 64kbps，文件小且清晰度足够
         },
         (error, result) => {
           if (error) {
@@ -199,7 +200,7 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
       uploadStream.end(fileBuffer);
     });
 
-    console.log(`✅ 音频上传成功: ${result.secure_url}`);
+    console.log(`✅ 音频上传成功 (MP3): ${result.secure_url}`);
 
     res.json({
       success: true,
@@ -217,7 +218,7 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
 });
 
 /**
- * 删除语音消息（可选，用于撤回时删除）
+ * 删除语音消息（可选，用于撤回时清理）
  * DELETE /api/upload/audio
  * 
  * 请求体: { url: string }
@@ -231,7 +232,7 @@ router.delete('/audio', authMiddleware, async (req, res) => {
     }
     
     // 从 URL 中提取 public_id
-    // 格式: https://res.cloudinary.com/.../upload/v.../rp-chat/voice_messages/voice-xxx.m4a
+    // 格式: https://res.cloudinary.com/.../upload/v.../rp-chat/voice_messages/voice-xxx.mp3
     const urlParts = url.split('/');
     const filename = urlParts[urlParts.length - 1];
     const publicId = `rp-chat/voice_messages/${filename.split('.')[0]}`;
