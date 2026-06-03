@@ -156,7 +156,6 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       });
       const memberCount = await PersonaRoom.countDocuments({ roomId: room._id });
       
-      // 从 PersonaRoom 中查找群主（role === 'owner'）
       let creatorName = '?';
       try {
         const ownerRecord = await PersonaRoom.findOne({ roomId: room._id, role: 'owner' })
@@ -169,7 +168,6 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
         console.error('获取群主失败:', err);
       }
       
-      // 备用方案：如果没找到，使用原来的方式
       if (creatorName === '?') {
         if (room.creatorName) {
           creatorName = room.creatorName;
@@ -327,20 +325,18 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 🔥 修复后的获取消息接口 ==========
+// ========== 🔥 获取消息接口（包含音频字段）==========
 router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const before = req.query.before;
     
-    // 构建查询条件
     let queryCondition = { roomId };
     if (before) {
       queryCondition.createdAt = { $lt: new Date(before) };
     }
     
-    // 关键修复：查询 limit+1 条，用于判断是否还有更多（基于原始数据，避免软删除影响分页判断）
     let rawMessages = await Message.find(queryCondition)
       .populate({
         path: 'personaId',
@@ -354,17 +350,13 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(limit + 1);
     
-    // 判断是否有更多未过滤的消息
     let hasMore = rawMessages.length > limit;
     if (hasMore) {
-      // 去掉多查的那一条
       rawMessages = rawMessages.slice(0, limit);
     }
     
-    // 反转顺序（从旧到新）
     rawMessages = rawMessages.reverse();
     
-    // 软删除过滤：过滤掉当前用户自己删除的消息
     const filteredMessages = rawMessages.filter(msg => {
       if (msg.isDeleted && msg.deletedBy === req.userId) {
         return false;
@@ -372,7 +364,6 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       return true;
     });
     
-    // 构建返回数据
     const safeMessages = filteredMessages.map(msg => {
       let replyToData = null;
       if (msg.replyTo) {
@@ -393,6 +384,7 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         avatarFrameUrl = persona.equipped.avatarFrame.image;
       }
       
+      // 🔥 关键：返回音频字段
       return {
         _id: msg._id,
         content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
@@ -403,6 +395,10 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         createdAt: msg.createdAt,
         roomId: msg.roomId,
         replyTo: replyToData,
+        // 🎙️ 音频字段
+        isAudio: msg.isAudio || false,
+        audioUrl: msg.audioUrl || null,
+        audioDuration: msg.audioDuration || null,
         personaId: persona ? {
           _id: persona._id,
           name: persona.name,
@@ -418,7 +414,6 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
       };
     });
     
-    // 返回消息数组和 hasMore 标志
     res.json({
       messages: safeMessages,
       hasMore: hasMore
@@ -429,11 +424,11 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 发送消息（支持回复和@提及）==========
+// ========== 发送消息（HTTP API - 备用）==========
 router.post('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { content, personaId, replyToId } = req.body;
+    const { content, personaId, replyToId, isAudio, audioUrl, audioDuration } = req.body;
     
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: '房间不存在' });
@@ -450,23 +445,22 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
       }
     }
     
-const message = new Message({
-  roomId,
-  userId: req.userId,
-  personaId: persona._id,
-  content,
-  isAction: content.startsWith('/me ') || content.startsWith('/action '),
-  isPat: false,
-  replyTo: replyToId || null,
-  // 🎙️ 新增音频字段
-  isAudio: req.body.isAudio || false,
-  audioUrl: req.body.audioUrl || null,
-  audioDuration: req.body.audioDuration || null
-});
+    const message = new Message({
+      roomId,
+      userId: req.userId,
+      personaId: persona._id,
+      content,
+      isAction: content.startsWith('/me ') || content.startsWith('/action '),
+      isPat: false,
+      replyTo: replyToId || null,
+      // 🎙️ 音频字段
+      isAudio: isAudio || false,
+      audioUrl: audioUrl || null,
+      audioDuration: audioDuration || null
+    });
     
     await message.save();
     
-    // 处理@提及
     const io = req.app.get('io');
     const mentionedUsers = await processMentions(content, roomId, persona._id, persona);
     
@@ -514,6 +508,7 @@ const message = new Message({
         createdAt: message.createdAt,
         roomId: message.roomId,
         replyTo: replyToData,
+        // 🎙️ 音频字段
         isAudio: message.isAudio || false,
         audioUrl: message.audioUrl || null,
         audioDuration: message.audioDuration || null,
@@ -537,7 +532,7 @@ const message = new Message({
   }
 });
 
-// ========== 未读消息数 ==========
+// ========== 其余路由（保持不变）==========
 router.get('/:roomId/unread', authMiddleware, async (req, res) => {
   try {
     const lastRead = await UserReadRecord.findOne({ userId: req.userId, roomId: req.params.roomId });
@@ -565,7 +560,6 @@ router.post('/:roomId/mark-read', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 加入群组 ==========
 router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   try {
     const { personaId, message: joinMessage } = req.body;
@@ -594,7 +588,6 @@ router.post('/:roomId/join-request', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 群成员列表 ==========
 router.get('/:roomId/members', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -641,7 +634,6 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 待审核 ==========
 router.get('/:roomId/pending', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
@@ -659,7 +651,6 @@ router.get('/:roomId/pending', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 批准/拒绝入群申请 ==========
 router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   try {
     const { personaId, approve } = req.body;
@@ -710,7 +701,6 @@ router.post('/:roomId/approve-request', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 设置管理员 ==========
 router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
   try {
     const { personaId, isAdmin } = req.body;
@@ -735,7 +725,6 @@ router.post('/:roomId/set-admin', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 踢出成员 ==========
 router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
   try {
     const { personaId } = req.body;
@@ -762,7 +751,6 @@ router.post('/:roomId/kick-member', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 退出群聊 ==========
 router.post('/:roomId/leave', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId);
@@ -792,7 +780,6 @@ router.post('/:roomId/leave', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 更新群设置 ==========
 router.put('/:roomId/settings', authMiddleware, async (req, res) => {
   try {
     const { name, description, announcement, isPublic, requireApproval } = req.body;
@@ -816,7 +803,6 @@ router.put('/:roomId/settings', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 设置头衔 ==========
 router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   try {
     const { personaId, title } = req.body;
@@ -840,7 +826,6 @@ router.put('/:roomId/set-title', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取用户在群里可用的 Persona ==========
 router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -873,7 +858,6 @@ router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 直接添加角色到群聊 ==========
 router.post('/:roomId/add-persona', authMiddleware, async (req, res) => {
   try {
     const { personaId } = req.body;
@@ -917,7 +901,6 @@ router.post('/:roomId/add-persona', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 撤回消息 ==========
 router.post('/message/recall', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
   console.log(`⏪ [API] 撤回消息请求: messageId=${messageId}`);
@@ -982,7 +965,6 @@ router.post('/message/recall', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 删除消息（软删除 - 仅自己不可见）==========
 router.post('/message/delete', authMiddleware, async (req, res) => {
   const { messageId } = req.body;
   console.log(`🗑️ [API] 删除消息请求: messageId=${messageId}`);
@@ -1033,7 +1015,6 @@ router.post('/message/delete', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 转让群主 ==========
 router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
   try {
     const { newOwnerId } = req.body;
@@ -1112,7 +1093,6 @@ router.post('/:roomId/transfer-owner', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 获取可提及的成员列表 ==========
 router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -1135,7 +1115,6 @@ router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
         role: pr.role
       }));
     
-    // 添加 @所有人 选项
     members.unshift({
       _id: '@all',
       displayName: '所有人',

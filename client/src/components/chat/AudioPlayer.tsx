@@ -25,38 +25,64 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
 
   // 初始化音频
   useEffect(() => {
-    const audio = new Audio();
+    if (!audioUrl) {
+      console.error('AudioPlayer: audioUrl 为空');
+      setHasError(true);
+      setIsLoading(false);
+      return;
+    }
+
+    console.log('🎵 AudioPlayer 初始化, URL:', audioUrl);
     
-    // 🔥 关键：为移动端添加特殊处理
+    // 根据 URL 后缀判断格式
+    const isM4a = audioUrl.toLowerCase().includes('.m4a') || audioUrl.toLowerCase().includes('audio/mp4');
+    const isMp3 = audioUrl.toLowerCase().includes('.mp3') || audioUrl.toLowerCase().includes('audio/mpeg');
+    
+    const audio = new Audio();
     audio.preload = 'metadata';
     audio.crossOrigin = 'anonymous';
     
-    // 使用 source 标签方式（更兼容）
+    // 清除已有的 source
+    while (audio.firstChild) {
+      audio.removeChild(audio.firstChild);
+    }
+    
+    // 设置 src（直接设置 src 更可靠）
+    audio.src = audioUrl;
+    
+    // 添加 source 作为备选
     const source = document.createElement('source');
     source.src = audioUrl;
-    source.type = 'audio/mpeg';  // MP3 的 MIME 类型
+    if (isMp3) {
+      source.type = 'audio/mpeg';
+    } else if (isM4a) {
+      source.type = 'audio/mp4';
+    } else {
+      source.type = 'audio/mpeg'; // 默认
+    }
     audio.appendChild(source);
     
     audio.addEventListener('loadedmetadata', () => {
+      console.log('✅ 音频元数据加载完成, 时长:', audio.duration);
       setIsLoading(false);
-      // 修正 duration
-      if (duration === 0 && audio.duration && !isNaN(audio.duration)) {
-        // 可以触发回调更新 duration
-      }
     });
     
     audio.addEventListener('canplay', () => {
+      console.log('✅ 音频可以播放');
       setIsLoading(false);
     });
     
     audio.addEventListener('error', (e) => {
-      console.error('音频加载错误:', e, audio.error);
-      // 🔥 移动端降级方案：尝试重新加载
-      if (isMobile && audio.error?.code === 4) { // MEDIA_ERR_SRC_NOT_SUPPORTED
-        console.log('尝试降级方案：直接设置 src');
-        audio.removeChild(source);
-        audio.src = audioUrl;
+      console.error('❌ 音频加载错误:', e, audio.error);
+      // 移动端降级：尝试重新加载
+      if (isMobile && audio.error?.code === 4) {
+        console.log('📱 移动端降级：重新设置 src');
         audio.load();
+        setTimeout(() => {
+          if (audio.readyState === 0) {
+            setHasError(true);
+          }
+        }, 3000);
       } else {
         setHasError(true);
         setIsLoading(false);
@@ -73,12 +99,26 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
       audio.currentTime = 0;
     });
     
+    audio.addEventListener('play', () => {
+      console.log('▶️ 音频开始播放');
+      setIsPlaying(true);
+    });
+    
+    audio.addEventListener('pause', () => {
+      console.log('⏸️ 音频暂停');
+      setIsPlaying(false);
+    });
+    
     audioRef.current = audio;
     
-    // 🔥 移动端：用户首次交互后激活音频上下文
+    // 预加载
+    audio.load();
+    
+    // 移动端：用户首次交互后激活音频上下文
     const activateAudio = () => {
       if (audioRef.current && audioRef.current.paused && audioRef.current.readyState >= 2) {
         // 预加载但不自动播放
+        console.log('📱 移动端音频上下文已激活');
       }
       document.removeEventListener('touchstart', activateAudio);
       document.removeEventListener('click', activateAudio);
@@ -88,8 +128,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
     document.addEventListener('click', activateAudio);
     
     return () => {
-      audio.pause();
-      audio.src = '';
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
       audioRef.current = null;
       document.removeEventListener('touchstart', activateAudio);
       document.removeEventListener('click', activateAudio);
@@ -98,24 +140,33 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
 
   // 播放/暂停
   const togglePlay = async () => {
-    if (!audioRef.current || hasError) return;
+    if (!audioRef.current || hasError) {
+      console.warn('无法播放: audioRef 为空或已有错误');
+      return;
+    }
     
     try {
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
       } else {
-        // 🔥 移动端：确保用户交互后可以播放
+        console.log('🎵 尝试播放音频');
         const playPromise = audioRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
+          console.log('✅ 播放成功');
           setIsPlaying(true);
         }
       }
     } catch (err) {
       console.error('播放失败:', err);
-      // 🔥 显示友好错误提示
-      setHasError(true);
+      // 如果是移动端自动播放策略问题，提示用户点击
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        console.log('📱 移动端需要用户交互才能播放');
+        setHasError(true);
+      } else {
+        setHasError(true);
+      }
     }
   };
 
@@ -126,21 +177,25 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
     const rect = progressRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = Math.max(0, Math.min(1, x / rect.width));
-    const newTime = percent * duration;
+    const actualDuration = audioRef.current.duration || duration;
+    const newTime = percent * actualDuration;
     
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
+    if (!isNaN(newTime) && isFinite(newTime)) {
+      audioRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
   };
 
   // 格式化时间
   const formatTime = (seconds: number): string => {
-    if (isNaN(seconds) || seconds === Infinity) return '0:00';
+    if (isNaN(seconds) || seconds === Infinity || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const actualDuration = audioRef.current?.duration || duration;
+  const progress = (actualDuration > 0 && currentTime > 0) ? (currentTime / actualDuration) * 100 : 0;
 
   // 错误降级显示
   if (hasError) {
@@ -159,9 +214,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
       </div>
     );
   }
-
-  // 实际 duration 显示（优先使用传入的 duration）
-  const displayDuration = duration > 0 ? duration : (audioRef.current?.duration || 0);
 
   return (
     <div className={`flex items-center gap-2 p-2 rounded-lg ${isOwn ? 'bg-blue-600/30' : 'bg-gray-100 dark:bg-gray-700'} min-w-[160px] max-w-[200px]`}>
@@ -203,7 +255,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration, isOwn = f
         </div>
         <div className="flex justify-between mt-1">
           <span className="text-[10px] opacity-75">{formatTime(currentTime)}</span>
-          <span className="text-[10px] opacity-75">{formatTime(displayDuration)}</span>
+          <span className="text-[10px] opacity-75">{formatTime(actualDuration)}</span>
         </div>
       </div>
     </div>
