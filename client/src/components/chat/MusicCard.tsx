@@ -20,12 +20,12 @@ const getYoutubeVideoId = (url: string): string | null => {
   return match ? match[1] : null;
 };
 
-// 获取 Bilibili 嵌入 URL
+// 获取 Bilibili 嵌入 URL（移动版，支持进度条）
 const getBilibiliEmbedUrl = (videoUrl: string): string => {
   const bvidMatch = videoUrl.match(/BV\w+/);
   if (!bvidMatch) return videoUrl;
   const bvid = bvidMatch[0];
-  return `https://player.bilibili.com/player.html?bvid=${bvid}&page=1&autoplay=0&danmaku=0`;
+  return `https://www.bilibili.com/blackboard/html5mobileplayer.html?bvid=${bvid}&page=1&autoplay=0&danmaku=0`;
 };
 
 const MusicCard: React.FC<MusicCardProps> = ({
