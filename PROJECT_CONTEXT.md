@@ -1,4 +1,4 @@
-以下是合并后的完整项目文档，保留所有历史记录并新增好友系统（2026-05-31 至 2026-06-03）的完整内容。
+以下是合并后的完整项目文档，包含所有历史记录、好友系统、以及本次新增的语音消息、音乐分享功能。
 
 ```markdown
 # RP Chat - 项目上下文文档
@@ -17,7 +17,7 @@
 | 前端技术 | React 18 + TypeScript + TailwindCSS + Vite + Framer Motion |
 | 后端技术 | Node.js + Express + MongoDB + Socket.IO |
 | 部署平台 | 前端 Vercel / 后端 Render |
-| 其他服务 | Cloudinary（图片上传）、DeepSeek（AI对话）、Discord Webhook（告警） |
+| 其他服务 | Cloudinary（图片/音频上传）、DeepSeek（AI对话）、YouTube API（音乐搜索）、Discord Webhook（告警） |
 
 ---
 
@@ -119,8 +119,8 @@
 | `AIChat.tsx` | AI 聊天弹窗组件 |
 | `AIChatRoom.tsx` | AI 对戏主界面 |
 | `AISettings.tsx` | AI 角色设置 |
-| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页加载，私聊 Tab 使用 FriendList** |
-| **`ChatInput.tsx`** | **消息输入框（表情、简繁转换、回复预览、@提及）** |
+| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页加载、私聊 Tab 使用 FriendList、语音消息发送、音乐分享、消息去重** |
+| **`ChatInput.tsx`** | **消息输入框（表情、简繁转换、回复预览、@提及、录音按钮、音乐分享按钮）** |
 | `CreateRoom.tsx` | 创建群聊弹窗 |
 | `GroupDetail.tsx` | 群聊详情页 |
 | `GroupSettings.tsx` | 群聊设置（头衔管理） |
@@ -132,7 +132,7 @@
 | **`PrivateChat.tsx`** | **私聊功能（基于角色 targetPersonaId，需好友关系）** |
 | `RoomMembers.tsx` | 房间成员列表 |
 | `RoomSettings.tsx` | 房间设置 |
-| `TranslatableMessage.tsx` | 可翻译消息组件（中英/多语言） |
+| **`TranslatableMessage.tsx`** | **可翻译消息组件（中英/多语言），支持语音消息播放、音乐卡片渲染** |
 | `UserPersonaSettings.tsx` | 用户角色设置（AI 用） |
 
 ---
@@ -159,6 +159,24 @@
 
 ---
 
+**`components/voice/` 🎙️ 语音消息系统（新增）**
+
+| 文件 | 职责 |
+|------|------|
+| **`AudioRecorderButton.tsx`** | **长按录音按钮组件（长按录音、上滑取消、时长限制）** |
+| **`AudioPlayer.tsx`** | **音频播放器组件（播放/暂停、进度条、音量控制）** |
+
+---
+
+**`components/music/` 🎵 音乐分享系统（新增）**
+
+| 文件 | 职责 |
+|------|------|
+| **`MusicSearchModal.tsx`** | **音乐搜索弹窗（YouTube + Bilibili 双平台，平台切换按钮）** |
+| **`MusicCard.tsx`** | **音乐卡片组件（信息展示 + 嵌入播放器）** |
+
+---
+
 **`components/diamond/` - 钻石系统**
 
 | 文件 | 职责 |
@@ -168,7 +186,7 @@
 
 ---
 
-**`components/friends/` ⭐ 好友系统（新增）**
+**`components/friends/` ⭐ 好友系统**
 
 | 文件 | 职责 |
 |------|------|
@@ -290,6 +308,7 @@
 | `useResponsive.ts` | 响应式断点检测 |
 | `useUnreadCount.ts` | 未读消息计数 |
 | **`useGroupPermission.ts`** | **群组权限 Hook（检查群主/管理员）** |
+| **`useMediaSession.ts`** | **媒体会话 Hook（预留，用于音频/视频媒体控制）** |
 
 ##### `src/services/`
 
@@ -302,6 +321,7 @@
 | `Notification.ts` | 浏览器通知 |
 | **`socket.ts`** | **Socket.IO 连接管理（传入 userId，好友事件监听方法）** |
 | `translateApi.ts` | 简繁转换 API |
+| **`audioRecorderService.ts`** | **录音核心服务（MP3 格式优先，时长限制）** |
 | `agoraService.ts` | 声网语音（已放弃） |
 
 ##### `src/utils/`
@@ -343,7 +363,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| **`app.js`** | **Express 入口 + Socket.IO 配置 + 路由注册（含 /api/friend 和 /api/private-chat）** |
+| **`app.js`** | **Express 入口 + Socket.IO 配置 + 路由注册（含 /api/friend、/api/private-chat、/api/music）** |
 
 ##### `src/models/` - 数据模型
 
@@ -352,7 +372,7 @@
 | `User.js` | 用户模型 | username, email, password, diamonds, role, hasAccess, onboarded, equippedItems |
 | `Persona.js` | 角色模型 | name, displayName, description, avatar, userId, status, sameNameNumber, equipped |
 | `Room.js` | 房间模型 | name, description, createdBy, members, isPublic, requireApproval |
-| `Message.js` | 消息模型 | content, roomId, personaId, isAction, **isPat**, replyTo, isRecalled, isDeleted, mentions |
+| **`Message.js`** | **消息模型** | **content, roomId, personaId, isAction, isPat, isAudio, audioUrl, audioDuration, musicData, replyTo, isRecalled, isDeleted, mentions** |
 | **`Friend.js`** | **角色间好友关系** | **personaId, friendPersonaId** |
 | **`FriendRequest.js`** | **角色间好友申请** | **fromPersonaId, toPersonaId, status, reason** |
 | `InviteCode.js` | 邀请码模型 | code, type, createdBy, usedBy, expiresAt, maxUses, usesCount |
@@ -383,7 +403,7 @@
 | `admin.js` | 维护模式开关、管理员豁免、维护计划 |
 | `diamond.js` | 钻石余额、每日签到 |
 | `shop.js` | 商品列表、购买、装备、卸下 |
-| `upload.js` | Cloudinary 图片上传/删除 |
+| **`upload.js`** | **Cloudinary 图片/音频上传/删除（音频强制转 MP3）** |
 | `translate.js` | 简繁转换、多语言翻译 |
 | `ai.js` | AI 对话（DeepSeek） |
 | `aiPersona.js` | AI 角色 CRUD |
@@ -394,6 +414,8 @@
 | `security.js` | 安全报告 |
 | **`friend.js`** | **完整好友 API：获取列表、获取申请、搜索角色、发送申请、处理申请、删除好友、获取动态** |
 | **`privateChat.js`** | **私聊路由：验证好友关系后获取消息历史** |
+| **`music.js`** | **音乐搜索 API（YouTube + Bilibili 双平台）** |
+| **`youtube.js`** | **YouTube 视频详情 API（Data API v3）** |
 
 ##### `src/middleware/` - 中间件
 
@@ -412,7 +434,7 @@
 | `aiService.js` | DeepSeek API 调用 |
 | `translateService.js` | 简繁转换 + 多语言翻译（Google Translate） |
 | `discordAlert.js` | Discord Webhook 告警（安全、部署、反馈） |
-| `uploadService.js` | Cloudinary 上传 |
+| **`uploadService.js`** | **Cloudinary 上传（图片 + 音频，音频转 MP3）** |
 | `contentFilter.js` | 脏话过滤 |
 | `markdownService.js` | Markdown 解析 |
 
@@ -452,49 +474,55 @@
 ### 1. 发送消息流程（支持回复和提及）
 用户点击回复按钮 → 设置 replyToMessage → 输入框显示回复预览 → 用户输入内容（可 @ 成员） → 前端解析 @ 提及 → 发送消息带 replyToId 和 mentions → 后端 mentionHandler 处理 → 保存消息到 MongoDB → 广播 new-message → 前端显示消息和引用内容，@ 成员高亮。
 
-### 2. 消息分页加载流程
+### 2. 语音消息流程（新增）
+用户长按录音按钮 → 录音中（显示时长）→ 松手 → 上传音频到 Cloudinary（强制转 MP3）→ Socket 发送消息（含 audioUrl、audioDuration）→ 后端保存（isAudio: true）→ 广播 → 接收方显示音频播放器。
+
+### 3. 音乐分享流程（新增）
+点击音乐按钮 → 选择平台（YouTube/Bilibili）→ 搜索歌曲 → 选择歌曲 → 获取视频详情 → Socket 发送 JSON 消息（musicData 字段）→ 后端保存 → 广播 → 接收方解析 JSON → 渲染 MusicCard → 点击卡片展开播放器（YouTube iframe / Bilibili 播放器）。
+
+### 4. 消息分页加载流程
 用户滚动到聊天顶部 → 触发 loadMoreMessages → 发送 GET /api/room/:roomId/messages?before=最早消息ID → 后端返回 50 条更早的消息 → 前端 prepend 到消息列表顶部 → 保持滚动位置。
 
-### 3. 消息撤回流程
+### 5. 消息撤回流程
 用户右键/长按消息 → 选择撤回（5分钟内）→ 后端标记 isRecalled → 广播 message-recalled → 所有人看到撤回提示。
 
-### 4. 消息删除流程
+### 6. 消息删除流程
 用户右键/长按消息 → 选择删除（仅自己）→ 后端标记 isDeleted → 仅删除者本人看不到。
 
-### 5. AI 对戏流程
+### 7. AI 对戏流程
 点击 AI 对戏 Tab → 加载默认 AI 角色 → 发送消息 → 调用 DeepSeek API → 返回带动作描写的回复。
 
-### 6. 每日签到流程
+### 8. 每日签到流程
 打开签到面板 → GET 签到信息 → 点击领取 → POST 领取 → 计算连续奖励（5,5,8,8,10,15,20 循环）→ 更新钻石。
 
-### 7. 角色切换流程
+### 9. 角色切换流程
 点击切换按钮 → 打开 PersonaSwitchPanel → 选择角色 → API 更新激活角色 → localStorage 保存 → 触发事件更新界面。
 
-### 8. 头像上传流程
+### 10. 头像上传流程
 点击更换头像 → 选择图片 → 上传到 Cloudinary → 返回 URL → 更新数据库 → 刷新页面。
 
-### 9. 头像框系统
+### 11. 头像框系统
 购买头像框 → 装备到角色 → 显示时根据 frameId 应用配置（scale, offsetX, offsetY）→ 在头像周围显示。
 
-### 10. @提及流程
+### 12. @提及流程
 用户在输入框输入 `@` → 弹出成员列表 → 选择成员 → 插入 `@用户名` → 发送时后端解析 mentions → 为被提及者创建通知 → 被提及者收到高亮消息。
 
-### 11. 维护模式流程
+### 13. 维护模式流程
 管理员在设置面板开启维护模式 → 后端设置 SystemSettings → 所有非管理员请求返回 503 → Socket.IO 拒绝连接。
 
-### 12. 拍一拍流程
+### 14. 拍一拍流程
 双击头像 → 弹出拍一拍面板 → 选择预设动作或自定义 → 后端生成消息（格式：{actor} 动作 {target}）→ 保存为 isPat: true → 广播 → 前端显示 ✨ 样式。
 
-### 13. 充值码流程
+### 15. 充值码流程
 管理员创建充值码 → 用户在钱包输入充值码 → 后端验证 → 增加钻石 → 记录使用。
 
-### 14. 新用户引导流程
+### 16. 新用户引导流程
 注册成功 → 输入邀请码 → 引导页（用户名/昵称/生日）→ 创建角色 → 创建/加入群聊 → 进入聊天页。
 
-### 15. AFK 隐私保护流程（新版）
+### 17. AFK 隐私保护流程
 用户无操作 5 分钟（开发环境 30 秒）→ AFKContext 检测 → 设置 isAFK = true → AFKScreen 全屏显示 → 播放壁纸视频（顺序循环，双视频层无缝切换）→ 出现可拖拽橙色锁头按钮 → 点击锁头展开功能菜单（暂停/播放/循环/跳过/显示解锁界面）→ 用户按 ESC 或点击退出按钮 → 恢复界面。**手动 AFK**：点击顶部栏锁头图标 → 立即进入 AFK 模式。
 
-### 16. 好友系统流程（新增）
+### 18. 好友系统流程
 **发送申请**：用户 A 搜索角色 B → 选择自己的角色 → 填写申请理由（30字内）→ 发送 → 后端创建 FriendRequest → Socket 通知角色 B 所属用户 → 角色 B 收到实时通知。**处理申请**：角色 B 同意/拒绝 → 后端更新状态 → 同意时创建 Friend 双向关系 → 双方收到 Socket 通知。**私聊**：双方成为好友后 → 私聊 Tab 显示好友列表 → 选择好友 → 验证好友关系 → 加载历史消息 → 实时通信。
 
 ---
@@ -517,6 +545,9 @@ FIREBASE_CONFIG=...
 GITHUB_TOKEN=your_github_token
 DEEPSEEK_API_KEY=your_deepseek_api_key
 CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
+
+# YouTube API（音乐搜索）
+YOUTUBE_API_KEY=your_youtube_api_key
 
 # Discord 告警（可选）
 DISCORD_WEBHOOK_SECURITY=https://discord.com/api/webhooks/...
@@ -555,6 +586,22 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **@提及功能（成员选择、通知、高亮）**
 - [x] **拍一拍功能（双击头像，预设+自定义动作，使用 isPat 字段存储）**
 - [x] **消息分页加载（游标分页，滚动自动加载历史）**
+- [x] **消息去重优化（修复 React key 重复警告）**
+
+#### 🎙️ 语音消息系统（2026-06-04 新增）
+- [x] **长按录音按钮（上滑取消、时长限制）**
+- [x] **音频播放器组件（播放/暂停、进度条、音量控制）**
+- [x] **后端音频上传（Cloudinary 存储，强制转 MP3）**
+- [x] **Socket.IO 实时推送语音消息**
+- [x] **消息气泡集成音频播放器**
+
+#### 🎵 音乐分享系统（2026-06-04 新增）
+- [x] **音乐搜索弹窗（YouTube + Bilibili 双平台，平台切换按钮）**
+- [x] **音乐卡片组件（信息展示 + 嵌入播放器）**
+- [x] **后端 YouTube 搜索 API（Data API v3）**
+- [x] **后端 Bilibili 搜索 API（公开 API + 详情接口）**
+- [x] **卡片嵌入播放器（YouTube iframe + Bilibili 移动版播放器）**
+- [x] **播放失败降级（跳转链接）**
 
 #### 👤 角色系统
 - [x] 角色创建/编辑/删除
@@ -604,7 +651,7 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **Discord 告警（安全事件、部署通知等）**
 - [x] **维护模式（管理员可开关，支持定时计划）**
 
-#### 👥 好友系统（2026-06-03 完成）
+#### 👥 好友系统
 - [x] **角色间添加好友（基于 Persona 独立）**
 - [x] **好友申请 Socket 实时通知**
 - [x] **同意/拒绝好友申请**
@@ -616,7 +663,7 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **申请理由（30字限制）**
 - [x] **拒绝后重新申请冷却（30分钟）**
 
-#### 🛡️ AFK 隐私保护系统（v2.0 - 2026-05-31 重构）
+#### 🛡️ AFK 隐私保护系统（v2.0）
 - [x] 无操作 5 分钟后自动进入隐私保护模式
 - [x] 全屏动态壁纸（支持视频/图片）
 - [x] 电脑/手机分离壁纸（7个电脑端 + 2个手机端）
@@ -671,7 +718,6 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **API 401 防循环跳转**
 
 ### ⏳ 开发中
-- [ ] 私聊功能（后端已完成，前端整合中）
 - [ ] 消息搜索（全文搜索）
 - [ ] 帖子评论功能
 - [ ] 邮箱验证（需要邮件服务）
@@ -709,7 +755,9 @@ Room (房间)
 
 Message (消息)
   ├── 自关联 → replyTo (回复)
-  └── 字段 → isPat (拍一拍标记)
+  ├── 字段 → isPat (拍一拍标记)
+  ├── 字段 → isAudio, audioUrl, audioDuration (语音消息)
+  └── 字段 → musicData (音乐分享 JSON)
 
 ShopItem (商品)
   └── 1:N → UserInventory (库存)
@@ -737,7 +785,7 @@ FriendRequest (好友申请)
 |------|------|------|
 | `join-room` | `{ roomId, userId, personaId }` | 加入聊天室 |
 | `leave-room` | `{}` | 离开聊天室 |
-| `send-message` | `{ roomId, userId, personaId, content, isAction, replyToId, mentions }` | 发送消息 |
+| `send-message` | `{ roomId, userId, personaId, content, isAction, replyToId, mentions, isAudio, audioUrl, audioDuration, musicData }` | 发送消息（支持文本/语音/音乐） |
 | `switch-persona` | `{ userId, newPersonaId }` | 切换角色 |
 | `pong` | `{}` | 心跳响应 |
 
@@ -747,7 +795,7 @@ FriendRequest (好友申请)
 |------|------|------|
 | `connected` | `{ id, timestamp }` | 连接成功 |
 | `ping` | `{}` | 心跳检测 |
-| `new-message` | `Message`（含 isPat） | 新消息 |
+| `new-message` | `Message`（含 isPat、isAudio、musicData） | 新消息 |
 | `message-recalled` | `{ messageId, recalledByName }` | 消息被撤回 |
 | `message-deleted` | `{ messageId }` | 消息被删除 |
 | `room-online-count` | `{ roomId, count }` | 在线人数更新 |
@@ -817,10 +865,13 @@ interface DraggableAFKStatusProps {
 > | AFK 配置 | `AFKContext.tsx` 的 `AFK_CONFIG`（超时时间） |
 > | AFK 壁纸 URL | `AFKScreen.tsx` 的 `DESKTOP_WALLPAPERS` / `MOBILE_WALLPAPERS` |
 > | AFK 锁头组件 | `DraggableAFKStatus.tsx` |
+> | **语音消息** | `AudioRecorderButton.tsx` + `AudioPlayer.tsx` + `audioRecorderService.ts` |
+> | **音乐分享** | `MusicSearchModal.tsx` + `MusicCard.tsx` + `music.js` |
 > | **好友系统** | `FriendContext.tsx` + `friendApi.ts` + `Friend.js`/`FriendRequest.js` |
 > | **Socket 通知** | `socketHelper.js` 的 `emitToUser` |
 > | Cloudinary | `CLOUDINARY_URL` 环境变量 |
 > | DeepSeek API | `aiService.js` |
+> | YouTube API | `YOUTUBE_API_KEY` 环境变量 + `youtube.js` |
 > | Socket.IO | `app.js` + `socket.ts` |
 > | 路由守卫 | `App.tsx` + `api.ts` 401 拦截 |
 > | API 缓存 | `api.ts` 中的 `_t` 时间戳参数 |
@@ -863,6 +914,12 @@ interface DraggableAFKStatusProps {
 > 1. **后端**：确保 MongoDB 旧索引 `userId_1_friendId_1` 已删除
 > 2. **前端**：确保登录时保存 `userId` 到 localStorage
 > 3. **Socket**：确保连接时传入正确的 `userId`（MongoDB `_id`）
+> 
+> ### 语音/音乐部署注意事项：
+> 
+> 1. **Cloudinary**：需配置音频上传（自动转 MP3）
+> 2. **YouTube API**：需配置 `YOUTUBE_API_KEY` 环境变量
+> 3. **Bilibili API**：使用公开 API，无需认证
 
 ---
 
@@ -870,7 +927,8 @@ interface DraggableAFKStatusProps {
 
 | 日期 | 更新内容 |
 |------|----------|
-| **2026-06-03** | **好友系统完整实现**：角色间添加好友、Socket 实时通知、好友申请/同意/拒绝/删除、角色间私聊（需好友关系）、好友动态、搜索角色、手机端/桌面端/平板端布局适配、申请理由（30字限制）、拒绝后重新申请冷却（30分钟）、修复 API 401 防循环跳转、修复 `useRef` TypeScript 错误 |
+| **2026-06-04** | **语音消息系统**：长按录音、音频播放器、Cloudinary 音频上传（MP3 转码）；**音乐分享系统**：YouTube + Bilibili 双平台搜索、音乐卡片、嵌入播放器；**消息去重优化**：修复 React key 重复警告 |
+| 2026-06-03 | 好友系统完整实现：角色间添加好友、Socket 实时通知、好友申请/同意/拒绝/删除、角色间私聊（需好友关系）、好友动态、搜索角色、手机端/桌面端/平板端布局适配、申请理由（30字限制）、拒绝后重新申请冷却（30分钟）、修复 API 401 防循环跳转、修复 `useRef` TypeScript 错误 |
 | 2026-05-31 | AFK 系统完整重构 v2.0：可拖拽橙色锁头控制面板（位置记忆）；功能菜单（暂停/播放/循环/跳过/显示解锁界面）；视频壁纸无缝循环（双视频层、主循环定时器、健康检查）；GitHub Releases + jsDelivr CDN 托管；毛玻璃 UI 美化；AFK 模式下强制锁定浅色模式；修复手动 AFK 遮挡层不显示问题；修复设置页面无限循环；修复拖拽跳跃和重复锁头问题 |
 | 2026-05-30 | AFK 隐私保护系统（5分钟自动进入、全屏视频壁纸、双视频层无缝切换、电脑/手机分离壁纸、密码保护、手动AFK按钮）；拍一拍修复（isPat 字段存储，刷新后样式保留）；消息分页加载（游标分页，滚动自动加载历史）；API 缓存问题修复（GET 请求自动添加 _t 时间戳）；CORS 和网络连接优化（智能环境检测）；Git LFS 配置（壁纸大文件存储） |
 | 2026-05-28 | 拍一拍功能（双击头像，预设/自定义动作）；充值码系统（钱包页面）；多语言翻译（Google Translate，消息内翻译）；新用户引导流程；全局编号移除（只保留同名编号）；定时维护计划；动画优化（Framer Motion）；安全中间件优化（翻译接口白名单） |
@@ -897,6 +955,7 @@ interface DraggableAFKStatusProps {
 
 | 问题 | 解决方案 | 日期 |
 |------|----------|------|
+| 消息重复渲染 | `handleNewMessage` 添加去重检查，按 `_id` 去重 | 2026-06-04 |
 | Socket 通知失败 | Socket 连接时传入 MongoDB `_id` 而非 Firebase UID | 2026-06-03 |
 | 好友索引冲突 | 删除旧的 `userId_1_friendId_1` 索引 | 2026-06-03 |
 | 拒绝后无法再次申请 | 发送申请前删除 `rejected` 记录 | 2026-06-03 |
@@ -914,16 +973,36 @@ interface DraggableAFKStatusProps {
 
 ---
 
+### 📊 功能运作流程速查
+
+#### 语音消息流程
+```
+用户长按录音按钮 → 录音中（显示时长）→ 松手 → 上传音频到 Cloudinary → Socket 发送消息（含 audioUrl）→ 后端保存 → 广播 → 接收方显示音频播放器
+```
+
+#### 音乐分享流程
+```
+点击音乐按钮 → 选择平台（YouTube/Bilibili）→ 搜索 → 选择歌曲 → 获取视频详情 → Socket 发送 JSON 消息 → 后端保存 → 广播 → 接收方解析 JSON → 渲染 MusicCard → 点击卡片展开播放器
+```
+
+#### AFK 模式流程
+```
+用户无操作 5 分钟 → 进入 AFK 模式 → 播放动态壁纸 → 双视频层无缝循环 → 显示橙色锁头 → 点击锁头展开菜单（暂停/循环/跳过/解锁）→ 按 ESC 或解锁退出
+```
+
+---
+
 *本文档由 AI 维护，每次重要更新后请同步更新*
 ```
 
 以上是合并后的完整项目文档，包含：
-- 所有历史功能（头像框、安全系统、@提及、头衔、充值码、AFK 系统等）
-- **新增好友系统**：完整的角色间好友功能、Socket 实时通知、私聊、好友动态、跨平台布局
-- **新增模型**：`Friend.js`、`FriendRequest.js`
-- **新增路由**：`friend.js`、`privateChat.js`
-- **新增组件**：`AddFriendModal.tsx`、`FriendList.tsx`、`FriendRequests.tsx`
-- **新增上下文**：`FriendContext.tsx`
-- **新增服务**：`friendApi.ts`、`socketHelper.js`
-- **Socket 事件**：`friend-request-received`、`friend-request-updated`
-- 近期修复的所有问题详情
+- 所有历史功能（头像框、安全系统、@提及、头衔、充值码、AFK 系统、好友系统等）
+- **新增语音消息系统**：长按录音、音频播放器、Cloudinary 音频上传
+- **新增音乐分享系统**：YouTube + Bilibili 双平台搜索、音乐卡片、嵌入播放器
+- **消息去重优化**：修复 React key 重复警告
+- **新增模型字段**：`isAudio`、`audioUrl`、`audioDuration`、`musicData`
+- **新增路由**：`music.js`、`youtube.js`
+- **新增组件**：`AudioRecorderButton.tsx`、`AudioPlayer.tsx`、`MusicSearchModal.tsx`、`MusicCard.tsx`
+- **新增服务**：`audioRecorderService.ts`
+- **环境变量**：`YOUTUBE_API_KEY`
+- 所有修复问题详情和功能运作流程速查

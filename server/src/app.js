@@ -196,7 +196,7 @@ const friendRoutes = require('./routes/friend'); // 🔥 新增：好友路由
 const privateChatRoutes = require('./routes/privateChat');
 const musicRoutes = require('./routes/music');
 const youtubeRoutes = require('./routes/youtube');
-
+const emojiRoutes = require('./routes/emoji');
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -324,6 +324,7 @@ app.use('/api/friend', standardLimit, friendRoutes); // 🔥 新增：好友路�
 app.use('/api/private-chat', privateChatRoutes); // 🔥 新增：私聊路由
 app.use('/api/music', musicRoutes);
 app.use('/api/youtube', youtubeRoutes);
+app.use('/api/emoji', emojiRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 
@@ -511,7 +512,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', async (data) => {
-    const { roomId, userId, personaId, content, isAction, replyToId, isAudio, audioUrl, audioDuration } = data;
+    const { roomId, userId, personaId, content, isAction, replyToId, isAudio, audioUrl, audioDuration, isEmoji, emojiId, emojiUrl } = data;
     try {
       const User = require('./models/User');
       const user = await User.findOne({ firebaseUid: userId });
@@ -535,7 +536,10 @@ io.on('connection', (socket) => {
         isAudio: isAudio || false,
         audioUrl: audioUrl || null,
         audioDuration: audioDuration || null,
-        replyTo: replyToId || null 
+        replyTo: replyToId || null, 
+        isEmoji: isEmoji || false,
+        emojiId: emojiId || null,
+        emojiUrl: emojiUrl || null,
       });
       await message.save();
       

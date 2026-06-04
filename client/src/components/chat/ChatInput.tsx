@@ -1,19 +1,20 @@
 // client/src/components/chat/ChatInput.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import EmojiPicker from '../common/EmojiPicker';
+import { EmojiPicker } from '../emoji/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import type { Persona } from '../../services/api';
 import AvatarFrame from '../common/AvatarFrame';
 import AudioRecorderButton from './AudioRecorderButton';
+import toast from 'react-hot-toast';
 
 console.log('🔧 [ChatInput] 组件加载');
 
 interface ChatInputProps {
-  onSendMessage: (content: string, isAction: boolean, personaId?: string) => void;
+  onSendMessage: (content: string, isAction: boolean, personaId?: string, isEmoji?: boolean, emojiId?: string) => void;
   onSendAudio?: (audioBlob: Blob, duration: number) => Promise<void>;
-  onOpenMusicSearch?: () => void;  // 🎵 新增：打开音乐搜索
+  onOpenMusicSearch?: () => void;
   disabled?: boolean;
   placeholder?: string;
   roomId?: string | null;
@@ -41,7 +42,7 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
 const ChatInput: React.FC<ChatInputProps> = ({ 
   onSendMessage, 
   onSendAudio,
-  onOpenMusicSearch,  // 🎵 新增
+  onOpenMusicSearch,
   disabled = false, 
   placeholder = "输入消息... ",
   roomId,
@@ -209,9 +210,23 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }, 50);
   };
 
-  const handleSelectEmoji = (emoji: string) => {
-    setInputValue(prev => prev + emoji);
-    inputRef.current?.focus();
+  // 🎨 发送表情消息
+  const handleSelectEmoji = (emojiUrl: string, emojiId: string) => {
+    if (!selectedPersona) {
+      toast.error('请选择发言角色');
+      return;
+    }
+    
+    setSendAnimation(true);
+    setTimeout(() => setSendAnimation(false), 400);
+    
+    // 发送表情消息：content 存储 emojiUrl，isEmoji 标记为 true
+    onSendMessage(emojiUrl, false, selectedPersona._id, true, emojiId);
+    setShowEmojiPicker(false);
+    
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   const handleSwitchPersona = (persona: Persona) => {
@@ -315,7 +330,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
 
-        {/* 表情按钮 */}
+        {/* 🎨 表情按钮 */}
         <div className="relative flex-shrink-0 pb-0.5" ref={emojiContainerRef}>
           <motion.button
             type="button"
@@ -346,7 +361,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
 
-        {/* 🎵 音乐分享按钮 - 新增 */}
+        {/* 🎵 音乐分享按钮 */}
         {onOpenMusicSearch && (
           <div className="flex-shrink-0 pb-0.5">
             <motion.button

@@ -27,6 +27,7 @@ import PatPanel from './PatPanel';
 import { smartConvert } from '../../services/translateApi';
 import { Users, MessageCircle, Sparkles, Plus } from 'lucide-react';
 import MusicSearchModal from './MusicSearchModal';
+import { EmojiMessage } from '../emoji/EmojiMessage';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -583,10 +584,61 @@ const MessageList: React.FC<{
                 );
               }
               
+              // 🎨 表情消息
+              if ((msg as any).isEmoji && (msg as any).emojiUrl) {
+                const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
+                return (
+                  <motion.div
+                    key={msg._id}
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className={`flex items-start gap-2 ${isSelf ? 'justify-end' : ''}`}
+                  >
+                    {!isSelf && (
+                      <AvatarFrame
+                        avatarUrl={msg.personaId?.avatar || ''}
+                        frameName={getFrameNameFromUrl(msg.personaId?.avatarFrame || msg.personaId?.equipped?.avatarFrame)}
+                        size="sm"
+                        className="flex-shrink-0 cursor-pointer hover:scale-105 transition"
+                        onClick={() => msg.personaId?._id && navigate(`/persona/${msg.personaId._id}`)}
+                      />
+                    )}
+                    
+                    <div className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
+                      <div className={`flex items-center gap-2 mb-1 ${isSelf ? 'justify-end' : ''}`}>
+                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {msg.personaId?.displayName || msg.personaId?.name}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <EmojiMessage
+                        url={(msg as any).emojiUrl}
+                        isGif={(msg as any).emojiUrl?.includes('.gif')}
+                        size="md"
+                      />
+                    </div>
+                    
+                    {isSelf && selectedPersona && (
+                      <AvatarFrame
+                        avatarUrl={selectedPersona.avatar || ''}
+                        frameName={getFrameNameFromUrl(selectedPersona.avatarFrame || selectedPersona.equipped?.avatarFrame)}
+                        size="sm"
+                        className="flex-shrink-0 cursor-pointer"
+                      />
+                    )}
+                  </motion.div>
+                );
+              }
+              
               const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
               
               return (
                 <MessageBubble
+                  key={msg._id}
                   message={msg}
                   isSelf={isSelf}
                   isMobile={isMobile}
@@ -832,12 +884,19 @@ const ChatHome = () => {
     }
   }, [saveLastUsedPersona]);
 
-  const handleSendMessage = useCallback((content: string, isAction = false, personaId?: string) => {
+  // ========== 🎨 发送消息（支持文本、动作、表情） ==========
+  const handleSendMessage = useCallback((
+    content: string, 
+    isAction = false, 
+    personaId?: string,
+    isEmoji = false,
+    emojiId?: string
+  ) => {
     if (!selectedRoom || !user) {
       toast.error('请先选择聊天室');
       return;
     }
-    if (!content.trim()) return;
+    if (!isEmoji && !content.trim()) return;
     const pid = personaId || selectedPersona?._id;
     if (!pid) {
       toast.error('请选择发言角色');
@@ -848,9 +907,12 @@ const ChatHome = () => {
       roomId: selectedRoom._id,
       userId: user.uid,
       personaId: pid,
-      content: isAction ? `/me ${content}` : content,
+      content: isEmoji ? '' : (isAction ? `/me ${content}` : content),
       isAction,
-      replyToId: replyToMessage?._id
+      replyToId: replyToMessage?._id,
+      isEmoji,
+      emojiId,
+      emojiUrl: isEmoji ? content : undefined,
     });
     
     setReplyToMessage(null);
@@ -895,102 +957,100 @@ const ChatHome = () => {
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   // ========== 🎵 分享音乐 ==========
-const handleShareMusic = useCallback((music: any) => {
-  if (!selectedRoom || !user) {
-    toast.error('请先选择聊天室');
-    return;
-  }
-  if (!selectedPersona) {
-    toast.error('请选择发言角色');
-    return;
-  }
-  
-  const musicData = {
-    type: 'music',
-    title: music.title,
-    artist: music.artist,
-    channelName: music.channelName || music.artist,  // 优先使用真实频道名
-    publishDate: music.publishDate || null,
-    coverUrl: music.coverUrl,
-    videoUrl: music.videoUrl,
-    platform: music.platform || 'youtube',
-    duration: music.duration,
-  };
-  
-  console.log('🎵 发送音乐消息:', musicData);
-  
-  socketService.emit('send-message', {
-    roomId: selectedRoom._id,
-    userId: user.uid,
-    personaId: selectedPersona._id,
-    content: JSON.stringify(musicData),
-    isAction: false,
-    replyToId: replyToMessage?._id,
-  });
-  
-  toast.success(`🎵 分享歌曲: ${music.title}`);
-  setShowMusicSearch(false);
-}, [selectedRoom, selectedPersona, user, replyToMessage]);
+  const handleShareMusic = useCallback((music: any) => {
+    if (!selectedRoom || !user) {
+      toast.error('请先选择聊天室');
+      return;
+    }
+    if (!selectedPersona) {
+      toast.error('请选择发言角色');
+      return;
+    }
+    
+    const musicData = {
+      type: 'music',
+      title: music.title,
+      artist: music.artist,
+      channelName: music.channelName || music.artist,
+      publishDate: music.publishDate || null,
+      coverUrl: music.coverUrl,
+      videoUrl: music.videoUrl,
+      platform: music.platform || 'youtube',
+      duration: music.duration,
+    };
+    
+    console.log('🎵 发送音乐消息:', musicData);
+    
+    socketService.emit('send-message', {
+      roomId: selectedRoom._id,
+      userId: user.uid,
+      personaId: selectedPersona._id,
+      content: JSON.stringify(musicData),
+      isAction: false,
+      replyToId: replyToMessage?._id,
+    });
+    
+    toast.success(`🎵 分享歌曲: ${music.title}`);
+    setShowMusicSearch(false);
+  }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   const loadInitialMessages = useCallback(async () => {
-  if (!selectedRoom || !selectedPersona || !user) return;
-  
-  try {
-    const response = await roomApi.getMessagesWithLimit(selectedRoom._id, 50);
+    if (!selectedRoom || !selectedPersona || !user) return;
     
-    if (response.messages && Array.isArray(response.messages)) {
-      // 🔥 去重：按 _id 去重
-      const uniqueMessages = response.messages.filter((msg, index, self) => 
-        index === self.findIndex(m => m._id === msg._id)
+    try {
+      const response = await roomApi.getMessagesWithLimit(selectedRoom._id, 50);
+      
+      if (response.messages && Array.isArray(response.messages)) {
+        const uniqueMessages = response.messages.filter((msg, index, self) => 
+          index === self.findIndex(m => m._id === msg._id)
+        );
+        setMessages(uniqueMessages);
+        if (uniqueMessages.length > 0) {
+          setOldestMessageDate(uniqueMessages[0].createdAt);
+          setHasMoreMessages(response.hasMore);
+        } else {
+          setHasMoreMessages(false);
+        }
+      } else {
+        setHasMoreMessages(false);
+      }
+      socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
+    } catch (err) { 
+      console.error('❌ [loadInitialMessages] 加载消息失败:', err); 
+    }
+  }, [selectedRoom, selectedPersona, user]);
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!selectedRoom || isLoadingMore || !hasMoreMessages || !oldestMessageDate) {
+      return;
+    }
+    
+    setIsLoadingMore(true);
+    
+    try {
+      const response = await roomApi.getMessagesWithLimit(
+        selectedRoom._id, 
+        50, 
+        oldestMessageDate
       );
-      setMessages(uniqueMessages);
-      if (uniqueMessages.length > 0) {
-        setOldestMessageDate(uniqueMessages[0].createdAt);
+      
+      if (response.messages && response.messages.length > 0) {
+        setMessages(prev => {
+          const existingIds = new Set(prev.map(m => m._id));
+          const newMessages = response.messages.filter(m => !existingIds.has(m._id));
+          return [...newMessages, ...prev];
+        });
+        setOldestMessageDate(response.messages[0].createdAt);
         setHasMoreMessages(response.hasMore);
       } else {
         setHasMoreMessages(false);
       }
-    } else {
-      setHasMoreMessages(false);
+    } catch (err) {
+      console.error('❌ [loadMoreMessages] 加载更多消息失败:', err);
+    } finally {
+      setIsLoadingMore(false);
     }
-    socketService.joinRoom(selectedRoom._id, user.uid, selectedPersona._id);
-  } catch (err) { 
-    console.error('❌ [loadInitialMessages] 加载消息失败:', err); 
-  }
-}, [selectedRoom, selectedPersona, user]);
-
-  const loadMoreMessages = useCallback(async () => {
-  if (!selectedRoom || isLoadingMore || !hasMoreMessages || !oldestMessageDate) {
-    return;
-  }
-  
-  setIsLoadingMore(true);
-  
-  try {
-    const response = await roomApi.getMessagesWithLimit(
-      selectedRoom._id, 
-      50, 
-      oldestMessageDate
-    );
-    
-    if (response.messages && response.messages.length > 0) {
-      // 🔥 去重：过滤掉已存在的消息
-      setMessages(prev => {
-        const existingIds = new Set(prev.map(m => m._id));
-        const newMessages = response.messages.filter(m => !existingIds.has(m._id));
-        return [...newMessages, ...prev];
-      });
-      setOldestMessageDate(response.messages[0].createdAt);
-      setHasMoreMessages(response.hasMore);
-    } else {
-      setHasMoreMessages(false);
-    }
-  } catch (err) {
-    console.error('❌ [loadMoreMessages] 加载更多消息失败:', err);
-  } finally {
-    setIsLoadingMore(false);
-  }
-}, [selectedRoom, isLoadingMore, hasMoreMessages, oldestMessageDate]);
+  }, [selectedRoom, isLoadingMore, hasMoreMessages, oldestMessageDate]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -1116,49 +1176,48 @@ const handleShareMusic = useCallback((music: any) => {
     console.log('🔌 连接 Socket, userId:', userId);
     socketService.connect(token, userId || undefined);
 
-    const handleNewMessage = (message: Message) => {
-  console.log('📨 [Socket] 收到新消息:', {
-    id: message._id,
-    content: message.content,
-    isAudio: message.isAudio,
-    audioUrl: message.audioUrl,
-    hasAudioUrl: !!message.audioUrl,
-  });
-  
-  // 🔥 去重：避免添加已经存在的消息
-  setMessages(prev => {
-    if (prev.some(m => m._id === message._id)) {
-      return prev;
-    }
-    return [...prev, message];
-  });
-  
-  const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
-  if (!isSelf) {
-    const frameName = getFrameNameFromUrl(message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame);
-    toast.custom((t) => (
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 flex items-center gap-3 cursor-pointer ${t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}
-        onClick={() => toast.dismiss(t.id)}>
-        <AvatarFrame
-          avatarUrl={message.personaId?.avatar || ''}
-          frameName={frameName}
-          size="sm"
-          className="notification"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate text-gray-800 dark:text-gray-200">{message.personaId?.displayName || message.personaId?.name}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{message.content}</p>
-        </div>
-      </div>
-    ), { duration: 3000, position: 'top-right' });
-    notificationService.onNewMessage(message);
-  }
-  
-  const msgRoomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
-  if (msgRoomId && selectedRoom && selectedRoom._id !== msgRoomId) {
-    setRooms(prev => prev.map(room => room._id === msgRoomId ? { ...room, unreadCount: (room.unreadCount || 0) + 1 } : room));
-  }
-};
+    const handleNewMessage = (message: any) => {
+      console.log('📨 [Socket] 收到新消息:', {
+        id: message._id,
+        content: message.content,
+        isAudio: message.isAudio,
+        isEmoji: message.isEmoji,
+        emojiUrl: message.emojiUrl,
+      });
+      
+      setMessages(prev => {
+        if (prev.some(m => m._id === message._id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
+      
+      const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
+      if (!isSelf && !message.isEmoji) {
+        const frameName = getFrameNameFromUrl(message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame);
+        toast.custom((t) => (
+          <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 flex items-center gap-3 cursor-pointer ${t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}
+            onClick={() => toast.dismiss(t.id)}>
+            <AvatarFrame
+              avatarUrl={message.personaId?.avatar || ''}
+              frameName={frameName}
+              size="sm"
+              className="notification"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate text-gray-800 dark:text-gray-200">{message.personaId?.displayName || message.personaId?.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{message.content || '[表情]'}</p>
+            </div>
+          </div>
+        ), { duration: 3000, position: 'top-right' });
+        notificationService.onNewMessage(message);
+      }
+      
+      const msgRoomId = typeof message.roomId === 'string' ? message.roomId : message.roomId?._id;
+      if (msgRoomId && selectedRoom && selectedRoom._id !== msgRoomId) {
+        setRooms(prev => prev.map(room => room._id === msgRoomId ? { ...room, unreadCount: (room.unreadCount || 0) + 1 } : room));
+      }
+    };
 
     const handleMessageRecalled = (data: { messageId: string; recalledByName: string }) => {
       setMessages(prev => prev.map(msg => 

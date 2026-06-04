@@ -89,7 +89,12 @@ const messageSchema = new mongoose.Schema({
     targetModel: { type: String },
     targetName: { type: String }
   }],
-  mentionAll: { type: Boolean, default: false }
+  mentionAll: { type: Boolean, default: false },
+
+  // 🎨 表情消息字段（新增）
+  isEmoji: { type: Boolean, default: false },
+  emojiId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserEmoji', default: null },
+  emojiUrl: { type: String, default: null },
 });
 
 // 索引优化查询性能

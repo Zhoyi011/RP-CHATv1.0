@@ -1,9 +1,18 @@
+// server/src/routes/upload.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary').v2;
 const User = require('../models/User');
 const Persona = require('../models/Persona');
 const { upload, uploadToCloudinary, deleteOldAvatar } = require('../services/uploadService');
+
+// Cloudinary 配置
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // 用于音频上传的 multer 配置（增加内存限制）
 const audioUpload = require('multer')({ 
@@ -141,13 +150,6 @@ router.delete('/persona/:personaId', authMiddleware, async (req, res) => {
 
 // ========== 🎙️ 语音消息上传（强制转为 MP3）==========
 
-/**
- * 上传语音消息
- * POST /api/upload/audio
- * 
- * 请求: multipart/form-data with field 'audio'
- * 响应: { url: string, duration?: number }
- */
 router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, res) => {
   try {
     if (!req.file) {
@@ -159,33 +161,21 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
     
     console.log(`🎙️ 收到音频上传: ${originalName}, 大小: ${fileBuffer.length} bytes`);
 
-    // 生成唯一文件名
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const publicId = `voice-${req.userId}-${uniqueSuffix}`;
     
-    // 🔥 强制转换为 MP3 格式（最佳兼容性）
     const result = await new Promise((resolve, reject) => {
-      const cloudinary = require('cloudinary').v2;
-      
-      // 确保 Cloudinary 已配置
-      cloudinary.config({
-        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-        api_key: process.env.CLOUDINARY_API_KEY,
-        api_secret: process.env.CLOUDINARY_API_SECRET,
-      });
-      
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          resource_type: 'video',           // 音频使用 video 类型
-          format: 'mp3',                    // 🔥 强制转为 MP3
+          resource_type: 'video',
+          format: 'mp3',
           folder: 'rp-chat/voice_messages',
           public_id: publicId,
           use_filename: false,
           unique_filename: true,
           overwrite: true,
-          // 音频质量优化
           audio_codec: 'mp3',
-          bit_rate: 64000,                  // 64kbps，文件小且清晰度足够
+          bit_rate: 64000,
         },
         (error, result) => {
           if (error) {
@@ -217,12 +207,6 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
   }
 });
 
-/**
- * 删除语音消息（可选，用于撤回时清理）
- * DELETE /api/upload/audio
- * 
- * 请求体: { url: string }
- */
 router.delete('/audio', authMiddleware, async (req, res) => {
   try {
     const { url } = req.body;
@@ -231,18 +215,9 @@ router.delete('/audio', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '请提供音频 URL' });
     }
     
-    // 从 URL 中提取 public_id
-    // 格式: https://res.cloudinary.com/.../upload/v.../rp-chat/voice_messages/voice-xxx.mp3
     const urlParts = url.split('/');
     const filename = urlParts[urlParts.length - 1];
     const publicId = `rp-chat/voice_messages/${filename.split('.')[0]}`;
-    
-    const cloudinary = require('cloudinary').v2;
-    cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
-    });
     
     const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
     
@@ -254,6 +229,58 @@ router.delete('/audio', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('删除音频失败:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== 🎨 表情上传 ==========
+const EMOJI_CONFIG = {
+  folder: 'rp-chat/emojis',
+  allowedFormats: ['jpg', 'png', 'gif', 'webp'],
+  maxSize: 2 * 1024 * 1024,
+  transformation: [
+    { width: 512, height: 512, crop: 'limit', quality: 'auto' }
+  ]
+};
+
+router.post('/emoji', authMiddleware, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择图片' });
+    }
+
+    if (req.file.size > (req.file.mimetype === 'image/gif' ? 5 * 1024 * 1024 : 2 * 1024 * 1024)) {
+      return res.status(400).json({ error: req.file.mimetype === 'image/gif' ? 'GIF 不能超过 5MB' : '图片不能超过 2MB' });
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream({
+        folder: EMOJI_CONFIG.folder,
+        transformation: EMOJI_CONFIG.transformation,
+        resource_type: 'auto'
+      }, (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      });
+      
+      uploadStream.end(req.file.buffer);
+    });
+
+    const metadata = {
+      width: result.width,
+      height: result.height,
+      fileSize: Math.round(req.file.size / 1024),
+      mimeType: req.file.mimetype,
+      format: result.format
+    };
+
+    res.json({
+      url: result.secure_url,
+      publicId: result.public_id,
+      ...metadata
+    });
+  } catch (error) {
+    console.error('表情上传失败:', error);
+    res.status(500).json({ error: '上传失败' });
   }
 });
 

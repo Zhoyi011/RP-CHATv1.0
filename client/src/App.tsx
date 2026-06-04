@@ -29,6 +29,7 @@ import PendingRequests from './components/chat/PendingRequests';
 import MaintenancePage from './components/common/MaintenancePage';
 import Wallet from './components/wallet/Wallet';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
+import { EmojiManager } from './components/emoji/EmojiManager'; // 🎨 新增
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -311,6 +312,13 @@ function AppContent() {
         <Route path="/wallet" element={
           <ProtectedRoute>
             <Wallet />
+          </ProtectedRoute>
+        } />
+
+        {/* 🎨 表情包管理页面 */}
+        <Route path="/emojis" element={
+          <ProtectedRoute>
+            <EmojiManager />
           </ProtectedRoute>
         } />
 
