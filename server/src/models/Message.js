@@ -18,10 +18,18 @@ const messageSchema = new mongoose.Schema({
     required: true 
   },
   content: { 
-    type: String, 
-    required: true,
-    trim: true
-  },
+  type: String, 
+  required: true,
+  trim: true,
+  // 🔥 添加：如果 isEmoji 为 true，则允许空字符串
+  validate: {
+    validator: function(v) {
+      if (this.isEmoji) return true;
+      return v && v.trim().length > 0;
+    },
+    message: '消息内容不能为空'
+  }
+},
   isAction: { 
     type: Boolean, 
     default: false

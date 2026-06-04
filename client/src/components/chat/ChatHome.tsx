@@ -886,37 +886,40 @@ const ChatHome = () => {
 
   // ========== 🎨 发送消息（支持文本、动作、表情） ==========
   const handleSendMessage = useCallback((
-    content: string, 
-    isAction = false, 
-    personaId?: string,
-    isEmoji = false,
-    emojiId?: string
-  ) => {
-    if (!selectedRoom || !user) {
-      toast.error('请先选择聊天室');
-      return;
-    }
-    if (!isEmoji && !content.trim()) return;
-    const pid = personaId || selectedPersona?._id;
-    if (!pid) {
-      toast.error('请选择发言角色');
-      return;
-    }
-    
-    socketService.emit('send-message', {
-      roomId: selectedRoom._id,
-      userId: user.uid,
-      personaId: pid,
-      content: isEmoji ? '' : (isAction ? `/me ${content}` : content),
-      isAction,
-      replyToId: replyToMessage?._id,
-      isEmoji,
-      emojiId,
-      emojiUrl: isEmoji ? content : undefined,
-    });
-    
-    setReplyToMessage(null);
-  }, [selectedRoom, selectedPersona, user, replyToMessage]);
+  content: string, 
+  isAction = false, 
+  personaId?: string,
+  isEmoji = false,
+  emojiId?: string
+) => {
+  if (!selectedRoom || !user) {
+    toast.error('请先选择聊天室');
+    return;
+  }
+  if (!isEmoji && !content.trim()) return;
+  const pid = personaId || selectedPersona?._id;
+  if (!pid) {
+    toast.error('请选择发言角色');
+    return;
+  }
+  
+  // 🔥 修复：表情消息使用默认文本
+  let messageContent = isEmoji ? '[表情]' : (isAction ? `/me ${content}` : content);
+  
+  socketService.emit('send-message', {
+    roomId: selectedRoom._id,
+    userId: user.uid,
+    personaId: pid,
+    content: messageContent,  // 使用修复后的内容
+    isAction,
+    replyToId: replyToMessage?._id,
+    isEmoji,
+    emojiId,
+    emojiUrl: isEmoji ? content : undefined,
+  });
+  
+  setReplyToMessage(null);
+}, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   // ========== 🎙️ 发送语音消息 ==========
   const handleSendAudio = useCallback(async (audioBlob: Blob, duration: number) => {

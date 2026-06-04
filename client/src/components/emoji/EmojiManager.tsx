@@ -228,9 +228,10 @@ export const EmojiManager: React.FC = () => {
                   >
                     <Trash2 className="w-5 h-5 text-gray-500" />
                   </button>
+                  {/* 🔥 上传按钮 - 紫色渐变，显眼位置 */}
                   <button
                     onClick={() => setShowUploader(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition shadow-md"
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition shadow-md"
                   >
                     <Upload className="w-4 h-4" />
                     上传表情
@@ -252,7 +253,7 @@ export const EmojiManager: React.FC = () => {
         </div>
       </div>
 
-      {/* 工具栏 */}
+      {/* 工具栏 - 包含搜索、排序、分组管理 */}
       <div className="max-w-6xl mx-auto px-4 py-3">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           {/* 搜索 */}
@@ -278,7 +279,7 @@ export const EmojiManager: React.FC = () => {
             <option value="most-used">使用最多</option>
           </select>
 
-          {/* 分组筛选 */}
+          {/* 🔥 分组筛选 + 新建分组按钮 */}
           <div className="flex gap-1 overflow-x-auto pb-1 max-w-full">
             <button
               onClick={() => setSelectedCategory(null)}
@@ -321,12 +322,14 @@ export const EmojiManager: React.FC = () => {
                 </div>
               </div>
             ))}
+            {/* 🔥 新建分组按钮 - + 号 */}
             <button
               onClick={() => setShowCreateCategory(true)}
-              className="p-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+              className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition text-gray-600 dark:text-gray-300"
               title="新建分组"
             >
-              <FolderPlus className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+              <FolderPlus className="w-4 h-4" />
+              <span className="text-sm">新建分组</span>
             </button>
           </div>
         </div>

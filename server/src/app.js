@@ -512,36 +512,43 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', async (data) => {
-    const { roomId, userId, personaId, content, isAction, replyToId, isAudio, audioUrl, audioDuration, isEmoji, emojiId, emojiUrl } = data;
-    try {
-      const User = require('./models/User');
-      const user = await User.findOne({ firebaseUid: userId });
-      if (!user) return socket.emit('error', { message: '用户不存在' });
-      
-      const cleanContent = filterMessage(content);
-      const Persona = require('./models/Persona');
-      const persona = await Persona.findById(personaId).populate('equipped.avatarFrame', 'image name');
-      if (!persona) return socket.emit('error', { message: '角色不存在' });
-      
-      let avatarFrameUrl = persona.equipped?.avatarFrame?.image || null;
-      
-      const Message = require('./models/Message');
-      const message = new Message({ 
-        roomId, 
-        userId: user._id, 
-        personaId, 
-        content: cleanContent, 
-        isAction: isAction || false, 
-        isPat: false,
-        isAudio: isAudio || false,
-        audioUrl: audioUrl || null,
-        audioDuration: audioDuration || null,
-        replyTo: replyToId || null, 
-        isEmoji: isEmoji || false,
-        emojiId: emojiId || null,
-        emojiUrl: emojiUrl || null,
-      });
-      await message.save();
+  const { roomId, userId, personaId, content, isAction, replyToId, isAudio, audioUrl, audioDuration, isEmoji, emojiId, emojiUrl } = data;
+  try {
+    const User = require('./models/User');
+    const user = await User.findOne({ firebaseUid: userId });
+    if (!user) return socket.emit('error', { message: '用户不存在' });
+    
+    const cleanContent = filterMessage(content);
+    const Persona = require('./models/Persona');
+    const persona = await Persona.findById(personaId).populate('equipped.avatarFrame', 'image name');
+    if (!persona) return socket.emit('error', { message: '角色不存在' });
+    
+    let avatarFrameUrl = persona.equipped?.avatarFrame?.image || null;
+    
+    const Message = require('./models/Message');
+    
+    // 🔥 修复：如果是表情消息且内容为空，设置默认内容
+    let finalContent = cleanContent;
+    if (isEmoji && (!cleanContent || cleanContent.trim() === '')) {
+      finalContent = '[表情]';
+    }
+    
+    const message = new Message({ 
+      roomId, 
+      userId: user._id, 
+      personaId, 
+      content: finalContent,
+      isAction: isAction || false, 
+      isPat: false,
+      isAudio: isAudio || false,
+      audioUrl: audioUrl || null,
+      audioDuration: audioDuration || null,
+      replyTo: replyToId || null, 
+      isEmoji: isEmoji || false,
+      emojiId: emojiId || null,
+      emojiUrl: emojiUrl || null,
+    });
+    await message.save();
       
       let replyToData = null;
       if (replyToId) {
