@@ -195,7 +195,6 @@ const patRoutes = require('./routes/pat');
 const friendRoutes = require('./routes/friend'); // 🔥 新增：好友路由
 const privateChatRoutes = require('./routes/privateChat');
 const musicRoutes = require('./routes/music');
-const youtubeRoutes = require('./routes/youtube');
 
 console.log('  ✅ 主要路由加载完成');
 
@@ -323,7 +322,6 @@ app.use('/api/pat', patRoutes);
 app.use('/api/friend', standardLimit, friendRoutes); // 🔥 新增：好友路由
 app.use('/api/private-chat', privateChatRoutes); // 🔥 新增：私聊路由
 app.use('/api/music', musicRoutes);
-app.use('/api/youtube', youtubeRoutes); // 🔥 新增：YouTube 字幕路由
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 
