@@ -1,8 +1,29 @@
+// server/src/routes/music.js
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+
+// ========== 辅助函数 ==========
+function parseYouTubeDuration(duration) {
+  const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+  if (!match) return '0:00';
+  const hours = (match[1] || '').replace('H', '');
+  const minutes = (match[2] || '').replace('M', '');
+  const seconds = (match[3] || '').replace('S', '');
+  if (hours) {
+    return `${hours}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`;
+  }
+  return `${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`;
+}
+
+function formatBilibiliDuration(seconds) {
+  if (!seconds || isNaN(seconds) || seconds === 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
 
 // ========== YouTube 搜索 ==========
 async function searchYouTube(query) {
@@ -42,16 +63,15 @@ async function searchYouTube(query) {
     return searchRes.data.items.map(item => {
       const detail = videoDetails.get(item.id.videoId);
       const duration = detail?.contentDetails?.duration || '';
-      const durationStr = parseYouTubeDuration(duration);
       
       return {
         id: item.id.videoId,
         title: item.snippet.title,
         artist: item.snippet.channelTitle,
-        coverUrl: item.snippet.thumbnails.medium?.url,
+        coverUrl: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
         videoUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
         platform: 'youtube',
-        duration: durationStr,
+        duration: parseYouTubeDuration(duration),
         channelName: item.snippet.channelTitle,
         publishDate: item.snippet.publishedAt?.split('T')[0]
       };
@@ -62,22 +82,9 @@ async function searchYouTube(query) {
   }
 }
 
-function parseYouTubeDuration(duration) {
-  const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-  if (!match) return '0:00';
-  const hours = (match[1] || '').replace('H', '');
-  const minutes = (match[2] || '').replace('M', '');
-  const seconds = (match[3] || '').replace('S', '');
-  if (hours) {
-    return `${hours}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`;
-  }
-  return `${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`;
-}
-
-// ========== 🆕 Bilibili 搜索 ==========
+// ========== Bilibili 搜索 ==========
 async function searchBilibili(query) {
   try {
-    // 使用 Bilibili 公开搜索 API（无需 key，但有频率限制）
     const url = 'https://api.bilibili.com/x/web-interface/search/type';
     const response = await axios.get(url, {
       params: {
@@ -98,62 +105,86 @@ async function searchBilibili(query) {
       return [];
     }
     
-    return response.data.data.result.map(item => ({
-      id: item.bvid,
-      title: item.title.replace(/<em class="keyword">|<\/em>/g, ''),
-      artist: item.author,
-      coverUrl: item.pic,
-      videoUrl: `https://www.bilibili.com/video/${item.bvid}`,
-      platform: 'bilibili',
-      duration: formatBilibiliDuration(item.duration),
-      channelName: item.author,
-      publishDate: item.pubdate ? new Date(item.pubdate * 1000).toISOString().split('T')[0] : null,
-      playCount: item.play,
-      danmakuCount: item.video_review
-    }));
+    const results = response.data.data.result.map(item => {
+      // 获取封面图（多种备选字段）
+      let coverUrl = item.pic;
+      if (!coverUrl) coverUrl = item.cover;
+      if (!coverUrl) coverUrl = item.cover_url;
+      if (!coverUrl) coverUrl = item.picture;
+      if (!coverUrl) coverUrl = item.cover_default;
+      if (!coverUrl) coverUrl = 'https://via.placeholder.com/120x90?text=Bilibili';
+      
+      // 确保图片 URL 使用 https
+      if (coverUrl && coverUrl.startsWith('http://')) {
+        coverUrl = coverUrl.replace('http://', 'https://');
+      }
+      
+      // 处理时长
+      let duration = item.duration;
+      if (typeof duration === 'string') {
+        // 格式如 "04:32" 已经是 mm:ss
+        duration = duration;
+      } else if (typeof duration === 'number') {
+        duration = formatBilibiliDuration(duration);
+      } else {
+        duration = '0:00';
+      }
+      
+      return {
+        id: item.bvid,
+        title: (item.title || '').replace(/<em class="keyword">|<\/em>/g, ''),
+        artist: item.author || '未知UP主',
+        coverUrl: coverUrl,
+        videoUrl: `https://www.bilibili.com/video/${item.bvid}`,
+        platform: 'bilibili',
+        duration: duration,
+        channelName: item.author || '未知UP主',
+        publishDate: item.pubdate ? new Date(item.pubdate * 1000).toISOString().split('T')[0] : null,
+        playCount: item.play || 0,
+        danmakuCount: item.video_review || 0
+      };
+    });
+    
+    return results;
   } catch (error) {
     console.error('Bilibili 搜索失败:', error.message);
     return [];
   }
 }
 
-function formatBilibiliDuration(seconds) {
-  if (!seconds) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
 // ========== 统一搜索接口 ==========
 router.get('/search', async (req, res) => {
-  const { q } = req.query;
+  const { q, platform } = req.query;
   
   if (!q || q.trim().length === 0) {
     return res.status(400).json({ error: '请输入搜索内容', items: [] });
   }
   
-  console.log(`🎵 搜索: ${q}`);
+  console.log(`🎵 搜索: ${q}, 平台: ${platform || '全部'}`);
   
   try {
-    // 并行搜索 YouTube 和 Bilibili
-    const [youtubeResults, bilibiliResults] = await Promise.all([
-      searchYouTube(q),
-      searchBilibili(q)
-    ]);
+    let items = [];
     
-    // 合并结果，YouTube 在前
-    const allResults = [...youtubeResults, ...bilibiliResults];
+    if (!platform || platform === 'youtube') {
+      const youtubeResults = await searchYouTube(q);
+      items.push(...youtubeResults);
+      console.log(`✅ YouTube: ${youtubeResults.length} 条`);
+    }
     
-    console.log(`✅ 找到 ${youtubeResults.length} 个 YouTube + ${bilibiliResults.length} 个 Bilibili = ${allResults.length} 个结果`);
+    if (!platform || platform === 'bilibili') {
+      const bilibiliResults = await searchBilibili(q);
+      items.push(...bilibiliResults);
+      console.log(`✅ Bilibili: ${bilibiliResults.length} 条`);
+    }
     
-    res.json({ items: allResults });
+    res.json({ items });
   } catch (error) {
     console.error('搜索失败:', error);
     res.status(500).json({ error: '搜索失败', items: [] });
   }
 });
 
-// ========== 🆕 Bilibili 视频详情接口 ==========
+// ========== Bilibili 视频详情接口 ==========
 router.get('/bilibili/info', async (req, res) => {
   const { videoId } = req.query;
   
@@ -162,7 +193,6 @@ router.get('/bilibili/info', async (req, res) => {
   }
   
   try {
-    // 提取 BV 号
     let bvid = videoId;
     if (videoId.includes('bilibili.com')) {
       const match = videoId.match(/BV\w+/);
@@ -186,8 +216,8 @@ router.get('/bilibili/info', async (req, res) => {
     const data = response.data.data;
     res.json({
       title: data.title,
-      channelName: data.owner.name,
-      channelId: data.owner.mid,
+      channelName: data.owner?.name || '未知UP主',
+      channelId: data.owner?.mid,
       publishDate: data.pubdate ? new Date(data.pubdate * 1000).toISOString().split('T')[0] : null,
       duration: data.duration,
       coverUrl: data.pic,
