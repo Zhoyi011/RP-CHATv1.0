@@ -96,12 +96,16 @@ const isGiftMessage = (content: string): boolean => {
   }
 };
 
-// ========== 检查是否为红包消息 ==========
+// ========== 🔥 修复：检查是否为红包消息（支持多种类型）==========
 const isRedPacketMessage = (content: string): boolean => {
   if (!content) return false;
   try {
     const parsed = JSON.parse(content);
-    return parsed?.type === 'redpacket';
+    // 支持红包类型：redpacket、random、fixed、personal
+    return parsed?.type === 'redpacket' || 
+           parsed?.type === 'random' || 
+           parsed?.type === 'fixed' || 
+           parsed?.type === 'personal';
   } catch {
     return false;
   }
@@ -696,9 +700,13 @@ const MessageList: React.FC<{
                   redpacketData = JSON.parse(msg.content);
                 } catch { return null; }
                 const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
-                const isExpired = new Date() > new Date(redpacketData.expiresAt);
+                // 🔥 修复：使用正确的字段名
+                const expiresAt = redpacketData.expiresAt || redpacketData.expiresAt;
+                const isExpired = new Date() > new Date(expiresAt);
                 const isFinished = redpacketData.status === 'finished';
                 const hasClaimed = redpacketData.hasClaimed || false;
+                // 获取红包类型（兼容 redpacket 或 random/fixed/personal）
+                const packetType = redpacketData.redPacketType || redpacketData.type;
                 return (
                   <motion.div
                     key={msg._id}
@@ -712,7 +720,7 @@ const MessageList: React.FC<{
                       redPacketId={redpacketData.redPacketId}
                       senderName={redpacketData.senderName}
                       senderAvatar={redpacketData.senderAvatar}
-                      type={redpacketData.type}
+                      type={packetType === 'random' ? 'random' : packetType === 'fixed' ? 'fixed' : packetType === 'personal' ? 'personal' : 'random'}
                       totalAmount={redpacketData.totalAmount}
                       count={redpacketData.count}
                       remainingCount={redpacketData.remainingCount}
@@ -1352,9 +1360,83 @@ const ChatHome = () => {
       setRooms(prev => prev.map(room => room._id === data.roomId ? { ...room, onlineCount: data.count } : room));
     });
 
+    // 🧧 监听红包发送事件
+    socketService.on('redpacket-sent', (data) => {
+      console.log('🧧 收到红包消息:', data);
+      
+      const redpacketMessage = {
+        _id: `temp_redpacket_${Date.now()}_${Math.random()}`,
+        content: JSON.stringify({
+          type: data.type || 'redpacket',
+          redPacketId: data.redPacketId,
+          senderName: data.senderPersonaName,
+          redPacketType: data.type,
+          totalAmount: data.totalAmount,
+          count: data.count,
+          remainingCount: data.remainingCount,
+          message: data.message,
+          targetPersonaName: data.targetPersonaId || undefined,
+          createdAt: data.createdAt,
+          status: 'active',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        }),
+        isAction: false,
+        createdAt: data.createdAt,
+        roomId: selectedRoom?._id,
+        personaId: {
+          _id: data.senderPersonaId,
+          name: data.senderPersonaName,
+          displayName: data.senderPersonaName,
+          avatar: undefined
+        },
+        userId: { _id: '' }
+      };
+      
+      setMessages(prev => [...prev, redpacketMessage]);
+    });
+
+    // 🧧 监听红包被抢事件
+    socketService.on('redpacket-claimed', (data) => {
+      console.log('🧧 红包被抢:', data);
+      setMessages(prev => prev.map(msg => {
+        if (isRedPacketMessage(msg.content)) {
+          try {
+            const content = JSON.parse(msg.content);
+            if (content.redPacketId === data.redPacketId) {
+              content.remainingCount = data.remainingCount;
+              if (data.isFinished) content.status = 'finished';
+              return { ...msg, content: JSON.stringify(content) };
+            }
+          } catch (e) {}
+        }
+        return msg;
+      }));
+    });
+
+    // 🧧 监听红包抢完事件
+    socketService.on('redpacket-finished', (data) => {
+      console.log('🧧 红包已抢完:', data);
+      setMessages(prev => prev.map(msg => {
+        if (isRedPacketMessage(msg.content)) {
+          try {
+            const content = JSON.parse(msg.content);
+            if (content.redPacketId === data.redPacketId) {
+              content.status = 'finished';
+              content.remainingCount = 0;
+              return { ...msg, content: JSON.stringify(content) };
+            }
+          } catch (e) {}
+        }
+        return msg;
+      }));
+    });
+
     return () => {
       socketService.off('message-recalled', handleMessageRecalled);
       socketService.off('message-deleted', handleMessageDeleted);
+      socketService.off('redpacket-sent');
+      socketService.off('redpacket-claimed');
+      socketService.off('redpacket-finished');
       socketService.removeAllListeners();
       socketService.disconnect();
     };

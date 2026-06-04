@@ -9,6 +9,7 @@ const RedPacket = require('../models/RedPacket');
 const RedPacketRecord = require('../models/RedPacketRecord');
 const DiamondService = require('../services/diamondService');
 const { emitToUser, emitToRoom } = require('../utils/socketHelper');
+const Message = require('../models/Message');
 
 // 认证中间件
 const authMiddleware = (req, res, next) => {
@@ -104,6 +105,32 @@ router.post('/send', authMiddleware, async (req, res) => {
 
     await redPacket.save();
 
+    // 🔥 保存红包消息到聊天记录（刷新后还能显示）
+    const redpacketMessageContent = JSON.stringify({
+      type: 'redpacket',
+      redPacketId: redPacket._id,
+      senderName: senderPersona.displayName || senderPersona.name,
+      redPacketType: type,
+      totalAmount: totalAmount,
+      count: type !== 'personal' ? count : 1,
+      remainingCount: type !== 'personal' ? count : 1,
+      message: message || '恭喜发财，大吉大利',
+      targetPersonaId: type === 'personal' ? targetPersonaId : null,
+      createdAt: new Date().toISOString(),
+      status: 'active',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    });
+
+    const redpacketMessage = new Message({
+      roomId: roomId,
+      userId: userId,
+      personaId: senderPersona._id,
+      content: redpacketMessageContent,
+      isAction: false,
+      createdAt: new Date()
+    });
+    await redpacketMessage.save();
+
     // 广播红包消息到房间
     emitToRoom(roomId, 'redpacket-sent', {
       redPacketId: redPacket._id,
@@ -184,24 +211,19 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
     let isLucky = false;
 
     if (redPacket.type === 'personal') {
-      // 个人红包：全部金额
       claimAmount = redPacket.remainingAmount;
       isLucky = true;
     } else if (redPacket.type === 'fixed') {
-      // 固定红包：平均金额
       claimAmount = redPacket.perAmount;
-      // 处理余数（最后一个红包多拿余数）
       if (redPacket.remainingCount === 1) {
         claimAmount = redPacket.remainingAmount;
       }
     } else {
-      // 随机红包：随机算法（二倍均值法）
       const max = Math.floor(redPacket.remainingAmount / redPacket.remainingCount * 2);
       claimAmount = Math.floor(Math.random() * Math.min(max, redPacket.remainingAmount)) + 1;
       if (redPacket.remainingCount === 1) {
         claimAmount = redPacket.remainingAmount;
       }
-      // 检查是否手气最佳
       if (claimAmount > (redPacket.records[0]?.amount || 0)) {
         isLucky = true;
       }
@@ -237,6 +259,23 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
 
     // 添加免费钻石到领取者账户
     await DiamondService.addFreeDiamonds(userId, claimAmount);
+
+    // 🔥 更新消息中的红包信息（剩余数量、状态）
+    try {
+      const targetMessage = await Message.findOne({
+        roomId: redPacket.roomId,
+        'content': { $regex: `"redPacketId":"${redPacketId}"` }
+      });
+      if (targetMessage) {
+        const oldContent = JSON.parse(targetMessage.content);
+        oldContent.remainingCount = redPacket.remainingCount;
+        oldContent.status = redPacket.status;
+        targetMessage.content = JSON.stringify(oldContent);
+        await targetMessage.save();
+      }
+    } catch (msgError) {
+      console.error('更新红包消息失败:', msgError);
+    }
 
     // 广播红包被抢
     emitToRoom(redPacket.roomId.toString(), 'redpacket-claimed', {
@@ -289,10 +328,8 @@ router.get('/:redPacketId', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '红包不存在' });
     }
 
-    // 获取领取记录
     const records = await RedPacketRecord.getRecordsByRedPacket(redPacketId);
 
-    // 检查当前用户是否已领取
     const ActivePersona = require('../models/ActivePersona');
     const active = await ActivePersona.findOne({ userId: req.userId });
     const hasClaimed = active ? redPacket.hasClaimed(active.personaId) : false;
