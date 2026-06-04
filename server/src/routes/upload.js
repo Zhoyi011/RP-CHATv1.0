@@ -175,7 +175,7 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
           unique_filename: true,
           overwrite: true,
           audio_codec: 'mp3',
-          bit_rate: 64000,
+          bit_rate: 48000, // 降低到 48kbps 减小文件大小
         },
         (error, result) => {
           if (error) {
@@ -190,7 +190,7 @@ router.post('/audio', authMiddleware, audioUpload.single('audio'), async (req, r
       uploadStream.end(fileBuffer);
     });
 
-    console.log(`✅ 音频上传成功 (MP3): ${result.secure_url}`);
+    console.log(`✅ 音频上传成功 (MP3): ${result.secure_url}, 大小: ${Math.round(result.bytes / 1024)}KB`);
 
     res.json({
       success: true,
@@ -232,31 +232,61 @@ router.delete('/audio', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 🎨 表情上传 ==========
+// ========== 🎨 表情上传配置（优化版）==========
+
 const EMOJI_CONFIG = {
   folder: 'rp-chat/emojis',
   allowedFormats: ['jpg', 'png', 'gif', 'webp'],
-  maxSize: 2 * 1024 * 1024,
-  transformation: [
-    { width: 512, height: 512, crop: 'limit', quality: 'auto' }
-  ]
+  maxSize: 2 * 1024 * 1024, // 2MB
+  gifMaxSize: 5 * 1024 * 1024, // GIF 5MB
+  transformation: {
+    // 静态图优化
+    static: [
+      { width: 256, height: 256, crop: 'limit' },  // 限制最大尺寸 256px
+      { quality: 'auto:good' },                     // 自动质量（平衡）
+      { fetch_format: 'auto' }                      // 自动转 WebP
+    ],
+    // GIF 优化（保留动画，只压缩大小）
+    gif: [
+      { width: 256, height: 256, crop: 'limit' },
+      { quality: 'auto:good' },
+      { flags: 'lossy' }  // 有损压缩 GIF
+    ]
+  }
 };
 
+// 表情上传接口（优化版）
 router.post('/emoji', authMiddleware, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: '请选择图片' });
     }
 
-    if (req.file.size > (req.file.mimetype === 'image/gif' ? 5 * 1024 * 1024 : 2 * 1024 * 1024)) {
-      return res.status(400).json({ error: req.file.mimetype === 'image/gif' ? 'GIF 不能超过 5MB' : '图片不能超过 2MB' });
+    const isGif = req.file.mimetype === 'image/gif';
+    const maxSize = isGif ? EMOJI_CONFIG.gifMaxSize : EMOJI_CONFIG.maxSize;
+    
+    if (req.file.size > maxSize) {
+      return res.status(400).json({ 
+        error: isGif ? 'GIF 不能超过 5MB' : '图片不能超过 2MB' 
+      });
     }
 
+    // 根据文件类型选择转换参数
+    const transformation = isGif ? EMOJI_CONFIG.transformation.gif : EMOJI_CONFIG.transformation.static;
+    
+    // 上传到 Cloudinary 并优化
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream({
         folder: EMOJI_CONFIG.folder,
-        transformation: EMOJI_CONFIG.transformation,
-        resource_type: 'auto'
+        transformation: transformation,
+        resource_type: 'auto',
+        use_filename: true,
+        unique_filename: true,
+        overwrite: true,
+        // 启用响应式图片标记
+        responsive: true,
+        // 自动去除元数据（减小文件大小）
+        auto_tagging: 0.7
       }, (error, result) => {
         if (error) reject(error);
         else resolve(result);
@@ -265,19 +295,21 @@ router.post('/emoji', authMiddleware, upload.single('image'), async (req, res) =
       uploadStream.end(req.file.buffer);
     });
 
+    // 返回优化后的信息
     const metadata = {
-      width: result.width,
-      height: result.height,
-      fileSize: Math.round(req.file.size / 1024),
+      width: Math.min(result.width, 256),
+      height: Math.min(result.height, 256),
+      fileSize: Math.round(result.bytes / 1024), // KB
       mimeType: req.file.mimetype,
-      format: result.format
+      format: result.format,
+      url: result.secure_url,
+      publicId: result.public_id
     };
 
-    res.json({
-      url: result.secure_url,
-      publicId: result.public_id,
-      ...metadata
-    });
+    console.log(`✅ 表情上传成功: ${metadata.fileSize}KB, ${metadata.width}x${metadata.height}, 格式: ${metadata.format}`);
+
+    res.json(metadata);
+    
   } catch (error) {
     console.error('表情上传失败:', error);
     res.status(500).json({ error: '上传失败' });

@@ -11,6 +11,8 @@ interface UserInfo {
   _id: string;
   username: string;
   diamonds: number;
+  paidDiamonds: number;    // 🔥 新增：充值钻石
+  freeDiamonds: number;    // 🔥 新增：免费钻石
   email: string;
 }
 
@@ -67,7 +69,6 @@ const Wallet: React.FC = () => {
 
   const handleRedeemSuccess = () => {
     setShowRedeemModal(false);
-    // 刷新数据
     setRefreshTrigger(prev => prev + 1);
   };
 
@@ -109,26 +110,36 @@ const Wallet: React.FC = () => {
 
       {/* 主要内容 */}
       <div className="p-4 space-y-4">
-        {/* 钻石余额卡片 */}
-        <div className={`rounded-2xl p-6 ${isDark ? 'bg-gradient-to-r from-purple-900/50 to-pink-900/50' : 'bg-gradient-to-r from-purple-100 to-pink-100'}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
-                钻石余额
+        {/* 钻石余额卡片 - 改为显示区分 */}
+        <div className={`rounded-2xl p-5 ${isDark ? 'bg-gradient-to-r from-purple-900/50 to-pink-900/50' : 'bg-gradient-to-r from-purple-100 to-pink-100'}`}>
+          <p className={`text-sm ${isDark ? 'text-purple-300' : 'text-purple-600'} mb-2`}>
+            钻石余额
+          </p>
+          <div className="flex items-baseline gap-2 mb-4">
+            <span className="text-4xl font-bold text-gray-900 dark:text-white">
+              {(user?.diamonds || 0).toLocaleString()}
+            </span>
+            <span className={`text-xl ${isDark ? 'text-purple-300' : 'text-purple-500'}`}>💎</span>
+          </div>
+          
+          {/* 🔥 钻石分类 */}
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <div className={`rounded-xl p-2 text-center ${isDark ? 'bg-white/10' : 'bg-white/60'}`}>
+              <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>充值钻石</p>
+              <p className={`text-lg font-semibold flex items-center justify-center gap-1 ${isDark ? 'text-white' : 'text-gray-800'}`}>
+                {(user?.paidDiamonds || 0).toLocaleString()}
+                <span className="text-sm text-yellow-500">💎</span>
               </p>
-              <p className="text-4xl font-bold flex items-center gap-1 mt-1">
-                <span className={isDark ? 'text-white' : 'text-gray-900'}>
-                  {user?.diamonds?.toLocaleString() || 0}
-                </span>
-                <span className={`text-xl ${isDark ? 'text-purple-300' : 'text-purple-500'}`}>💎</span>
-              </p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">可用于发红包</p>
             </div>
-            <button
-              onClick={() => setShowRedeemModal(true)}
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all shadow-lg"
-            >
-              充值
-            </button>
+            <div className={`rounded-xl p-2 text-center ${isDark ? 'bg-white/10' : 'bg-white/60'}`}>
+              <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>免费钻石</p>
+              <p className={`text-lg font-semibold flex items-center justify-center gap-1 ${isDark ? 'text-white' : 'text-gray-800'}`}>
+                {(user?.freeDiamonds || 0).toLocaleString()}
+                <span className="text-sm text-green-500">💎</span>
+              </p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">签到/红包获得，仅可购物</p>
+            </div>
           </div>
         </div>
 
@@ -144,12 +155,23 @@ const Wallet: React.FC = () => {
                 <span className="text-lg text-yellow-500">💎</span>
               </p>
             </div>
-            <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-              <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+            <button
+              onClick={() => setShowRedeemModal(true)}
+              className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all shadow-lg"
+            >
+              充值
+            </button>
           </div>
+        </div>
+
+        {/* 钻石说明 */}
+        <div className={`rounded-xl p-3 ${isDark ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
+          <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'} space-y-1`}>
+            💡 钻石说明：<br/>
+            • <span className="text-yellow-500">充值钻石</span>：通过充值获得，可用于发红包和购买商品<br/>
+            • <span className="text-green-500">免费钻石</span>：每日签到、抢红包获得，仅可用于购买商品<br/>
+            • 购买商品时优先扣除免费钻石
+          </p>
         </div>
 
         {/* 使用记录 */}
