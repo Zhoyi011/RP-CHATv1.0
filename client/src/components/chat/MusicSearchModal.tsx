@@ -11,6 +11,9 @@ interface MusicResult {
   videoUrl: string;
   platform: 'youtube';
   duration?: string;
+  channelName?: string;
+  publishDate?: string;
+  durationSeconds?: number;
 }
 
 interface MusicSearchModalProps {
@@ -37,15 +40,9 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
     try {
       const response = await fetch(`${API_BASE}/music/search?q=${encodeURIComponent(searchQuery)}`);
       const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || '搜索失败');
-      }
-      
+      if (!response.ok) throw new Error(data.error || '搜索失败');
       setResults(data.items || []);
-      if (data.items?.length === 0) {
-        toast.error('未找到相关音乐');
-      }
+      if (data.items?.length === 0) toast.error('未找到相关音乐');
     } catch (error) {
       console.error('搜索失败:', error);
       toast.error('搜索失败，请重试');
@@ -54,8 +51,24 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  const handleSelect = (music: MusicResult) => {
+  const handleSelect = async (music: MusicResult) => {
     setSelectedId(music.id);
+    // 获取视频详细信息（频道名、发布日期、时长）
+    try {
+      const infoRes = await fetch(`${API_BASE}/youtube/info?videoId=${music.id}`);
+      if (infoRes.ok) {
+        const videoInfo = await infoRes.json();
+        music.channelName = videoInfo.channelName;
+        music.publishDate = videoInfo.publishDate;
+        music.durationSeconds = videoInfo.duration;
+        // 格式化时长显示
+        const mins = Math.floor(videoInfo.duration / 60);
+        const secs = videoInfo.duration % 60;
+        music.duration = `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
+    } catch (e) {
+      console.warn('获取视频详情失败，使用基础信息');
+    }
     setTimeout(() => {
       onSelect(music);
       onClose();
@@ -66,9 +79,7 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      searchMusic();
-    }
+    if (e.key === 'Enter') searchMusic();
   };
 
   return (
@@ -88,22 +99,15 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
             className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md mx-4 overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 头部 */}
             <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                🎵 分享音乐
-              </h3>
-              <button
-                onClick={onClose}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
-              >
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">🎵 分享音乐</h3>
+              <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* 搜索框 */}
             <div className="p-4">
               <div className="flex gap-2">
                 <input
@@ -125,20 +129,15 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
               </div>
             </div>
 
-            {/* 搜索结果 */}
             <div className="max-h-96 overflow-y-auto p-4 space-y-3">
               {isLoading && (
                 <div className="flex justify-center py-8">
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
-              
               {!isLoading && results.length === 0 && searchQuery && (
-                <div className="text-center py-8 text-gray-400">
-                  没有找到相关音乐
-                </div>
+                <div className="text-center py-8 text-gray-400">没有找到相关音乐</div>
               )}
-
               {results.map((music) => (
                 <motion.div
                   key={music.id}
@@ -150,22 +149,12 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
                   }`}
                   onClick={() => handleSelect(music)}
                 >
-                  <img
-                    src={music.coverUrl}
-                    alt={music.title}
-                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                  />
+                  <img src={music.coverUrl} alt={music.title} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-800 dark:text-white truncate">
-                      {music.title}
-                    </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {music.artist}
-                    </p>
+                    <h4 className="font-medium text-gray-800 dark:text-white truncate">{music.title}</h4>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{music.artist}</p>
                   </div>
-                  {music.duration && (
-                    <span className="text-xs text-gray-400 flex-shrink-0">{music.duration}</span>
-                  )}
+                  {music.duration && <span className="text-xs text-gray-400 flex-shrink-0">{music.duration}</span>}
                   <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
                     <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -175,7 +164,6 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
               ))}
             </div>
 
-            {/* 提示 */}
             <div className="p-3 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400">
               音乐来自 YouTube，点击即分享到聊天
             </div>
