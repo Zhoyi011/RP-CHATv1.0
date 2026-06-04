@@ -201,8 +201,18 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
       }
     }
 
-    // 检查是否已领取过
+    // 🔥 检查是否已领取过（双重检查，防止重复领取）
     if (redPacket.hasClaimed(persona._id)) {
+      return res.status(400).json({ error: '你已经领过这个红包了' });
+    }
+
+    // 🔥 数据库级别检查（防止并发）
+    const existingRecord = await RedPacketRecord.findOne({
+      redPacketId: redPacket._id,
+      receiverPersonaId: persona._id
+    });
+
+    if (existingRecord) {
       return res.status(400).json({ error: '你已经领过这个红包了' });
     }
 
