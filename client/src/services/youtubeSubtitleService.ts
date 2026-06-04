@@ -3,44 +3,38 @@
 export interface SubtitleLine {
   text: string;
   startTime: number;  // 秒
-  endTime: number;
+  endTime: number;    // 秒
 }
 
-/**
- * 从 YouTube URL 获取视频 ID
- */
 export function getYoutubeVideoId(url: string): string | null {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
   return match ? match[1] : null;
 }
 
-/**
- * 获取 YouTube 字幕（自动生成）
- */
-export async function fetchYouTubeSubtitles(videoId: string): Promise<SubtitleLine[]> {
+export const fetchYouTubeSubtitles = async (videoId: string): Promise<SubtitleLine[]> => {
+  const apiBase = import.meta.env.VITE_API_BASE || '/api';
+  const url = `${apiBase}/youtube/subtitles?videoId=${videoId}`;
+  
+  console.log(`🎤 [前端] 请求后端字幕接口: ${url}`);
+  
   try {
-    // 使用 yt.lemnoslife.com 公开 API
-    const response = await fetch(`https://yt.lemnoslife.com/video?videoId=${videoId}`);
+    const response = await fetch(url);
     const data = await response.json();
     
-    if (data && data.captions && data.captions.length > 0) {
-      // 找到中文字幕或第一个可用字幕
-      const chineseCaption = data.captions.find((c: any) => 
-        c.languageCode === 'zh-Hans' || c.languageCode === 'zh-Hant' || c.languageCode === 'zh'
-      );
-      const caption = chineseCaption || data.captions[0];
+    if (data && data.subtitles && data.subtitles.length > 0) {
+      console.log(`✅ [前端] 成功获取 ${data.subtitles.length} 条字幕，语言: ${data.language || '未知'}`);
       
-      if (caption && caption.subtitles) {
-        return caption.subtitles.map((sub: any) => ({
-          text: sub.text,
-          startTime: sub.start,
-          endTime: sub.end
-        }));
-      }
+      return data.subtitles.map((sub: any) => ({
+        text: sub.text,
+        startTime: sub.start,
+        endTime: sub.start + (sub.dur || 3)  // 如果没有 dur，默认 3 秒
+      }));
     }
+    
+    console.log(`⚠️ [前端] 该视频没有字幕`);
     return [];
   } catch (error) {
-    console.error('获取 YouTube 字幕失败:', error);
+    console.error(`❌ [前端] 请求字幕接口失败:`, error);
     return [];
   }
-}
+};
