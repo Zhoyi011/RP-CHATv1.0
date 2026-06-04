@@ -26,7 +26,7 @@ import TranslatableMessage from './TranslatableMessage';
 import PatPanel from './PatPanel';
 import { smartConvert } from '../../services/translateApi';
 import { Users, MessageCircle, Sparkles, Plus } from 'lucide-react';
-import MusicSearchModal from './MusicSearchModal';  // 🎵 新增
+import MusicSearchModal from './MusicSearchModal';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -67,6 +67,17 @@ const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   const match = url.match(/\/([^/]+)\.(png|webp|jpg|jpeg|gif|svg)$/i);
   if (match) return match[1].toLowerCase();
   return null;
+};
+
+// ========== 检查是否为音乐消息 ==========
+const isMusicMessage = (content: string): boolean => {
+  if (!content) return false;
+  try {
+    const parsed = JSON.parse(content);
+    return parsed?.type === 'music';
+  } catch {
+    return false;
+  }
 };
 
 // ========== 时间分隔线 ==========
@@ -143,6 +154,16 @@ const MessageBubble: React.FC<{
   const [patTarget, setPatTarget] = useState<{ id: string; name: string } | null>(null);
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDoubleClickRef = useRef(false);
+  
+  // 🎵 检查是否是音乐消息
+  const musicCheck = (() => {
+    try {
+      const parsed = JSON.parse(message.content);
+      return parsed?.type === 'music';
+    } catch {
+      return false;
+    }
+  })();
   
   const longPressProps = useLongPress({
     duration: 500,
@@ -343,7 +364,8 @@ const MessageBubble: React.FC<{
               }`}
             />
             
-            {urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
+            {/* 🎵 只有非音乐消息才显示链接预览 */}
+            {!musicCheck && urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
             
             <div className={`flex items-center gap-1 mt-1.5 ${isSelf ? 'justify-end' : 'justify-start'}`}>
               <span className={`text-[10px] ${isSelf ? 'text-blue-200' : 'text-gray-400'}`}>
@@ -846,14 +868,12 @@ const ChatHome = () => {
     }
     
     try {
-      // 1. 上传音频
       const uploadResult = await uploadApi.uploadAudio(audioBlob);
       
       if (!uploadResult.success || !uploadResult.url) {
         throw new Error('上传失败');
       }
       
-      // 2. 通过 Socket 发送语音消息
       socketService.emit('send-message', {
         roomId: selectedRoom._id,
         userId: user.uid,
@@ -885,18 +905,22 @@ const ChatHome = () => {
       return;
     }
     
+    const musicData = {
+      type: 'music',
+      title: music.title,
+      artist: music.artist,
+      coverUrl: music.coverUrl,
+      videoUrl: music.videoUrl,
+      platform: music.platform || 'youtube'
+    };
+    
+    console.log('🎵 发送音乐消息:', musicData);
+    
     socketService.emit('send-message', {
       roomId: selectedRoom._id,
       userId: user.uid,
       personaId: selectedPersona._id,
-      content: JSON.stringify({
-        type: 'music',
-        title: music.title,
-        artist: music.artist,
-        coverUrl: music.coverUrl,
-        videoUrl: music.videoUrl,
-        platform: music.platform || 'youtube'
-      }),
+      content: JSON.stringify(musicData),
       isAction: false,
       replyToId: replyToMessage?._id,
     });
@@ -989,12 +1013,11 @@ const ChatHome = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
-            // 🔥 获取用户信息并保存 userId
-    const userInfo = await authApi.getCurrentUser();
-    if (userInfo && userInfo._id) {
-      localStorage.setItem('userId', userInfo._id);
-      console.log('✅ 已保存 userId:', userInfo._id);
-    }
+        const userInfo = await authApi.getCurrentUser();
+        if (userInfo && userInfo._id) {
+          localStorage.setItem('userId', userInfo._id);
+          console.log('✅ 已保存 userId:', userInfo._id);
+        }
         const [roomsRes, personasData, activePersonaRes] = await Promise.all([
           fetch(`${API_BASE}/room/my-rooms`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
           personaApi.getMyPersonas(),
@@ -1079,7 +1102,7 @@ const ChatHome = () => {
     if (!token) return;
 
     console.log('🔌 连接 Socket, userId:', userId);
-    socketService.connect(token, userId || undefined); // ✅ 传递 userId
+    socketService.connect(token, userId || undefined);
 
     const handleNewMessage = (message: Message) => {
       console.log('📨 [Socket] 收到新消息:', {
@@ -1351,7 +1374,6 @@ const ChatHome = () => {
   );
 
   const renderChatWindow = () => {
-    // 手机端：显示好友列表
     if (isMobile && showUserList) {
       return (
         <FriendList 
@@ -1465,7 +1487,7 @@ const ChatHome = () => {
         <ChatInput
           onSendMessage={handleSendMessage}
           onSendAudio={handleSendAudio}
-          onOpenMusicSearch={() => setShowMusicSearch(true)}  // 🎵 新增
+          onOpenMusicSearch={() => setShowMusicSearch(true)}
           disabled={!selectedRoom}
           roomId={selectedRoom?._id}
           selectedPersona={selectedPersona}

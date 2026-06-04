@@ -1,17 +1,59 @@
 // client/src/components/chat/MusicCard.tsx
-import React, { useState } from 'react';
-// @ts-ignore - 临时忽略类型错误
-import ReactPlayer from 'react-player';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react';
+
+interface SubtitleLine {
+  text: string;
+  startTime: number;  // 秒
+  endTime: number;    // 秒
+}
 
 interface MusicCardProps {
   title: string;
   artist: string;
   coverUrl: string;
   videoUrl: string;
-  platform?: 'youtube' | 'bilibili' | 'local';
+  platform?: 'youtube' | 'bilibili';
   isOwn?: boolean;
 }
+
+// 从 YouTube URL 提取视频 ID
+const getYoutubeVideoId = (url: string): string | null => {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+  return match ? match[1] : null;
+};
+
+// 获取 YouTube 字幕（使用 yt.lemnoslife.com 公开 API）
+const fetchYouTubeSubtitles = async (videoId: string): Promise<SubtitleLine[]> => {
+  try {
+    console.log(`🎤 获取字幕: videoId=${videoId}`);
+    const response = await fetch(`https://yt.lemnoslife.com/video?videoId=${videoId}`);
+    const data = await response.json();
+    
+    if (data && data.captions && data.captions.length > 0) {
+      // 优先中文，其次英文，最后第一个可用
+      const chineseCaption = data.captions.find((c: any) => 
+        c.languageCode === 'zh-Hans' || c.languageCode === 'zh-Hant' || c.languageCode === 'zh'
+      );
+      const englishCaption = data.captions.find((c: any) => c.languageCode === 'en');
+      const caption = chineseCaption || englishCaption || data.captions[0];
+      
+      console.log(`📝 使用字幕语言: ${caption.languageCode}, 共 ${caption.subtitles?.length || 0} 条`);
+      
+      if (caption && caption.subtitles) {
+        return caption.subtitles.map((sub: any) => ({
+          text: sub.text,
+          startTime: sub.start,
+          endTime: sub.end
+        }));
+      }
+    }
+    console.log('⚠️ 该视频没有字幕');
+    return [];
+  } catch (error) {
+    console.error('获取 YouTube 字幕失败:', error);
+    return [];
+  }
+};
 
 const MusicCard: React.FC<MusicCardProps> = ({ 
   title, 
@@ -21,154 +63,209 @@ const MusicCard: React.FC<MusicCardProps> = ({
   platform = 'youtube',
   isOwn = false 
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(false);
+  const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentSubtitleIndex, setCurrentSubtitleIndex] = useState(-1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [playerReady, setPlayerReady] = useState(false);
+  
+  const playerRef = useRef<HTMLIFrameElement>(null);
+  const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const videoId = getYoutubeVideoId(videoUrl);
 
-  // 判断是本地文件
-  const isLocalFile = videoUrl.endsWith('.mp4') || videoUrl.endsWith('.webm') || videoUrl.startsWith('/');
-
-  // 获取 Bilibili 嵌入 URL
-  const getBilibiliEmbedUrl = () => {
-    const bvidMatch = videoUrl.match(/BV\w+/);
-    if (bvidMatch) {
-      return `https://player.bilibili.com/player.html?bvid=${bvidMatch[0]}&page=1&high_quality=1&autoplay=0`;
+  // 获取字幕
+  useEffect(() => {
+    if (!videoId) {
+      setIsLoading(false);
+      return;
     }
-    return videoUrl;
-  };
+    
+    const loadSubtitles = async () => {
+      setIsLoading(true);
+      try {
+        const subs = await fetchYouTubeSubtitles(videoId);
+        setSubtitles(subs);
+        if (subs.length > 0) {
+          setDuration(subs[subs.length - 1]?.endTime || 0);
+        }
+      } catch (error) {
+        console.error('加载字幕失败:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadSubtitles();
+  }, [videoId]);
 
-  // 渲染播放器
-  const renderPlayer = () => {
-    // Bilibili 使用 iframe
-    if (platform === 'bilibili') {
-      return (
-        <iframe
-          src={getBilibiliEmbedUrl()}
-          width="100%"
-          height="160px"
-          allowFullScreen
-          className="rounded-lg"
-          title={title}
-        />
-      );
-    }
+  // 监听 YouTube 播放器消息
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== 'https://www.youtube.com') return;
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === 'onStateChange') {
+          setPlayerReady(true);
+        }
+        if (data.event === 'onCurrentTime') {
+          setCurrentTime(data.info);
+        }
+      } catch {}
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
-    // YouTube 和本地 MP4 使用 react-player
-    // 🔥 使用 as any 绕过类型检查（最简单）
-    return (
-      <ReactPlayer
-        url={videoUrl}
-        playing={isPlaying}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        controls
-        width="100%"
-        height="160px"
-        {...{ modestbranding: 1, rel: '0' } as any}
-      />
+  // 更新当前字幕索引（高亮）
+  useEffect(() => {
+    if (subtitles.length === 0) return;
+    
+    // 容错：给一个小的缓冲区间，避免频繁切换
+    const buffer = 0.05;
+    const newIndex = subtitles.findIndex(
+      sub => currentTime + buffer >= sub.startTime && currentTime - buffer < sub.endTime
     );
+    
+    if (newIndex !== currentSubtitleIndex && newIndex !== -1) {
+      setCurrentSubtitleIndex(newIndex);
+      // 滚动到当前歌词
+      if (lyricsContainerRef.current && newIndex >= 0) {
+        const elements = lyricsContainerRef.current.querySelectorAll('.lyric-line');
+        const currentElement = elements[newIndex] as HTMLElement;
+        if (currentElement) {
+          currentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }
+  }, [currentTime, subtitles, currentSubtitleIndex]);
+
+  const formatTime = (seconds: number): string => {
+    if (!seconds || isNaN(seconds) || seconds === Infinity) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // 获取平台标签
-  const getPlatformLabel = () => {
-    if (platform === 'bilibili') return '📺 Bilibili';
-    if (isLocalFile) return '🎬 本地视频';
-    return '🎵 YouTube MV';
-  };
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}&modestbranding=1&rel=0&playsinline=1`;
 
-  const getPlatformColor = () => {
-    if (platform === 'bilibili') return 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400';
-    if (isLocalFile) return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-    return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400';
-  };
+  if (!videoId) {
+    return (
+      <div className={`w-80 rounded-xl overflow-hidden shadow-md p-4 text-center text-gray-400 ${
+        isOwn ? 'bg-blue-50' : 'bg-white dark:bg-gray-800'
+      }`}>
+        <svg className="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-sm">无效的视频链接</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`w-72 rounded-2xl shadow-lg overflow-hidden transition-all duration-200 ${
-      isOwn 
-        ? 'bg-gradient-to-br from-blue-500 to-cyan-500' 
-        : 'bg-white dark:bg-gray-800'
+    <div className={`w-80 rounded-xl overflow-hidden shadow-md ${
+      isOwn ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800'
     }`}>
-      {/* CD 唱片区域 */}
-      <div 
-        className="relative aspect-square cursor-pointer group"
-        onClick={() => setShowPlayer(!showPlayer)}
-      >
-        <img 
-          src={coverUrl} 
-          alt={title}
-          className={`w-full h-full object-cover transition-all duration-300 ${
-            isPlaying ? 'animate-spin-slow' : ''
-          }`}
-          style={{ animationDuration: '10s' }}
+      {/* YouTube 播放器 */}
+      <div className="relative bg-black aspect-video">
+        <iframe
+          ref={playerRef}
+          src={embedUrl}
+          width="100%"
+          height="100%"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          className="w-full h-full"
+          title={title}
         />
-        
-        {/* 黑胶唱片中心效果 */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center ${
-            isOwn ? 'bg-blue-500/70' : 'bg-black/50'
-          }`}>
-            <div className={`w-7 h-7 rounded-full ${
-              isOwn ? 'bg-cyan-300' : 'bg-white/80'
-            }`} />
-          </div>
-        </div>
-        
-        {/* 悬停播放按钮 */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-          <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-            {isPlaying ? (
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="4" width="4" height="16" rx="1" />
-                <rect x="14" y="4" width="4" height="16" rx="1" />
-              </svg>
-            ) : (
-              <svg className="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* 歌曲信息 */}
-      <div className="p-3">
-        <h4 className={`font-semibold truncate ${
-          isOwn ? 'text-white' : 'text-gray-800 dark:text-white'
-        }`}>
-          {title}
-        </h4>
-        <p className={`text-sm truncate ${
-          isOwn ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
-        }`}>
-          {artist}
-        </p>
-        
-        {/* 平台标签 */}
-        <div className="mt-2">
-          <span className={`text-xs px-2 py-0.5 rounded-full ${
-            isOwn ? 'bg-white/20 text-white' : getPlatformColor()
-          }`}>
-            {getPlatformLabel()}
-          </span>
+      <div className="flex items-center gap-2 p-2 border-b border-gray-100 dark:border-gray-700">
+        <img 
+          src={coverUrl} 
+          alt={title}
+          className="w-8 h-8 rounded object-cover flex-shrink-0"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/40?text=Music';
+          }}
+        />
+        <div className="flex-1 min-w-0">
+          <h4 className={`font-medium truncate text-sm ${isOwn ? 'text-blue-700' : 'text-gray-800 dark:text-white'}`}>
+            {title}
+          </h4>
+          <p className="text-xs truncate text-gray-500 dark:text-gray-400">
+            {artist}
+          </p>
         </div>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 flex-shrink-0">
+          🎵 MV
+        </span>
       </div>
 
-      {/* 展开的播放器 */}
-      <AnimatePresence>
-        {showPlayer && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className={`p-3 border-t ${
-              isOwn ? 'border-blue-400/30' : 'border-gray-100 dark:border-gray-700'
-            }`}>
-              {renderPlayer()}
+      {/* 进度条 */}
+      {duration > 0 && (
+        <div className="px-3 pt-2">
+          <div className="relative h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div 
+              className="absolute left-0 top-0 h-full bg-blue-500 rounded-full transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1 text-xs text-gray-400">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* 歌词区域 */}
+      <div className="p-3">
+        <div className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4v16" />
+          </svg>
+          <span>滚动歌词</span>
+          {subtitles.length > 0 && <span className="text-[10px] text-green-500">(YouTube 字幕)</span>}
+        </div>
+        
+        <div ref={lyricsContainerRef} className="max-h-40 overflow-y-auto space-y-1.5">
+          {isLoading && (
+            <div className="text-center py-4 text-gray-400 text-sm">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              加载字幕中...
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+          
+          {!isLoading && subtitles.length > 0 && (
+            subtitles.map((sub, index) => (
+              <div
+                key={index}
+                className={`lyric-line text-sm transition-all duration-150 ${
+                  index === currentSubtitleIndex
+                    ? 'text-blue-500 font-medium bg-blue-50 dark:bg-blue-900/20 -mx-2 px-2 py-0.5 rounded'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {sub.text}
+              </div>
+            ))
+          )}
+          
+          {!isLoading && subtitles.length === 0 && (
+            <div className="text-center py-4 text-gray-400 text-sm">
+              <svg className="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+              </svg>
+              <p>该视频暂无字幕</p>
+              <p className="text-xs mt-1">可以在 YouTube 中开启字幕</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

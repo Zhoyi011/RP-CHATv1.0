@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { translateApi } from '../../services/api';
 import AudioPlayer from './AudioPlayer';
-import MusicCard from './MusicCard';  // 🎵 新增
+import MusicCard from './MusicCard';
 
 interface TranslatableMessageProps {
   content: string;
@@ -27,20 +27,37 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [targetLang, setTargetLang] = useState<string>('zh');
 
-  // 🎵 解析音乐消息
-  const tryParseMusic = () => {
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed.type === 'music') {
-        return parsed;
-      }
-    } catch {
-      // 不是 JSON，忽略
+  // 在组件最前面，任何逻辑之前
+const tryParseMusic = () => {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.type === 'music') {
+      return parsed;
     }
+  } catch {
     return null;
-  };
-
+  }
+  return null;
+};
   const musicData = tryParseMusic();
+
+  // 🎵 如果是音乐消息，直接返回卡片，不进行任何其他处理
+  if (musicData) {
+    console.log('🎵 渲染音乐卡片:', musicData.title);
+    return (
+      <div className={className}>
+        <MusicCard
+          title={musicData.title}
+          artist={musicData.artist}
+          coverUrl={musicData.coverUrl}
+          videoUrl={musicData.videoUrl}
+          platform={musicData.platform || 'youtube'}
+          isOwn={isOwn}
+        />
+      </div>
+    );
+  }
 
   // 获取用户设置的翻译目标语言
   useEffect(() => {
@@ -49,41 +66,6 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
       setTargetLang(savedLang);
     }
   }, []);
-
-  // 判断是否需要显示翻译按钮
-  const needsTranslation = () => {
-    // 语音消息不需要翻译按钮
-    if (isAudio) return false;
-    
-    // 音乐消息不需要翻译按钮
-    if (musicData) return false;
-    
-    // 自己的消息不显示翻译按钮
-    if (isOwn) return false;
-    
-    // 如果目标语言是中文
-    if (targetLang === 'zh' || targetLang === 'zh-CN' || targetLang === 'zh-TW') {
-      // 只有当内容中**没有**中文字符时才显示翻译按钮
-      // 注意：日文汉字也会被匹配，所以要用更精确的判断
-      const hasChinese = /[\u4e00-\u9fa5]/.test(content);
-      if (hasChinese) {
-        // 简单判断是不是纯中文（没有日文假名）
-        const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(content);
-        // 如果包含日文假名，说明是日文，需要翻译
-        if (!hasJapaneseKana) {
-          return false;  // 纯中文，不翻译
-        }
-      }
-    }
-    
-    // 如果目标语言是英文
-    if (targetLang === 'en') {
-      const isEnglish = /^[a-zA-Z0-9\s\.,!?;:'"()-]+$/.test(content);
-      if (isEnglish) return false;
-    }
-    
-    return true;
-  };
 
   const handleTranslate = async () => {
     if (isTranslated) {
@@ -110,22 +92,6 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
     }
   };
 
-  // 🎵 如果是音乐消息，渲染音乐卡片
-  if (musicData) {
-    return (
-      <div className={className}>
-        <MusicCard
-          title={musicData.title}
-          artist={musicData.artist}
-          coverUrl={musicData.coverUrl}
-          videoUrl={musicData.videoUrl}
-          platform={musicData.platform || 'youtube'}
-          isOwn={isOwn}
-        />
-      </div>
-    );
-  }
-
   // 如果是语音消息，直接渲染音频播放器
   if (isAudio && audioUrl && audioDuration) {
     return (
@@ -135,7 +101,23 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
     );
   }
 
-  // 如果不显示翻译按钮，直接显示原文
+  // 普通文本消息：判断是否需要显示翻译按钮
+  const needsTranslation = () => {
+    if (isOwn) return false;
+    if (targetLang === 'zh' || targetLang === 'zh-CN' || targetLang === 'zh-TW') {
+      const hasChinese = /[\u4e00-\u9fa5]/.test(content);
+      if (hasChinese) {
+        const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(content);
+        if (!hasJapaneseKana) return false;
+      }
+    }
+    if (targetLang === 'en') {
+      const isEnglish = /^[a-zA-Z0-9\s\.,!?;:'"()-]+$/.test(content);
+      if (isEnglish) return false;
+    }
+    return true;
+  };
+
   if (!needsTranslation()) {
     return <div className={className}>{content}</div>;
   }
@@ -146,7 +128,6 @@ const TranslatableMessage: React.FC<TranslatableMessageProps> = ({
         {isTranslated && translatedContent ? translatedContent : content}
       </div>
       
-      {/* 翻译按钮 - 悬停显示 */}
       <button
         onClick={handleTranslate}
         disabled={isLoading}
