@@ -16,41 +16,36 @@ interface MusicCardProps {
   isOwn?: boolean;
 }
 
+// API 基础地址
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
+
 // 从 YouTube URL 提取视频 ID
 const getYoutubeVideoId = (url: string): string | null => {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
   return match ? match[1] : null;
 };
 
-// 获取 YouTube 字幕（使用 yt.lemnoslife.com 公开 API）
+// 🔥 调用自己的后端 API 获取字幕
 const fetchYouTubeSubtitles = async (videoId: string): Promise<SubtitleLine[]> => {
   try {
-    console.log(`🎤 获取字幕: videoId=${videoId}`);
-    const response = await fetch(`https://yt.lemnoslife.com/video?videoId=${videoId}`);
+    const url = `${API_BASE}/youtube/subtitles?videoId=${videoId}`;
+    console.log('🎤 [MusicCard] 请求字幕:', url);
+    
+    const response = await fetch(url);
     const data = await response.json();
     
-    if (data && data.captions && data.captions.length > 0) {
-      // 优先中文，其次英文，最后第一个可用
-      const chineseCaption = data.captions.find((c: any) => 
-        c.languageCode === 'zh-Hans' || c.languageCode === 'zh-Hant' || c.languageCode === 'zh'
-      );
-      const englishCaption = data.captions.find((c: any) => c.languageCode === 'en');
-      const caption = chineseCaption || englishCaption || data.captions[0];
-      
-      console.log(`📝 使用字幕语言: ${caption.languageCode}, 共 ${caption.subtitles?.length || 0} 条`);
-      
-      if (caption && caption.subtitles) {
-        return caption.subtitles.map((sub: any) => ({
-          text: sub.text,
-          startTime: sub.start,
-          endTime: sub.end
-        }));
-      }
+    if (data && data.subtitles && data.subtitles.length > 0) {
+      console.log(`✅ [MusicCard] 获取到 ${data.subtitles.length} 条字幕`);
+      return data.subtitles.map((sub: any) => ({
+        text: sub.text,
+        startTime: sub.start,
+        endTime: sub.start + (sub.dur || 3)
+      }));
     }
-    console.log('⚠️ 该视频没有字幕');
+    console.log('⚠️ [MusicCard] 该视频没有字幕');
     return [];
   } catch (error) {
-    console.error('获取 YouTube 字幕失败:', error);
+    console.error('❌ [MusicCard] 获取字幕失败:', error);
     return [];
   }
 };
@@ -121,7 +116,7 @@ const MusicCard: React.FC<MusicCardProps> = ({
   useEffect(() => {
     if (subtitles.length === 0) return;
     
-    // 容错：给一个小的缓冲区间，避免频繁切换
+    // 容错：给一个小的缓冲区间
     const buffer = 0.05;
     const newIndex = subtitles.findIndex(
       sub => currentTime + buffer >= sub.startTime && currentTime - buffer < sub.endTime
