@@ -215,9 +215,9 @@ userSchema.methods.isOwner = function() {
 
 // ========== 🔥 钻石分类系统 ==========
 
-// 获取总钻石数（兼容旧版）
+// 获取总钻石数
 userSchema.methods.getTotalDiamonds = function() {
-  return (this.diamonds || 0) + (this.paidDiamonds || 0) + (this.freeDiamonds || 0);
+  return (this.paidDiamonds || 0) + (this.freeDiamonds || 0);
 };
 
 // 添加充值钻石

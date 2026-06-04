@@ -23,3 +23,7 @@ Thumbs.db
 # 构建输出
 dist/
 build/
+
+# 脚本
+src/scripts
+scripts/
