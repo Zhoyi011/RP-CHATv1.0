@@ -291,50 +291,44 @@ router.post('/use', async (req, res) => {
       return res.status(400).json({ error: '请提供充值码' });
     }
     
-    // 获取当前用户
     const user = await getCurrentUser(req);
     if (!user) {
       return res.status(401).json({ error: '请先登录' });
     }
     
-    // 格式化充值码
     const formattedCode = code.trim().toUpperCase();
     
-    // 查找充值码
     const redeemCode = await RedeemCode.findOne({ code: formattedCode });
     if (!redeemCode) {
       return res.status(404).json({ error: '充值码不存在' });
     }
     
-    // 检查是否已使用
     if (redeemCode.isUsed) {
       return res.status(400).json({ error: '充值码已被使用' });
     }
     
-    // 检查是否过期
     if (new Date() > redeemCode.expiresAt) {
       return res.status(400).json({ error: '充值码已过期' });
     }
     
-    // 记录使用前余额
     const previousBalance = user.diamonds || 0;
     
-    // 增加钻石
-    user.diamonds = (user.diamonds || 0) + redeemCode.diamondAmount;
+    // 🔥 关键修复：同时增加 diamonds 和 paidDiamonds
+    const amount = redeemCode.diamondAmount;
+    user.diamonds = (user.diamonds || 0) + amount;
+    user.paidDiamonds = (user.paidDiamonds || 0) + amount;
     await user.save();
     
-    // 更新充值码状态
     redeemCode.isUsed = true;
     redeemCode.usedBy = user._id;
     redeemCode.usedAt = new Date();
     await redeemCode.save();
     
-    // 创建使用记录
     const record = new RedemptionRecord({
       userId: user._id,
       redeemCodeId: redeemCode._id,
       code: redeemCode.code,
-      diamondAmount: redeemCode.diamondAmount,
+      diamondAmount: amount,
       previousBalance,
       newBalance: user.diamonds
     });
@@ -342,9 +336,9 @@ router.post('/use', async (req, res) => {
     
     res.json({
       success: true,
-      message: `充值成功！获得 ${redeemCode.diamondAmount} 💎`,
+      message: `充值成功！获得 ${amount} 💎`,
       data: {
-        diamondAmount: redeemCode.diamondAmount,
+        diamondAmount: amount,
         newBalance: user.diamonds
       }
     });
