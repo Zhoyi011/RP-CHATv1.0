@@ -5,21 +5,6 @@ import type { Variants } from 'framer-motion';
 import { useAFK } from '../../contexts/AFKContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { DraggableAFKStatus } from './DraggableAFKStatus';
-import MusicSearchModal from '../chat/MusicSearchModal';
-import { useMediaSession } from '../../hooks/useMediaSession';
-import toast from 'react-hot-toast';
-
-interface MusicResult {
-  id: string;
-  title: string;
-  artist: string;
-  coverUrl: string;
-  videoUrl: string;
-  platform: 'youtube' | 'bilibili';
-  duration?: string;
-  channelName?: string;
-  publishDate?: string;
-}
 
 interface AFKScreenProps {
   children: React.ReactNode;
@@ -29,8 +14,6 @@ interface AFKScreenProps {
 const Z_INDEX = {
   WALLPAPER: 9000,
   AFK_UI: 9010,
-  MUSIC_PANEL: 10000,
-  MUSIC_MODAL: 10050,
 };
 
 // 壁纸配置
@@ -115,24 +98,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   
   const [isVideoPaused, setIsVideoPaused] = useState(false);
   const [isRepeating, setIsRepeating] = useState(false);
-
-  // 🎵 音乐播放器状态
-  const [showMusicPlayer, setShowMusicPlayer] = useState(false);
-  const [currentMusic, setCurrentMusic] = useState<MusicResult | null>(null);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(0.7);
-  const [musicCurrentTime, setMusicCurrentTime] = useState(0);
-  const [musicDuration, setMusicDuration] = useState(0);
-  
-  const { 
-    setMetadata, 
-    setPlaybackState, 
-    setPositionState, 
-    setupHandlers, 
-    clearHandlers,
-    isSupported: mediaSessionSupported 
-  } = useMediaSession();
   
   const isVideoPausedRef = useRef(false);
   const isInitializedRef = useRef(false);
@@ -156,122 +121,17 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   const lastCurrentTimeRef = useRef<number>(0);
   const videoStartTimeRef = useRef<number>(0);
 
-  const formatTime = (seconds: number): string => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const formatDurationStr = (seconds: number): string => {
+  const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     if (mins > 0) return `${mins} 分钟 ${secs} 秒`;
     return `${secs} 秒`;
   };
 
-  // ========== 🔥 检测页面中正在播放的音频/视频 ==========
-  const detectPlayingMedia = useCallback(() => {
-    // 1. 检查我们自己的 audioElement（通过搜索选择的音乐）
-    if (audioElement && !audioElement.paused && audioElement.currentTime > 0) {
-      return {
-        element: audioElement,
-        title: currentMusic?.title || '正在播放',
-        artist: currentMusic?.artist || '未知',
-        duration: audioElement.duration,
-        currentTime: audioElement.currentTime,
-      };
-    }
-    
-    // 2. 检查页面中所有的 audio 和 video 元素
-    const medias = document.querySelectorAll('audio, video');
-    for (const media of medias) {
-      const element = media as HTMLAudioElement | HTMLVideoElement;
-      if (!element.paused && element.currentTime > 0 && element.duration > 0) {
-        let title = (element as any).dataset?.title;
-        let artist = (element as any).dataset?.artist;
-        
-        if (!title) {
-          const parent = element.closest('[data-title]');
-          if (parent) {
-            title = parent.getAttribute('data-title') || '';
-            artist = parent.getAttribute('data-artist') || '';
-          }
-        }
-        
-        return {
-          element,
-          title: title || '正在播放',
-          artist: artist || '未知',
-          duration: element.duration,
-          currentTime: element.currentTime,
-        };
-      }
-    }
-    
-    return null;
-  }, [audioElement, currentMusic]);
-
-  // ========== 🔥 监听页面中的媒体播放 ==========
-  useEffect(() => {
-    if (!isAFK) return;
-    
-    let timeUpdateHandler: ((e: Event) => void) | null = null;
-    
-    const interval = setInterval(() => {
-      const playing = detectPlayingMedia();
-      
-      if (playing && !currentMusic) {
-        console.log('🎵 检测到播放:', playing.title);
-        
-        setCurrentMusic({
-          id: 'detected',
-          title: playing.title,
-          artist: playing.artist,
-          coverUrl: '',
-          videoUrl: '',
-          platform: 'youtube',
-        });
-        
-        if (!audioElement) {
-          setAudioElement(playing.element);
-          setIsMusicPlaying(true);
-          setMusicCurrentTime(playing.currentTime);
-          setMusicDuration(playing.duration);
-          
-          timeUpdateHandler = () => {
-            setMusicCurrentTime(playing.element.currentTime);
-          };
-          playing.element.addEventListener('timeupdate', timeUpdateHandler);
-          playing.element.addEventListener('ended', () => setIsMusicPlaying(false));
-        }
-      } else if (!playing && currentMusic && currentMusic.id === 'detected') {
-        console.log('🎵 检测到播放停止');
-        if (timeUpdateHandler && audioElement) {
-          audioElement.removeEventListener('timeupdate', timeUpdateHandler);
-        }
-        setCurrentMusic(null);
-        setAudioElement(null);
-        setIsMusicPlaying(false);
-        setMusicCurrentTime(0);
-        setMusicDuration(0);
-      }
-    }, 2000);
-    
-    return () => {
-      clearInterval(interval);
-      if (timeUpdateHandler && audioElement) {
-        audioElement.removeEventListener('timeupdate', timeUpdateHandler);
-      }
-    };
-  }, [isAFK, currentMusic, audioElement, detectPlayingMedia]);
-
-  // 同步暂停状态到 ref
   useEffect(() => {
     isVideoPausedRef.current = isVideoPaused;
   }, [isVideoPaused]);
 
-  // 监听来自 DraggableAFKStatus 的事件
   useEffect(() => {
     const handleShowUI = () => {
       setShowUI(true);
@@ -320,7 +180,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     };
   }, []);
 
-  // 退出 AFK 时重置状态
   useEffect(() => {
     if (!isAFK) {
       setShowUI(false);
@@ -333,7 +192,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       retryCountRef.current = 0;
       setVideoLoadError(false);
       isInitializedRef.current = false;
-      // 退出 AFK 时不清空音乐面板，让面板隐藏
     }
   }, [isAFK]);
 
@@ -638,131 +496,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     window.dispatchEvent(new CustomEvent('afkUIShown'));
   }, []);
 
-  // ========== 🎵 音乐播放器回调函数 ==========
-  const handleOpenMusicPlayer = useCallback(() => {
-    setShowMusicPlayer(true);
-  }, []);
-
-  const handleCloseMusicPlayer = useCallback(() => {
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.src = '';
-    }
-    if (mediaSessionSupported) {
-      clearHandlers();
-      setPlaybackState(false);
-    }
-    setAudioElement(null);
-    setCurrentMusic(null);
-    setIsMusicPlaying(false);
-    setMusicCurrentTime(0);
-    setMusicDuration(0);
-  }, [audioElement, mediaSessionSupported, clearHandlers, setPlaybackState]);
-
-  // 🔥 从 YouTube URL 获取音频流（需要后端代理）
-  const getYouTubeAudioUrl = (videoUrl: string): string => {
-    const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/)?.[1];
-    if (!videoId) return '';
-    // 使用后端代理接口
-    return `/api/youtube/audio?videoId=${videoId}`;
-  };
-
-  const handleSelectMusic = useCallback((music: MusicResult) => {
-    console.log('🎵 选择音乐:', music.title);
-    
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.src = '';
-    }
-    if (mediaSessionSupported) {
-      clearHandlers();
-    }
-    
-    // 🔥 获取真实的 YouTube 音频 URL
-    const audioUrl = getYouTubeAudioUrl(music.videoUrl);
-    
-    if (!audioUrl) {
-      toast.error('无法获取音频链接');
-      return;
-    }
-    
-    const audio = new Audio();
-    audio.src = audioUrl;
-    audio.volume = musicVolume;
-    
-    setCurrentMusic(music);
-    setAudioElement(audio);
-    
-    audio.play().catch(err => {
-      console.error('播放失败:', err);
-      toast.error('播放失败，请重试');
-    });
-    
-    audio.addEventListener('play', () => {
-      setIsMusicPlaying(true);
-      if (mediaSessionSupported) setPlaybackState(true);
-    });
-    audio.addEventListener('pause', () => {
-      setIsMusicPlaying(false);
-      if (mediaSessionSupported) setPlaybackState(false);
-    });
-    audio.addEventListener('ended', () => {
-      setIsMusicPlaying(false);
-      if (mediaSessionSupported) setPlaybackState(false);
-    });
-    audio.addEventListener('timeupdate', () => {
-      setMusicCurrentTime(audio.currentTime);
-      if (mediaSessionSupported) setPositionState(audio.currentTime, audio.duration);
-    });
-    audio.addEventListener('durationchange', () => {
-      setMusicDuration(audio.duration);
-    });
-    
-    if (mediaSessionSupported) {
-      setMetadata({
-        title: music.title,
-        artist: music.artist,
-        album: 'AFK 音乐',
-        artwork: music.coverUrl ? [{ src: music.coverUrl, sizes: '96x96', type: 'image/jpeg' }] : [],
-      });
-      setupHandlers({
-        onPlay: () => { audio.play().catch(console.error); setPlaybackState(true); },
-        onPause: () => { audio.pause(); setPlaybackState(false); },
-        onSeek: (time: number) => { audio.currentTime = time; setPositionState(time, audio.duration); },
-        onStop: () => { handleCloseMusicPlayer(); },
-      });
-    }
-    
-    setShowMusicPlayer(false);
-  }, [audioElement, musicVolume, mediaSessionSupported, setMetadata, setPlaybackState, setPositionState, setupHandlers, clearHandlers, handleCloseMusicPlayer]);
-
-  const handleMusicPlayPause = useCallback(() => {
-    if (audioElement) {
-      if (isMusicPlaying) {
-        audioElement.pause();
-        if (mediaSessionSupported) setPlaybackState(false);
-      } else {
-        audioElement.play().catch(err => console.error('播放失败:', err));
-        if (mediaSessionSupported) setPlaybackState(true);
-      }
-    }
-  }, [audioElement, isMusicPlaying, mediaSessionSupported, setPlaybackState]);
-
-  const handleMusicVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseFloat(e.target.value);
-    setMusicVolume(newVolume);
-    if (audioElement) audioElement.volume = newVolume;
-  }, [audioElement]);
-
-  const handleMusicSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
-    if (audioElement) {
-      audioElement.currentTime = newTime;
-      setMusicCurrentTime(newTime);
-      if (mediaSessionSupported) setPositionState(newTime, audioElement.duration);
-    }
-  }, [audioElement, mediaSessionSupported, setPositionState]);
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isAFK && e.key === 'Escape') {
@@ -813,133 +546,9 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
         onRepeatToggle={handleRepeatToggle}
         onSkip={handleSkip}
         onShowUI={handleShowUI}
-        onOpenMusicPlayer={handleOpenMusicPlayer}
         isVideoPaused={isVideoPaused}
         isRepeating={isRepeating}
       />
-      
-      {/* 🎵 音乐面板 - 只在 AFK 模式下显示 */}
-      {isAFK && (
-        <div style={{ zIndex: Z_INDEX.MUSIC_PANEL, position: 'fixed', top: '16px', left: '50%', transform: 'translateX(-50%)', width: '320px' }}>
-          <div className="bg-black/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-            {currentMusic ? (
-              <>
-                <div className="flex items-center gap-3 p-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-white text-sm font-medium truncate">{currentMusic.title}</h4>
-                    <p className="text-white/60 text-xs truncate">{currentMusic.artist}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={handleMusicPlayPause}
-                      className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition"
-                    >
-                      {isMusicPlaying ? (
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                          <rect x="6" y="4" width="4" height="16" rx="1" />
-                          <rect x="14" y="4" width="4" height="16" rx="1" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      )}
-                    </button>
-                    <button
-                      onClick={handleCloseMusicPlayer}
-                      className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition"
-                    >
-                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                {isMusicPlaying && musicDuration > 0 && (
-                  <div className="px-3 pb-3 space-y-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max={musicDuration}
-                      step="0.1"
-                      value={musicCurrentTime}
-                      onChange={handleMusicSeek}
-                      className="w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between mt-1 text-[10px] text-white/50">
-                      <span>{formatTime(musicCurrentTime)}</span>
-                      <span>{formatTime(musicDuration)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const newVolume = musicVolume === 0 ? 0.7 : 0;
-                          setMusicVolume(newVolume);
-                          if (audioElement) audioElement.volume = newVolume;
-                        }}
-                        className="text-white/70 hover:text-white"
-                      >
-                        {musicVolume === 0 ? (
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                          </svg>
-                        ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 0 1 0 7.072m2.828-9.9a9 9 0 0 1 0 12.728M5.586 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                          </svg>
-                        )}
-                      </button>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={musicVolume}
-                        onChange={handleMusicVolumeChange}
-                        className="flex-1 h-1 bg-white/20 rounded-full appearance-none cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <button
-                onClick={handleOpenMusicPlayer}
-                className="w-full flex items-center gap-3 p-3 hover:bg-white/5 transition-colors group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                </div>
-                <div className="flex-1 text-left">
-                  <h4 className="text-white text-sm font-medium">播放音乐</h4>
-                  <p className="text-white/50 text-xs">点击搜索歌曲</p>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div style={{ zIndex: Z_INDEX.MUSIC_MODAL, position: 'relative' }}>
-        <MusicSearchModal
-          isOpen={showMusicPlayer}
-          onClose={() => setShowMusicPlayer(false)}
-          onSelect={handleSelectMusic}
-        />
-      </div>
       
       <AnimatePresence>
         {isAFK && wallpapers.length > 0 && (
@@ -1006,7 +615,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                       您的屏幕已被锁定
                     </motion.p>
                     <motion.div variants={durationVariants} initial="hidden" animate="visible" className="bg-black/40 backdrop-blur-md rounded-2xl p-4 mb-8 inline-block mx-auto border border-white/20">
-                      <p className="text-white/90 text-sm">已离开 <span className="text-orange-400 font-bold text-2xl mx-1">{formatDurationStr(afkDuration)}</span></p>
+                      <p className="text-white/90 text-sm">已离开 <span className="text-orange-400 font-bold text-2xl mx-1">{formatDuration(afkDuration)}</span></p>
                     </motion.div>
                     <AnimatePresence mode="wait">
                       {afkPasswordEnabled && showPasswordField && (

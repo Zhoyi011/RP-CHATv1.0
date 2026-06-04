@@ -10,7 +10,6 @@ interface DraggableAFKStatusProps {
   onRepeatToggle?: (repeating: boolean) => void;
   onSkip?: () => void;
   onShowUI?: () => void;
-  onOpenMusicPlayer?: () => void;  // 🎵 音乐播放器
   isVideoPaused?: boolean;
   isRepeating?: boolean;
 }
@@ -73,7 +72,6 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
   onRepeatToggle,
   onSkip,
   onShowUI,
-  onOpenMusicPlayer,
   isVideoPaused = false,
   isRepeating = false
 }) => {
@@ -212,7 +210,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
     });
   };
 
-  // 🔥 菜单选项（新增音乐按钮 - 放在跳过壁纸前面）
+  // 🔥 菜单选项（仅壁纸控制，移除音乐按钮）
   const menuItems = [
     { 
       id: 'pause', 
@@ -238,20 +236,6 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
         </svg>
       ),
       action: () => onRepeatToggle?.(!isRepeating)
-    },
-    { 
-      id: 'music', 
-      label: '听音乐', 
-      icon: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-        </svg>
-      ),
-      action: () => {
-        console.log('🎵 点击听音乐按钮');
-        onOpenMusicPlayer?.();
-        setShowMenu(false);
-      }
     },
     { 
       id: 'skip', 
@@ -319,7 +303,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
         right: 0, 
         bottom: 0, 
         pointerEvents: 'none', 
-        zIndex: 99998  // 🔥 确保在 AFK 视频层之上，但在音乐面板之下
+        zIndex: 99998
       }}
     >
       <motion.div
@@ -331,7 +315,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
           position: 'fixed',
           x,
           y,
-          zIndex: 99999,  // 🔥 锁头本身在最高层
+          zIndex: 99999,
           cursor: isDragging ? 'grabbing' : 'pointer',
           touchAction: 'none',
           pointerEvents: 'auto',
@@ -344,7 +328,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
         onMouseLeave={() => setShowTooltip(false)}
         onClick={handleClick}
       >
-        {/* 🔥 脉冲光环 - 毛玻璃效果 */}
+        {/* 🔥 脉冲光环 */}
         <motion.div
           animate={{ scale: [1, 1.25, 1], opacity: [0.5, 0.15, 0.5] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
@@ -352,14 +336,14 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
           style={{ zIndex: -1 }}
         />
         
-        {/* 🔥 主按钮 - 毛玻璃 + 渐变边框 */}
+        {/* 🔥 主按钮 */}
         <div className={`${sizeMap[size]} rounded-full bg-gradient-to-br from-orange-400/90 to-red-500/90 backdrop-blur-sm flex items-center justify-center shadow-lg ring-1 ring-white/30 cursor-pointer hover:scale-105 transition-all duration-200`}>
           <svg className={`${iconSizeMap[size]} text-white drop-shadow-sm`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
         </div>
         
-        {/* 🔥 提示框 - 毛玻璃 */}
+        {/* 🔥 提示框 */}
         <AnimatePresence>
           {showTooltip && !showMenu && (
             <motion.div
@@ -375,7 +359,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
           )}
         </AnimatePresence>
 
-        {/* 🔥 功能菜单面板 - 完全透明毛玻璃，无灰色背景 */}
+        {/* 🔥 功能菜单面板 */}
         <AnimatePresence>
           {showMenu && (
             <motion.div
@@ -395,9 +379,8 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
                     whileTap="tap"
                     onClick={(e) => {
                       e.stopPropagation();
-                      console.log(`🎮 点击菜单: ${item.label}`);
                       item.action();
-                      if (item.id !== 'showUI' && item.id !== 'music') {
+                      if (item.id !== 'showUI') {
                         setTimeout(() => setShowMenu(false), 300);
                       }
                       cancelMenuHideTimer();
