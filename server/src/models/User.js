@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
   },
   role: { 
     type: String, 
-    enum: ['owner', 'admin', 'user'], 
+    enum: ['owner', 'super_admin', 'admin', 'user'], 
     default: 'user' 
   },
   status: {
@@ -56,12 +56,27 @@ const userSchema = new mongoose.Schema({
     type: Date
   },
   
-  // ===== 账号级别共享钻石 =====
+  // ===== 钻石系统（兼容旧版）=====
   diamonds: {
     type: Number,
     default: 0,
     min: 0
   },
+  
+  // 🔥 新增：区分钻石类型
+  paidDiamonds: {
+    type: Number,
+    default: 0,
+    min: 0,
+    description: '充值钻石（可发红包、可购买）'
+  },
+  freeDiamonds: {
+    type: Number,
+    default: 0,
+    min: 0,
+    description: '免费钻石（只能购买，不可发红包）'
+  },
+  
   lastDailyDiamond: {
     type: Date,
     default: null
@@ -167,9 +182,6 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// 注意：equippedItems 字段在 schema 中定义了两次，需要合并
-// 删除重复的 equippedItems 定义，保留上面那个
-
 // ===== 中间件 =====
 userSchema.pre('save', function(next) {
   this.updatedAt = new Date();
@@ -194,34 +206,89 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 userSchema.methods.isAdmin = function() {
-  return this.role === 'admin' || this.role === 'owner';
+  return this.role === 'admin' || this.role === 'super_admin' || this.role === 'owner';
 };
 
 userSchema.methods.isOwner = function() {
   return this.role === 'owner';
 };
 
-// ========== 钻石系统 ==========
+// ========== 🔥 钻石分类系统 ==========
 
-userSchema.methods.addDiamonds = async function(amount) {
-  this.diamonds += amount;
-  await this.save();
-  return this.diamonds;
+// 获取总钻石数（兼容旧版）
+userSchema.methods.getTotalDiamonds = function() {
+  return (this.diamonds || 0) + (this.paidDiamonds || 0) + (this.freeDiamonds || 0);
 };
 
-userSchema.methods.deductDiamonds = async function(amount) {
-  if (this.diamonds < amount) {
+// 添加充值钻石
+userSchema.methods.addPaidDiamonds = async function(amount) {
+  this.paidDiamonds = (this.paidDiamonds || 0) + amount;
+  // 同时更新旧版 diamonds 字段保持兼容
+  this.diamonds = (this.diamonds || 0) + amount;
+  await this.save();
+  return this.paidDiamonds;
+};
+
+// 添加免费钻石（签到、红包等）
+userSchema.methods.addFreeDiamonds = async function(amount) {
+  this.freeDiamonds = (this.freeDiamonds || 0) + amount;
+  // 同时更新旧版 diamonds 字段保持兼容
+  this.diamonds = (this.diamonds || 0) + amount;
+  await this.save();
+  return this.freeDiamonds;
+};
+
+// 扣除钻石（优先扣除免费钻石，再扣除充值钻石）
+userSchema.methods.deductDiamonds = async function(amount, requirePaid = false) {
+  let total = this.getTotalDiamonds();
+  if (total < amount) {
     throw new Error('钻石不足');
   }
-  this.diamonds -= amount;
+  
+  if (requirePaid) {
+    // 发红包等操作只能用充值钻石
+    if ((this.paidDiamonds || 0) < amount) {
+      throw new Error('充值钻石不足，请充值后再发红包');
+    }
+    this.paidDiamonds -= amount;
+    this.diamonds -= amount;
+  } else {
+    // 优先扣除免费钻石
+    let remaining = amount;
+    const freeAmount = Math.min(this.freeDiamonds || 0, remaining);
+    this.freeDiamonds -= freeAmount;
+    remaining -= freeAmount;
+    
+    if (remaining > 0) {
+      this.paidDiamonds -= remaining;
+    }
+    this.diamonds -= amount;
+  }
+  
   await this.save();
-  return this.diamonds;
+  return this.getTotalDiamonds();
+};
+
+// 检查是否有足够的充值钻石（发红包用）
+userSchema.methods.hasEnoughPaidDiamonds = function(amount) {
+  return (this.paidDiamonds || 0) >= amount;
+};
+
+// ========== 每日签到 ==========
+
+const DAILY_REWARDS = [5, 5, 8, 8, 10, 15, 20];
+
+const getRewardByStreak = (streak) => {
+  if (streak <= 0) return DAILY_REWARDS[0];
+  if (streak > 7) {
+    return DAILY_REWARDS[(streak - 1) % 7];
+  }
+  return DAILY_REWARDS[streak - 1];
 };
 
 userSchema.methods.claimDailyDiamond = function() {
   const now = new Date();
   const last = this.lastDailyDiamond;
-  const DAILY_REWARDS = [5, 5, 8, 8, 10, 15, 20];
   
   if (!last) {
     this.dailyDiamondStreak = 1;
@@ -230,7 +297,7 @@ userSchema.methods.claimDailyDiamond = function() {
     const hours = diff / (1000 * 60 * 60);
     
     if (hours >= 24 && hours < 48) {
-      this.dailyDiamondStreak = Math.min(this.dailyDiamondStreak + 1, 6);
+      this.dailyDiamondStreak = Math.min(this.dailyDiamondStreak + 1, 7);
     } else if (hours >= 48) {
       this.dailyDiamondStreak = 1;
     } else {
@@ -238,12 +305,30 @@ userSchema.methods.claimDailyDiamond = function() {
     }
   }
   
-  const streakIndex = this.dailyDiamondStreak - 1;
-  const reward = DAILY_REWARDS[streakIndex];
-  this.diamonds += reward;
+  const reward = getRewardByStreak(this.dailyDiamondStreak);
+  
+  // 签到奖励添加到免费钻石
+  this.freeDiamonds = (this.freeDiamonds || 0) + reward;
+  this.diamonds = (this.diamonds || 0) + reward;
   this.lastDailyDiamond = now;
   
-  return { reward, streak: this.dailyDiamondStreak, diamonds: this.diamonds };
+  return { reward, streak: this.dailyDiamondStreak, diamonds: this.getTotalDiamonds() };
+};
+
+// 获取每日信息
+userSchema.methods.getDailyInfo = function() {
+  const today = new Date().toDateString();
+  const lastDailyDate = this.lastDailyDiamond ? new Date(this.lastDailyDiamond).toDateString() : null;
+  const hasClaimed = lastDailyDate === today;
+  const currentStreak = this.dailyDiamondStreak || 0;
+  const nextReward = getRewardByStreak(hasClaimed ? currentStreak + 1 : currentStreak + 1);
+  
+  return {
+    hasClaimed,
+    currentStreak,
+    nextReward,
+    rewards: DAILY_REWARDS
+  };
 };
 
 // ========== 金币系统（兼容）==========
@@ -261,34 +346,6 @@ userSchema.methods.deductCoins = async function(amount) {
   this.coins -= amount;
   await this.save();
   return this.coins;
-};
-
-userSchema.methods.claimDailyReward = function() {
-  const now = new Date();
-  const last = this.lastDailyDiamond;
-  const DAILY_REWARDS = [5, 5, 8, 8, 10, 15, 20];
-  
-  if (!last) {
-    this.loginStreak = 1;
-  } else {
-    const diff = now.getTime() - last.getTime();
-    const hours = diff / (1000 * 60 * 60);
-    
-    if (hours >= 24 && hours < 48) {
-      this.loginStreak = Math.min(this.loginStreak + 1, 6);
-    } else if (hours >= 48) {
-      this.loginStreak = 1;
-    } else {
-      throw new Error('今日已领取');
-    }
-  }
-  
-  const streakIndex = this.loginStreak - 1;
-  const reward = DAILY_REWARDS[streakIndex];
-  this.coins += reward;
-  this.lastDailyDiamond = now;
-  
-  return { reward, streak: this.loginStreak, coins: this.coins };
 };
 
 // ========== 背包系统 ==========
@@ -336,7 +393,10 @@ userSchema.methods.toSafeObject = function() {
     status: this.status,
     hasAccess: this.hasAccess,
     onboarded: this.onboarded || false,
-    diamonds: this.diamonds || 0,
+    // 🔥 钻石字段
+    diamonds: this.getTotalDiamonds(),
+    paidDiamonds: this.paidDiamonds || 0,
+    freeDiamonds: this.freeDiamonds || 0,
     coins: this.coins || 0,
     dailyDiamondStreak: this.dailyDiamondStreak || 0,
     loginStreak: this.loginStreak || 0,
@@ -347,7 +407,7 @@ userSchema.methods.toSafeObject = function() {
     equippedItems: this.equippedItems || {},
     lastLogin: this.lastLogin,
     createdAt: this.createdAt,
-    lastFeedViewAt: this.lastFeedViewAt || null,  // 🔥 新增
+    lastFeedViewAt: this.lastFeedViewAt || null,
     stats: this.stats || { totalMessages: 0, totalRooms: 0, totalPersonas: 0 },
     inventory: this.inventory || [],
     achievements: this.achievements || []

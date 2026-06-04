@@ -197,6 +197,9 @@ const privateChatRoutes = require('./routes/privateChat');
 const musicRoutes = require('./routes/music');
 const youtubeRoutes = require('./routes/youtube');
 const emojiRoutes = require('./routes/emoji');
+const giftRoutes = require('./routes/gift');
+const redpacketRoutes = require('./routes/redpacket');
+const guardianRoutes = require('./routes/guardian');
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -325,6 +328,9 @@ app.use('/api/private-chat', privateChatRoutes); // 🔥 新增：私聊路由
 app.use('/api/music', musicRoutes);
 app.use('/api/youtube', youtubeRoutes);
 app.use('/api/emoji', emojiRoutes);
+app.use('/api/gift', standardLimit, giftRoutes);
+app.use('/api/redpacket', standardLimit, redpacketRoutes);
+app.use('/api/guardian', standardLimit, guardianRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 

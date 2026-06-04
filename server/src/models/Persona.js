@@ -1,3 +1,4 @@
+// server/src/models/Persona.js
 const mongoose = require('mongoose');
 
 const personaSchema = new mongoose.Schema({
@@ -90,6 +91,13 @@ const personaSchema = new mongoose.Schema({
     default: 0
   },
   
+  // 🔥 新增：守护值（收到的礼物总额）
+  guardianValue: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  
   // 亲密关系
   relationships: [{
     targetPersonaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Persona' },
@@ -101,7 +109,7 @@ const personaSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
   }],
   
-  // ✅ 装备（存储 ShopItem 的 ID）
+  // 装备（存储 ShopItem 的 ID）
   equipped: {
     avatarFrame: { type: mongoose.Schema.Types.ObjectId, ref: 'ShopItem', default: null },
     ring: { type: mongoose.Schema.Types.ObjectId, ref: 'ShopItem', default: null },
@@ -135,7 +143,6 @@ personaSchema.methods.markUsedInRoom = async function(roomId) {
   this.usageCount = (this.usageCount || 0) + 1;
   await this.save();
   
-  // 更新 PersonaRoom 的最后使用时间
   const PersonaRoom = mongoose.model('PersonaRoom');
   await PersonaRoom.findOneAndUpdate(
     { personaId: this._id, roomId },
@@ -156,7 +163,22 @@ personaSchema.methods.addLike = async function() {
   await this.save();
 };
 
-// 安全输出（不包含敏感信息）
+// 🔥 新增：增加守护值
+personaSchema.methods.addGuardianValue = async function(amount) {
+  this.guardianValue = (this.guardianValue || 0) + amount;
+  await this.save();
+  return this.guardianValue;
+};
+
+// 🔥 新增：获取守护榜排名
+personaSchema.statics.getGuardianRanking = async function(limit = 50) {
+  return await this.find({ status: 'approved' })
+    .sort({ guardianValue: -1 })
+    .limit(limit)
+    .select('_id name displayName avatar guardianValue');
+};
+
+// 安全输出
 personaSchema.methods.toSafeObject = function() {
   return {
     _id: this._id,
@@ -179,7 +201,9 @@ personaSchema.methods.toSafeObject = function() {
     guardians: this.guardians,
     totalGuardianAmount: this.totalGuardianAmount,
     relationships: this.relationships,
-    equipped: this.equipped
+    equipped: this.equipped,
+    // 🔥 新增
+    guardianValue: this.guardianValue || 0
   };
 };
 

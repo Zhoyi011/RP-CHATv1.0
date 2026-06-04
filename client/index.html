@@ -12,5 +12,13 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+  
+  <!-- 只禁用右键菜单，保留开发者工具快捷键 -->
+  <script>
+    document.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      return false;
+    });
+  </script>
 </body>
 </html>
