@@ -1,22 +1,46 @@
 // server/src/routes/emoji.js
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const jwt = require('jsonwebtoken');
 const UserEmoji = require('../models/UserEmoji');
 const EmojiCategory = require('../models/EmojiCategory');
 const cloudinary = require('cloudinary').v2;
 
+// ========== 认证中间件 ==========
+const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: '请先登录' });
+  }
+  try {
+    const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+    const decoded = jwt.verify(token, secret);
+    req.userId = decoded.userId;
+    req.userRole = decoded.role;
+    next();
+  } catch (error) {
+    console.error('Token 验证失败:', error);
+    return res.status(401).json({ error: 'token无效' });
+  }
+};
+
+// Cloudinary 配置
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 // ============ 分组管理 ============
 
 // 获取我的所有分组
-router.get('/categories', auth, async (req, res) => {
+router.get('/categories', authMiddleware, async (req, res) => {
   try {
-    const categories = await EmojiCategory.find({ userId: req.user.id })
+    const categories = await EmojiCategory.find({ userId: req.userId })
       .sort({ order: 1, createdAt: 1 });
     
-    // 添加"未分类"虚拟分组
     const uncategorizedCount = await UserEmoji.countDocuments({
-      userId: req.user.id,
+      userId: req.userId,
       categoryId: null,
       isBanned: false
     });
@@ -32,7 +56,7 @@ router.get('/categories', auth, async (req, res) => {
 });
 
 // 创建分组
-router.post('/categories', auth, async (req, res) => {
+router.post('/categories', authMiddleware, async (req, res) => {
   try {
     const { name } = req.body;
     
@@ -44,7 +68,7 @@ router.post('/categories', auth, async (req, res) => {
     }
     
     const existing = await EmojiCategory.findOne({
-      userId: req.user.id,
+      userId: req.userId,
       name: name.trim()
     });
     
@@ -53,7 +77,7 @@ router.post('/categories', auth, async (req, res) => {
     }
     
     const category = new EmojiCategory({
-      userId: req.user.id,
+      userId: req.userId,
       name: name.trim()
     });
     
@@ -66,12 +90,12 @@ router.post('/categories', auth, async (req, res) => {
 });
 
 // 更新分组
-router.put('/categories/:categoryId', auth, async (req, res) => {
+router.put('/categories/:categoryId', authMiddleware, async (req, res) => {
   try {
     const { name } = req.body;
     const category = await EmojiCategory.findOne({
       _id: req.params.categoryId,
-      userId: req.user.id
+      userId: req.userId
     });
     
     if (!category) {
@@ -94,20 +118,19 @@ router.put('/categories/:categoryId', auth, async (req, res) => {
 });
 
 // 删除分组（表情移至未分类）
-router.delete('/categories/:categoryId', auth, async (req, res) => {
+router.delete('/categories/:categoryId', authMiddleware, async (req, res) => {
   try {
     const category = await EmojiCategory.findOne({
       _id: req.params.categoryId,
-      userId: req.user.id
+      userId: req.userId
     });
     
     if (!category) {
       return res.status(404).json({ error: '分组不存在' });
     }
     
-    // 将该分组下的表情移至未分类
     await UserEmoji.updateMany(
-      { userId: req.user.id, categoryId: category._id },
+      { userId: req.userId, categoryId: category._id },
       { categoryId: null }
     );
     
@@ -121,11 +144,14 @@ router.delete('/categories/:categoryId', auth, async (req, res) => {
 
 // ============ 表情管理 ============
 
-// 上传表情（复用 Cloudinary）
-router.post('/upload', auth, async (req, res) => {
+// 上传表情（保存数据库记录）
+router.post('/upload', authMiddleware, async (req, res) => {
   try {
-    // 检查数量限制
-    const count = await UserEmoji.getUserCount(req.user.id);
+    const count = await UserEmoji.countDocuments({ 
+      userId: req.userId, 
+      isBanned: false 
+    });
+    
     if (count >= 300) {
       return res.status(400).json({ error: '表情已达上限（300张），请删除一些后再上传' });
     }
@@ -139,7 +165,7 @@ router.post('/upload', auth, async (req, res) => {
     const isGif = mimeType === 'image/gif';
     
     const emoji = new UserEmoji({
-      userId: req.user.id,
+      userId: req.userId,
       url: imageUrl,
       publicId,
       keywords: keywords || [],
@@ -165,10 +191,10 @@ router.post('/upload', auth, async (req, res) => {
   }
 });
 
-// 批量上传（最多10张）
-router.post('/batch-upload', auth, async (req, res) => {
+// 批量上传
+router.post('/batch-upload', authMiddleware, async (req, res) => {
   try {
-    const { emojis } = req.body; // [{ imageUrl, publicId, fileSize, width, height, mimeType }]
+    const { emojis } = req.body;
     
     if (!emojis || !Array.isArray(emojis)) {
       return res.status(400).json({ error: '无效的参数' });
@@ -178,7 +204,11 @@ router.post('/batch-upload', auth, async (req, res) => {
       return res.status(400).json({ error: '单次最多上传10张表情' });
     }
     
-    const currentCount = await UserEmoji.getUserCount(req.user.id);
+    const currentCount = await UserEmoji.countDocuments({ 
+      userId: req.userId, 
+      isBanned: false 
+    });
+    
     if (currentCount + emojis.length > 300) {
       return res.status(400).json({ 
         error: `上传后表情数将超过上限（300张），当前已有 ${currentCount} 张，最多可再上传 ${300 - currentCount} 张` 
@@ -189,7 +219,7 @@ router.post('/batch-upload', auth, async (req, res) => {
     for (const emojiData of emojis) {
       const isGif = emojiData.mimeType === 'image/gif';
       const emoji = new UserEmoji({
-        userId: req.user.id,
+        userId: req.userId,
         url: emojiData.imageUrl,
         publicId: emojiData.publicId,
         keywords: [],
@@ -215,12 +245,12 @@ router.post('/batch-upload', auth, async (req, res) => {
 });
 
 // 获取我的表情列表
-router.get('/my', auth, async (req, res) => {
+router.get('/my', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 50, categoryId, sortBy = 'recent' } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    const query = { userId: req.user.id, isBanned: false };
+    const query = { userId: req.userId, isBanned: false };
     if (categoryId === 'null') {
       query.categoryId = null;
     } else if (categoryId) {
@@ -261,11 +291,11 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// 获取常用表情（按使用次数）
-router.get('/frequent', auth, async (req, res) => {
+// 获取常用表情
+router.get('/frequent', authMiddleware, async (req, res) => {
   try {
     const emojis = await UserEmoji.find({
-      userId: req.user.id,
+      userId: req.userId,
       isBanned: false
     })
       .sort({ useCount: -1, createdAt: -1 })
@@ -279,10 +309,10 @@ router.get('/frequent', auth, async (req, res) => {
 });
 
 // 获取收藏表情
-router.get('/favorites', auth, async (req, res) => {
+router.get('/favorites', authMiddleware, async (req, res) => {
   try {
     const emojis = await UserEmoji.find({
-      userId: req.user.id,
+      userId: req.userId,
       isFavorite: true,
       isBanned: false
     })
@@ -295,13 +325,13 @@ router.get('/favorites', auth, async (req, res) => {
   }
 });
 
-// 更新表情（分组、关键词、收藏）
-router.put('/:emojiId', auth, async (req, res) => {
+// 更新表情
+router.put('/:emojiId', authMiddleware, async (req, res) => {
   try {
     const { categoryId, keywords, isFavorite } = req.body;
     const emoji = await UserEmoji.findOne({
       _id: req.params.emojiId,
-      userId: req.user.id
+      userId: req.userId
     });
     
     if (!emoji) {
@@ -309,11 +339,10 @@ router.put('/:emojiId', auth, async (req, res) => {
     }
     
     if (categoryId !== undefined) {
-      // 验证分组属于当前用户
       if (categoryId) {
         const category = await EmojiCategory.findOne({
           _id: categoryId,
-          userId: req.user.id
+          userId: req.userId
         });
         if (!category) {
           return res.status(400).json({ error: '分组不存在' });
@@ -338,24 +367,22 @@ router.put('/:emojiId', auth, async (req, res) => {
   }
 });
 
-// 删除表情（真实删除）
-router.delete('/:emojiId', auth, async (req, res) => {
+// 删除表情
+router.delete('/:emojiId', authMiddleware, async (req, res) => {
   try {
     const emoji = await UserEmoji.findOne({
       _id: req.params.emojiId,
-      userId: req.user.id
+      userId: req.userId
     });
     
     if (!emoji) {
       return res.status(404).json({ error: '表情不存在' });
     }
     
-    // 从 Cloudinary 删除
     try {
       await cloudinary.uploader.destroy(emoji.publicId);
     } catch (cloudError) {
       console.error('Cloudinary删除失败:', cloudError);
-      // 继续删除数据库记录
     }
     
     await emoji.deleteOne();
@@ -367,7 +394,7 @@ router.delete('/:emojiId', auth, async (req, res) => {
 });
 
 // 批量删除
-router.post('/batch-delete', auth, async (req, res) => {
+router.post('/batch-delete', authMiddleware, async (req, res) => {
   try {
     const { emojiIds } = req.body;
     
@@ -381,10 +408,9 @@ router.post('/batch-delete', auth, async (req, res) => {
     
     const emojis = await UserEmoji.find({
       _id: { $in: emojiIds },
-      userId: req.user.id
+      userId: req.userId
     });
     
-    // 从 Cloudinary 批量删除
     for (const emoji of emojis) {
       try {
         await cloudinary.uploader.destroy(emoji.publicId);
@@ -395,7 +421,7 @@ router.post('/batch-delete', auth, async (req, res) => {
     
     await UserEmoji.deleteMany({
       _id: { $in: emojiIds },
-      userId: req.user.id
+      userId: req.userId
     });
     
     res.json({ message: `已删除 ${emojis.length} 张表情` });
@@ -405,8 +431,8 @@ router.post('/batch-delete', auth, async (req, res) => {
   }
 });
 
-// 搜索表情（按关键词）
-router.get('/search', auth, async (req, res) => {
+// 搜索表情
+router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { q, limit = 50 } = req.query;
     
@@ -417,7 +443,7 @@ router.get('/search', auth, async (req, res) => {
     const searchTerm = q.toLowerCase().trim();
     
     const emojis = await UserEmoji.find({
-      userId: req.user.id,
+      userId: req.userId,
       isBanned: false,
       $or: [
         { keywords: { $in: [searchTerm] } },
@@ -435,7 +461,7 @@ router.get('/search', auth, async (req, res) => {
 });
 
 // 举报表情
-router.post('/:emojiId/report', auth, async (req, res) => {
+router.post('/:emojiId/report', authMiddleware, async (req, res) => {
   try {
     const emoji = await UserEmoji.findById(req.params.emojiId);
     
@@ -443,14 +469,12 @@ router.post('/:emojiId/report', auth, async (req, res) => {
       return res.status(404).json({ error: '表情不存在' });
     }
     
-    // 不能举报自己的表情
-    if (emoji.userId.toString() === req.user.id) {
+    if (emoji.userId.toString() === req.userId) {
       return res.status(400).json({ error: '不能举报自己的表情' });
     }
     
     emoji.reportCount += 1;
     
-    // 被举报 3 次自动下架
     if (emoji.reportCount >= 3) {
       emoji.isBanned = true;
     }
@@ -463,11 +487,11 @@ router.post('/:emojiId/report', auth, async (req, res) => {
   }
 });
 
-// 增加使用次数（发送表情时调用）
-router.post('/:emojiId/use', auth, async (req, res) => {
+// 增加使用次数
+router.post('/:emojiId/use', authMiddleware, async (req, res) => {
   try {
     await UserEmoji.updateOne(
-      { _id: req.params.emojiId, userId: req.user.id },
+      { _id: req.params.emojiId, userId: req.userId },
       { $inc: { useCount: 1 } }
     );
     res.json({ success: true });
