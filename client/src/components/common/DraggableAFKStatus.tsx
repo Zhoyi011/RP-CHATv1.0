@@ -10,6 +10,7 @@ interface DraggableAFKStatusProps {
   onRepeatToggle?: (repeating: boolean) => void;
   onSkip?: () => void;
   onShowUI?: () => void;
+  onOpenMusicPlayer?: () => void;  // 🎵 音乐播放器
   isVideoPaused?: boolean;
   isRepeating?: boolean;
 }
@@ -72,6 +73,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
   onRepeatToggle,
   onSkip,
   onShowUI,
+  onOpenMusicPlayer,
   isVideoPaused = false,
   isRepeating = false
 }) => {
@@ -210,7 +212,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
     });
   };
 
-  // 🔥 菜单选项（美化版）
+  // 🔥 菜单选项（新增音乐按钮 - 放在跳过壁纸前面）
   const menuItems = [
     { 
       id: 'pause', 
@@ -236,6 +238,20 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
         </svg>
       ),
       action: () => onRepeatToggle?.(!isRepeating)
+    },
+    { 
+      id: 'music', 
+      label: '听音乐', 
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        </svg>
+      ),
+      action: () => {
+        console.log('🎵 点击听音乐按钮');
+        onOpenMusicPlayer?.();
+        setShowMenu(false);
+      }
     },
     { 
       id: 'skip', 
@@ -294,7 +310,18 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
   };
 
   return (
-    <div className="draggable-afk-container" style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, pointerEvents: 'none', zIndex: 20000 }}>
+    <div 
+      className="draggable-afk-container" 
+      style={{ 
+        position: 'fixed', 
+        left: 0, 
+        top: 0, 
+        right: 0, 
+        bottom: 0, 
+        pointerEvents: 'none', 
+        zIndex: 99998  // 🔥 确保在 AFK 视频层之上，但在音乐面板之下
+      }}
+    >
       <motion.div
         drag
         dragMomentum={false}
@@ -304,7 +331,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
           position: 'fixed',
           x,
           y,
-          zIndex: 20001,
+          zIndex: 99999,  // 🔥 锁头本身在最高层
           cursor: isDragging ? 'grabbing' : 'pointer',
           touchAction: 'none',
           pointerEvents: 'auto',
@@ -356,7 +383,7 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-black/40 backdrop-blur-xl rounded-xl overflow-hidden shadow-xl border border-white/20 z-50"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-black/40 backdrop-blur-xl rounded-xl overflow-hidden shadow-xl border border-white/20 z-[100000] pointer-events-auto"
               onMouseEnter={cancelMenuHideTimer}
               onMouseLeave={startMenuHideTimer}
             >
@@ -368,8 +395,9 @@ export const DraggableAFKStatus: React.FC<DraggableAFKStatusProps> = ({
                     whileTap="tap"
                     onClick={(e) => {
                       e.stopPropagation();
+                      console.log(`🎮 点击菜单: ${item.label}`);
                       item.action();
-                      if (item.id !== 'showUI') {
+                      if (item.id !== 'showUI' && item.id !== 'music') {
                         setTimeout(() => setShowMenu(false), 300);
                       }
                       cancelMenuHideTimer();

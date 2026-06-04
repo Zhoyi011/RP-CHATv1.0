@@ -44,6 +44,7 @@ const MusicCard: React.FC<MusicCardProps> = ({
   const [showDetails, setShowDetails] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(propDuration || 0);
+  const [playerError, setPlayerError] = useState(false);
   const playerRef = useRef<HTMLIFrameElement>(null);
 
   const videoId = platform === 'youtube' ? getYoutubeVideoId(videoUrl) : null;
@@ -104,24 +105,42 @@ const MusicCard: React.FC<MusicCardProps> = ({
         isOwn ? 'bg-gradient-to-br from-blue-500 to-cyan-500' : 'bg-white dark:bg-gray-800'
       }`}
     >
-      {/* 封面 + 播放按钮 */}
-      <div className="relative cursor-pointer group" onClick={() => setShowPlayer(!showPlayer)}>
-        <img src={coverUrl} alt={title} className="w-full aspect-video object-cover" />
-        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-            {showPlayer ? (
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="4" width="4" height="16" rx="1" />
-                <rect x="14" y="4" width="4" height="16" rx="1" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
+      {/* YouTube：显示封面图 + 播放按钮 */}
+      {platform === 'youtube' && (
+        <div className="relative cursor-pointer group" onClick={() => setShowPlayer(!showPlayer)}>
+          <img src={coverUrl} alt={title} className="w-full aspect-video object-cover" />
+          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+              {showPlayer ? (
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Bilibili：无封面，显示平台图标 + 播放按钮 */}
+      {platform === 'bilibili' && (
+        <div className="relative cursor-pointer group bg-gradient-to-br from-blue-500 to-purple-500 aspect-video flex items-center justify-center" onClick={() => setShowPlayer(!showPlayer)}>
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-white/20 backdrop-blur flex items-center justify-center mb-2">
+              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.223 3.086a1.5 1.5 0 0 1 2.12 2.12l-2.88 2.88h2.88a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-15a1.5 1.5 0 0 1-1.5-1.5v-8.5a1.5 1.5 0 0 1 1.5-1.5h2.88l-2.88-2.88a1.5 1.5 0 1 1 2.12-2.12L12 5.086l3.223-3.223a1.5 1.5 0 1 1 2.12 2.12L14.12 7.086h2.88l2.88-2.88z" />
+              </svg>
+            </div>
+            <p className="text-white text-sm font-medium">点击播放</p>
+            <p className="text-white/70 text-xs mt-1 line-clamp-1">{title}</p>
+          </div>
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition" />
+        </div>
+      )}
 
       {/* 播放器（展开） */}
       <AnimatePresence>
@@ -144,15 +163,38 @@ const MusicCard: React.FC<MusicCardProps> = ({
                   title={title}
                 />
               ) : (
-                <iframe
-                  src={getBilibiliEmbedUrl(videoUrl)}
-                  width="100%"
-                  height="100%"
-                  allowFullScreen
-                  className="rounded-lg"
-                  title={title}
-                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
-                />
+                <>
+                  {!playerError ? (
+                    <iframe
+                      src={getBilibiliEmbedUrl(videoUrl)}
+                      width="100%"
+                      height="100%"
+                      allowFullScreen
+                      className="rounded-lg"
+                      title={title}
+                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
+                      onError={() => setPlayerError(true)}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full bg-gray-900 text-white text-xs">
+                      <div className="text-center p-4">
+                        <svg className="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p>本视频无法在外站播放</p>
+                        <p className="text-gray-500 text-xs mt-1">请点击下方链接到B站观看</p>
+                        <a 
+                          href={videoUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-block mt-2 px-3 py-1 bg-blue-500 rounded text-white text-xs hover:bg-blue-600 transition"
+                        >
+                          去B站观看 →
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </motion.div>
@@ -162,7 +204,17 @@ const MusicCard: React.FC<MusicCardProps> = ({
       {/* 信息区 */}
       <div className="p-2.5">
         <div className="flex items-start gap-2">
-          <img src={coverUrl} alt={title} className="w-10 h-10 rounded object-cover flex-shrink-0" />
+          {/* YouTube：显示小封面图；Bilibili：显示平台图标 */}
+          {platform === 'youtube' ? (
+            <img src={coverUrl} alt={title} className="w-10 h-10 rounded object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.223 3.086a1.5 1.5 0 0 1 2.12 2.12l-2.88 2.88h2.88a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-15a1.5 1.5 0 0 1-1.5-1.5v-8.5a1.5 1.5 0 0 1 1.5-1.5h2.88l-2.88-2.88a1.5 1.5 0 1 1 2.12-2.12L12 5.086l3.223-3.223a1.5 1.5 0 1 1 2.12 2.12L14.12 7.086h2.88l2.88-2.88z" />
+              </svg>
+            </div>
+          )}
+          
           <div className="flex-1 min-w-0">
             <h4 className={`font-semibold truncate text-sm ${isOwn ? 'text-white' : 'text-gray-800 dark:text-white'}`}>
               {title}
@@ -176,6 +228,7 @@ const MusicCard: React.FC<MusicCardProps> = ({
               </p>
             )}
           </div>
+          
           <button
             onClick={() => setShowDetails(!showDetails)}
             className={`p-1 rounded-full transition-colors ${isOwn ? 'text-white/70 hover:text-white' : 'text-gray-400 hover:text-blue-500'}`}
@@ -185,6 +238,7 @@ const MusicCard: React.FC<MusicCardProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
+          
           <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
             platform === 'youtube'
               ? 'bg-red-100 text-red-600'
@@ -194,8 +248,8 @@ const MusicCard: React.FC<MusicCardProps> = ({
           </span>
         </div>
 
-        {/* 进度条 */}
-        {videoDuration > 0 && platform === 'youtube' && (
+        {/* 进度条（仅 YouTube） */}
+        {platform === 'youtube' && videoDuration > 0 && (
           <div className="mt-2">
             <div className="relative h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div className="absolute left-0 top-0 h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progress}%` }} />

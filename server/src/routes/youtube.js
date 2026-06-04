@@ -70,4 +70,23 @@ router.get('/info', async (req, res) => {
   }
 });
 
+// 添加音频流代理
+router.get('/audio', async (req, res) => {
+  const { videoId } = req.query;
+  if (!videoId) {
+    return res.status(400).json({ error: '缺少 videoId' });
+  }
+  
+  try {
+    const ytdl = require('ytdl-core');
+    const stream = ytdl(videoId, { filter: 'audioonly' });
+    
+    res.setHeader('Content-Type', 'audio/mpeg');
+    stream.pipe(res);
+  } catch (error) {
+    console.error('获取音频失败:', error);
+    res.status(500).json({ error: '获取音频失败' });
+  }
+});
+
 module.exports = router;
