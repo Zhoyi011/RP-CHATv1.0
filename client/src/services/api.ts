@@ -258,6 +258,9 @@ export interface User {
   hasAccess: boolean;
   coins: number;
   diamonds: number;
+  // 🔥 新增：区分钻石类型
+  paidDiamonds?: number;
+  freeDiamonds?: number;
   theme: string;
   notifications: boolean;
   soundEnabled: boolean;
@@ -279,6 +282,7 @@ export interface User {
     totalPersonas: number;
   };
 }
+
 
 export interface UserSettings {
   theme: 'light' | 'dark' | 'auto';
@@ -331,6 +335,10 @@ export interface Message {
   isAudio?: boolean;
   audioUrl?: string;
   audioDuration?: number;
+  // 🎨 表情消息字段 - 🔥 添加这些
+  isEmoji?: boolean;
+  emojiId?: string;
+  emojiUrl?: string;
   createdAt: string;
   roomId: string | { _id: string; name: string };
   personaId: {
@@ -352,6 +360,7 @@ export interface Message {
   isDeleted?: boolean;
   replyTo?: ReplyToInfo | null;
 }
+
 
 export interface Persona {
   _id: string;

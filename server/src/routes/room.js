@@ -1,3 +1,4 @@
+// server/src/routes/room.js
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -325,7 +326,7 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 🔥 获取消息接口（包含音频字段）==========
+// ========== 🔥 获取消息接口（包含音频和表情字段）==========
 router.get('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -384,7 +385,7 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         avatarFrameUrl = persona.equipped.avatarFrame.image;
       }
       
-      // 🔥 关键：返回音频字段
+      // 🔥 关键：返回所有字段，包括表情和音频
       return {
         _id: msg._id,
         content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
@@ -399,6 +400,10 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         isAudio: msg.isAudio || false,
         audioUrl: msg.audioUrl || null,
         audioDuration: msg.audioDuration || null,
+        // 🎨 表情字段
+        isEmoji: msg.isEmoji || false,
+        emojiId: msg.emojiId || null,
+        emojiUrl: msg.emojiUrl || null,
         personaId: persona ? {
           _id: persona._id,
           name: persona.name,
@@ -428,7 +433,7 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
 router.post('/:roomId/messages', authMiddleware, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { content, personaId, replyToId, isAudio, audioUrl, audioDuration } = req.body;
+    const { content, personaId, replyToId, isAudio, audioUrl, audioDuration, isEmoji, emojiId, emojiUrl } = req.body;
     
     const room = await Room.findById(roomId);
     if (!room) return res.status(404).json({ error: '房间不存在' });
@@ -456,7 +461,11 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
       // 🎙️ 音频字段
       isAudio: isAudio || false,
       audioUrl: audioUrl || null,
-      audioDuration: audioDuration || null
+      audioDuration: audioDuration || null,
+      // 🎨 表情字段
+      isEmoji: isEmoji || false,
+      emojiId: emojiId || null,
+      emojiUrl: emojiUrl || null
     });
     
     await message.save();
@@ -512,6 +521,10 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
         isAudio: message.isAudio || false,
         audioUrl: message.audioUrl || null,
         audioDuration: message.audioDuration || null,
+        // 🎨 表情字段
+        isEmoji: message.isEmoji || false,
+        emojiId: message.emojiId || null,
+        emojiUrl: message.emojiUrl || null,
         personaId: {
           _id: persona._id,
           name: persona.name,
@@ -532,7 +545,7 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 其余路由（保持不变）==========
+// ========== 其余路由 ==========
 router.get('/:roomId/unread', authMiddleware, async (req, res) => {
   try {
     const lastRead = await UserReadRecord.findOne({ userId: req.userId, roomId: req.params.roomId });

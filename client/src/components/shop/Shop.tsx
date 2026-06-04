@@ -1,6 +1,9 @@
+// client/src/components/shop/Shop.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Gift, ShoppingBag } from 'lucide-react';
+import { GiftModal } from '../gift/GiftModal';
 import toast from 'react-hot-toast';
 
 interface ShopItem {
@@ -13,6 +16,7 @@ interface ShopItem {
   image: string;
   previewImage?: string;
   description: string;
+  isGiftable?: boolean;
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
@@ -23,6 +27,21 @@ const Shop: React.FC = () => {
   const [myItems, setMyItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState<string | null>(null);
+  
+  // 礼物弹窗状态
+  const [giftModal, setGiftModal] = useState<{
+    isOpen: boolean;
+    itemId: string;
+    itemName: string;
+    itemImage: string;
+    itemPrice: number;
+  }>({
+    isOpen: false,
+    itemId: '',
+    itemName: '',
+    itemImage: '',
+    itemPrice: 0,
+  });
 
   useEffect(() => {
     loadData();
@@ -84,6 +103,21 @@ const Shop: React.FC = () => {
     }
   };
 
+  // 🔥 新增：打开赠送弹窗
+  const handleOpenGift = (item: ShopItem) => {
+    if (!myItems.includes(item._id)) {
+      toast.error('请先购买该物品再赠送');
+      return;
+    }
+    setGiftModal({
+      isOpen: true,
+      itemId: item._id,
+      itemName: item.name,
+      itemImage: item.previewImage || item.image,
+      itemPrice: item.price,
+    });
+  };
+
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
       case 'legendary': return 'from-yellow-500 to-amber-600';
@@ -126,55 +160,99 @@ const Shop: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 py-6">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {items.map((item) => (
-            <motion.div
-              key={item._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all ${
-                myItems.includes(item._id) ? 'opacity-60' : ''
-              }`}
-            >
-              {/* 预览图 */}
-              <div className={`bg-gradient-to-br ${getRarityColor(item.rarity)} p-4 flex justify-center`}>
-                <img
-                  src={item.previewImage || item.image}
-                  alt={item.name}
-                  className="w-32 h-32 object-contain"
-                />
-              </div>
-              
-              {/* 信息 */}
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-800 dark:text-gray-200">{item.name}</h3>
-                  <span className={`text-xs px-2 py-0.5 rounded-full bg-${item.rarity === 'legendary' ? 'yellow' : item.rarity === 'epic' ? 'purple' : item.rarity === 'rare' ? 'blue' : 'gray'}-100 text-${item.rarity === 'legendary' ? 'yellow' : item.rarity === 'epic' ? 'purple' : item.rarity === 'rare' ? 'blue' : 'gray'}-700`}>
-                    {getRarityName(item.rarity)}
-                  </span>
+          {items.map((item) => {
+            const isOwned = myItems.includes(item._id);
+            const canGift = isOwned && item.isGiftable !== false;
+            
+            return (
+              <motion.div
+                key={item._id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all ${
+                  isOwned ? 'opacity-80' : ''
+                }`}
+              >
+                {/* 预览图 */}
+                <div className={`bg-gradient-to-br ${getRarityColor(item.rarity)} p-4 flex justify-center`}>
+                  <img
+                    src={item.previewImage || item.image}
+                    alt={item.name}
+                    className="w-32 h-32 object-contain"
+                  />
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{item.description}</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <span className="text-lg">{item.currency === 'diamonds' ? '💎' : '🪙'}</span>
-                    <span className="font-bold text-gray-800 dark:text-gray-200">{item.price}</span>
+                
+                {/* 信息 */}
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-200">{item.name}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full bg-${item.rarity === 'legendary' ? 'yellow' : item.rarity === 'epic' ? 'purple' : item.rarity === 'rare' ? 'blue' : 'gray'}-100 text-${item.rarity === 'legendary' ? 'yellow' : item.rarity === 'epic' ? 'purple' : item.rarity === 'rare' ? 'blue' : 'gray'}-700`}>
+                      {getRarityName(item.rarity)}
+                    </span>
                   </div>
-                  <button
-                    onClick={() => handleBuy(item)}
-                    disabled={myItems.includes(item._id) || buying === item._id}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-                      myItems.includes(item._id)
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:shadow-md active:scale-95'
-                    }`}
-                  >
-                    {myItems.includes(item._id) ? '已拥有' : buying === item._id ? '购买中...' : '购买'}
-                  </button>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{item.description}</p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <span className="text-lg">{item.currency === 'diamonds' ? '💎' : '🪙'}</span>
+                      <span className="font-bold text-gray-800 dark:text-gray-200">{item.price}</span>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      {/* 🔥 赠送按钮 */}
+                      {canGift && (
+                        <button
+                          onClick={() => handleOpenGift(item)}
+                          className="p-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:shadow-md transition active:scale-95"
+                          title="赠送好友"
+                        >
+                          <Gift className="w-4 h-4" />
+                        </button>
+                      )}
+                      
+                      {/* 购买按钮 */}
+                      <button
+                        onClick={() => handleBuy(item)}
+                        disabled={isOwned || buying === item._id}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 ${
+                          isOwned
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:shadow-md active:scale-95'
+                        }`}
+                      >
+                        {buying === item._id ? (
+                          '购买中...'
+                        ) : isOwned ? (
+                          <>
+                            <ShoppingBag className="w-3 h-3" />
+                            已拥有
+                          </>
+                        ) : (
+                          '购买'
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
+
+      {/* 🔥 赠送礼物弹窗 */}
+      <GiftModal
+        isOpen={giftModal.isOpen}
+        onClose={() => setGiftModal({ ...giftModal, isOpen: false })}
+        itemId={giftModal.itemId}
+        itemName={giftModal.itemName}
+        itemImage={giftModal.itemImage}
+        itemPrice={giftModal.itemPrice}
+        onSuccess={() => {
+          // 赠送成功后刷新数据
+          loadData();
+        }}
+      />
     </div>
   );
 };

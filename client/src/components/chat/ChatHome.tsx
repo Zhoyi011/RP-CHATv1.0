@@ -28,6 +28,10 @@ import { smartConvert } from '../../services/translateApi';
 import { Users, MessageCircle, Sparkles, Plus } from 'lucide-react';
 import MusicSearchModal from './MusicSearchModal';
 import { EmojiMessage } from '../emoji/EmojiMessage';
+import { GiftMessage } from '../gift/GiftMessage';
+import { RedPacketMessage } from '../redpacket/RedPacketMessage';
+import { RedPacketDetail } from '../redpacket/RedPacketDetail';
+import { RedPacketModal } from '../redpacket/RedPacketModal';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -76,6 +80,28 @@ const isMusicMessage = (content: string): boolean => {
   try {
     const parsed = JSON.parse(content);
     return parsed?.type === 'music';
+  } catch {
+    return false;
+  }
+};
+
+// ========== 检查是否为礼物消息 ==========
+const isGiftMessage = (content: string): boolean => {
+  if (!content) return false;
+  try {
+    const parsed = JSON.parse(content);
+    return parsed?.type === 'gift';
+  } catch {
+    return false;
+  }
+};
+
+// ========== 检查是否为红包消息 ==========
+const isRedPacketMessage = (content: string): boolean => {
+  if (!content) return false;
+  try {
+    const parsed = JSON.parse(content);
+    return parsed?.type === 'redpacket';
   } catch {
     return false;
   }
@@ -156,7 +182,7 @@ const MessageBubble: React.FC<{
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDoubleClickRef = useRef(false);
   
-  // 🎵 检查是否是音乐消息
+  // 检查消息类型
   const musicCheck = (() => {
     try {
       const parsed = JSON.parse(message.content);
@@ -365,7 +391,6 @@ const MessageBubble: React.FC<{
               }`}
             />
             
-            {/* 🎵 只有非音乐消息才显示链接预览 */}
             {!musicCheck && urls.length > 0 && <LinkPreviewContainer urls={urls} isSelf={isSelf} />}
             
             <div className={`flex items-center gap-1 mt-1.5 ${isSelf ? 'justify-end' : 'justify-start'}`}>
@@ -429,7 +454,8 @@ const MessageList: React.FC<{
   onReply: (message: Message) => void;
   onRecall: (message: Message) => void;
   onDeleteSelf: (message: Message) => void;
-}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange, onReply, onRecall, onDeleteSelf }) => {
+  onOpenRedPacket?: (redPacketId: string) => void;
+}> = ({ messages, user, selectedPersona, isMobile, navigate, onMessagesChange, onReply, onRecall, onDeleteSelf, onOpenRedPacket }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [translatingMsgId, setTranslatingMsgId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -634,6 +660,73 @@ const MessageList: React.FC<{
                 );
               }
               
+              // 🎁 礼物消息
+              if (isGiftMessage(msg.content)) {
+                let giftData;
+                try {
+                  giftData = JSON.parse(msg.content);
+                } catch { return null; }
+                const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
+                return (
+                  <motion.div
+                    key={msg._id}
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <GiftMessage
+                      fromPersonaName={giftData.fromPersonaName}
+                      fromPersonaAvatar={giftData.fromPersonaAvatar}
+                      itemName={giftData.itemName}
+                      itemImage={giftData.itemImage}
+                      guardValue={giftData.guardValue}
+                      message={giftData.message}
+                      timestamp={msg.createdAt}
+                    />
+                  </motion.div>
+                );
+              }
+              
+              // 🧧 红包消息
+              if (isRedPacketMessage(msg.content)) {
+                let redpacketData;
+                try {
+                  redpacketData = JSON.parse(msg.content);
+                } catch { return null; }
+                const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
+                const isExpired = new Date() > new Date(redpacketData.expiresAt);
+                const isFinished = redpacketData.status === 'finished';
+                const hasClaimed = redpacketData.hasClaimed || false;
+                return (
+                  <motion.div
+                    key={msg._id}
+                    variants={messageVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <RedPacketMessage
+                      redPacketId={redpacketData.redPacketId}
+                      senderName={redpacketData.senderName}
+                      senderAvatar={redpacketData.senderAvatar}
+                      type={redpacketData.type}
+                      totalAmount={redpacketData.totalAmount}
+                      count={redpacketData.count}
+                      remainingCount={redpacketData.remainingCount}
+                      message={redpacketData.message}
+                      targetPersonaName={redpacketData.targetPersonaName}
+                      isExpired={isExpired}
+                      isFinished={isFinished}
+                      hasClaimed={hasClaimed}
+                      onClick={() => onOpenRedPacket?.(redpacketData.redPacketId)}
+                    />
+                  </motion.div>
+                );
+              }
+              
               const isSelf = selectedPersona && msg.personaId?._id === selectedPersona._id;
               
               return (
@@ -700,6 +793,11 @@ const ChatHome = () => {
   
   // 🎵 音乐搜索弹窗状态
   const [showMusicSearch, setShowMusicSearch] = useState(false);
+  
+  // 🧧 红包相关状态
+  const [showRedPacketModal, setShowRedPacketModal] = useState(false);
+  const [selectedRedPacketId, setSelectedRedPacketId] = useState<string | null>(null);
+  const [showRedPacketDetail, setShowRedPacketDetail] = useState(false);
   
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -884,51 +982,48 @@ const ChatHome = () => {
     }
   }, [saveLastUsedPersona]);
 
-  // ========== 🎨 发送消息（支持文本、动作、表情） ==========
+  // ========== 🎨 发送消息 ==========
   const handleSendMessage = useCallback((
-  content: string, 
-  isAction = false, 
-  personaId?: string,
-  isEmoji = false,
-  emojiId?: string
-) => {
-  if (!selectedRoom || !user) {
-    toast.error('请先选择聊天室');
-    return;
-  }
-  if (!isEmoji && !content.trim()) return;
-  const pid = personaId || selectedPersona?._id;
-  if (!pid) {
-    toast.error('请选择发言角色');
-    return;
-  }
-  
-  // 🔥 修复：表情消息使用 '[表情]' 作为内容
-  let messageContent: string;
-  if (isEmoji) {
-    messageContent = '[表情]';
-  } else if (isAction) {
-    messageContent = `/me ${content}`;
-  } else {
-    messageContent = content;
-  }
-  
-  console.log('📤 发送消息:', { isEmoji, emojiId, emojiUrl: isEmoji ? content : undefined });
-  
-  socketService.emit('send-message', {
-    roomId: selectedRoom._id,
-    userId: user.uid,
-    personaId: pid,
-    content: messageContent,
-    isAction,
-    replyToId: replyToMessage?._id,
-    isEmoji,
-    emojiId,
-    emojiUrl: isEmoji ? content : undefined,
-  });
-  
-  setReplyToMessage(null);
-}, [selectedRoom, selectedPersona, user, replyToMessage]);
+    content: string, 
+    isAction = false, 
+    personaId?: string,
+    isEmoji = false,
+    emojiId?: string
+  ) => {
+    if (!selectedRoom || !user) {
+      toast.error('请先选择聊天室');
+      return;
+    }
+    if (!isEmoji && !content.trim()) return;
+    const pid = personaId || selectedPersona?._id;
+    if (!pid) {
+      toast.error('请选择发言角色');
+      return;
+    }
+    
+    let messageContent: string;
+    if (isEmoji) {
+      messageContent = '[表情]';
+    } else if (isAction) {
+      messageContent = `/me ${content}`;
+    } else {
+      messageContent = content;
+    }
+    
+    socketService.emit('send-message', {
+      roomId: selectedRoom._id,
+      userId: user.uid,
+      personaId: pid,
+      content: messageContent,
+      isAction,
+      replyToId: replyToMessage?._id,
+      isEmoji,
+      emojiId,
+      emojiUrl: isEmoji ? content : undefined,
+    });
+    
+    setReplyToMessage(null);
+  }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   // ========== 🎙️ 发送语音消息 ==========
   const handleSendAudio = useCallback(async (audioBlob: Blob, duration: number) => {
@@ -991,8 +1086,6 @@ const ChatHome = () => {
       duration: music.duration,
     };
     
-    console.log('🎵 发送音乐消息:', musicData);
-    
     socketService.emit('send-message', {
       roomId: selectedRoom._id,
       userId: user.uid,
@@ -1006,6 +1099,13 @@ const ChatHome = () => {
     setShowMusicSearch(false);
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
+  // ========== 🧧 打开红包 ==========
+  const handleOpenRedPacket = useCallback((redPacketId: string) => {
+    setSelectedRedPacketId(redPacketId);
+    setShowRedPacketDetail(true);
+  }, []);
+
+  // ========== 加载消息 ==========
   const loadInitialMessages = useCallback(async () => {
     if (!selectedRoom || !selectedPersona || !user) return;
     
@@ -1081,6 +1181,7 @@ const ChatHome = () => {
     };
   }, [hasMoreMessages, isLoadingMore, loadMoreMessages]);
 
+  // ========== 认证和初始化 ==========
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (!firebaseUser) { navigate('/'); return; }
@@ -1179,6 +1280,7 @@ const ChatHome = () => {
 
   useEffect(() => { if (selectedRoom) loadRoomPersonas(); }, [selectedRoom]);
 
+  // ========== Socket 事件 ==========
   useEffect(() => {
     if (!authChecked || !user) return;
     const token = localStorage.getItem('token');
@@ -1205,7 +1307,7 @@ const ChatHome = () => {
       });
       
       const isSelf = selectedPersona && message.personaId?._id === selectedPersona._id;
-      if (!isSelf && !message.isEmoji) {
+      if (!isSelf && !message.isEmoji && !isGiftMessage(message.content) && !isRedPacketMessage(message.content)) {
         const frameName = getFrameNameFromUrl(message.personaId?.avatarFrame || message.personaId?.equipped?.avatarFrame);
         toast.custom((t) => (
           <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 flex items-center gap-3 cursor-pointer ${t.visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}
@@ -1272,6 +1374,7 @@ const ChatHome = () => {
     };
   }, [selectedRoom, selectedPersona, user]);
 
+  // ========== 选择房间等 ==========
   const handleSelectRoom = useCallback(async (room: Room) => {
     let persona = selectedPersona;
     
@@ -1353,6 +1456,7 @@ const ChatHome = () => {
   if (!authChecked) return <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center"><div className="text-white/60 text-lg animate-pulse">加载中...</div></div>;
   if (error) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><div className="text-center"><div className="text-6xl mb-4">😢</div><p className="text-red-500 mb-6">{error}</p><button onClick={() => window.location.reload()} className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl shadow-md hover:shadow-lg transition">重试</button></div></div>;
 
+  // ========== 渲染函数 ==========
   const renderChatList = () => (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
@@ -1532,6 +1636,16 @@ const ChatHome = () => {
                 <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
               </button>
             )}
+            {/* 🧧 红包按钮 */}
+            <button 
+              onClick={() => setShowRedPacketModal(true)} 
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition" 
+              title="发红包"
+            >
+              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -1549,6 +1663,7 @@ const ChatHome = () => {
             onReply={handleReply}
             onRecall={handleRecall}
             onDeleteSelf={handleDeleteSelf}
+            onOpenRedPacket={handleOpenRedPacket}
           />
           {isLoadingMore && (
             <div className="text-center py-2">
@@ -1595,6 +1710,32 @@ const ChatHome = () => {
           onClose={() => setShowMusicSearch(false)}
           onSelect={handleShareMusic}
         />
+
+        {/* 🧧 发红包弹窗 */}
+        <RedPacketModal
+          isOpen={showRedPacketModal}
+          onClose={() => setShowRedPacketModal(false)}
+          roomId={selectedRoom?._id || ''}
+          onSuccess={() => {
+            // 红包发送成功后刷新消息
+          }}
+        />
+
+        {/* 🧧 红包详情弹窗 */}
+        {selectedRedPacketId && (
+          <RedPacketDetail
+            isOpen={showRedPacketDetail}
+            onClose={() => {
+              setShowRedPacketDetail(false);
+              setSelectedRedPacketId(null);
+            }}
+            redPacketId={selectedRedPacketId}
+            onClaimSuccess={() => {
+              // 领取成功后刷新消息
+              loadInitialMessages();
+            }}
+          />
+        )}
       </div>
     );
   };
