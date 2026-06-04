@@ -1,5 +1,5 @@
 // client/src/services/emojiApi.ts
-// 修复类型导入问题
+// 表情包系统 API - 完整修复版
 
 import toast from 'react-hot-toast';
 
@@ -173,6 +173,7 @@ export const uploadEmoji = async (file: File): Promise<UploadEmojiResponse> => {
   const formData = new FormData();
   formData.append('image', file);
   
+  // 1. 上传到 Cloudinary
   const fullUrl = `${API_BASE}/upload/emoji`;
   
   const response = await fetch(fullUrl, {
@@ -188,6 +189,7 @@ export const uploadEmoji = async (file: File): Promise<UploadEmojiResponse> => {
     throw new Error(data.error || '上传失败');
   }
   
+  // 2. 保存到数据库
   const saveResult = await request<UploadEmojiResponse>('/emoji/upload', {
     method: 'POST',
     body: JSON.stringify({
@@ -204,6 +206,7 @@ export const uploadEmoji = async (file: File): Promise<UploadEmojiResponse> => {
   return saveResult;
 };
 
+// 🔥 修复：批量上传 - 不再重复调用 batch-upload
 export const batchUploadEmojis = async (files: File[]): Promise<{ emojis: UploadEmojiResponse[] }> => {
   if (files.length === 0) {
     return { emojis: [] };
@@ -213,24 +216,12 @@ export const batchUploadEmojis = async (files: File[]): Promise<{ emojis: Upload
     throw new Error('单次最多上传10张表情');
   }
   
+  // 直接上传每张图片（uploadEmoji 已经包含上传+保存）
   const uploadPromises = files.map(file => uploadEmoji(file));
   const uploadResults = await Promise.all(uploadPromises);
   
-  const emojisData = uploadResults.map((result, index) => ({
-    imageUrl: result.url,
-    publicId: result.publicId,
-    fileSize: result.fileSize,
-    width: result.width,
-    height: result.height,
-    mimeType: files[index].type,
-  }));
-  
-  const batchResult = await request<{ emojis: UploadEmojiResponse[] }>('/emoji/batch-upload', {
-    method: 'POST',
-    body: JSON.stringify({ emojis: emojisData }),
-  });
-  
-  return batchResult;
+  // 直接返回结果，不再重复调用 batch-upload
+  return { emojis: uploadResults };
 };
 
 // ========== 表情管理 API ==========

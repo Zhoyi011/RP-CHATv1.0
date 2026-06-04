@@ -566,29 +566,33 @@ io.on('connection', (socket) => {
       }
       
       io.in(roomId).emit('new-message', {
-        _id: message._id,
-        content: message.content,
-        isAction: message.isAction,
-        isPat: message.isPat || false,
-        isRecalled: false,
-        isDeleted: false,
-        createdAt: message.createdAt,
-        roomId,
-        replyTo: replyToData,
-        isAudio: message.isAudio || false,
-        audioUrl: message.audioUrl || null,
-        audioDuration: message.audioDuration || null,
-        personaId: {
-          _id: persona._id,
-          name: persona.name,
-          displayName: persona.displayName,
-          avatar: persona.avatar,
-          sameNameNumber: persona.sameNameNumber,
-          avatarFrame: avatarFrameUrl,
-          equipped: { avatarFrame: avatarFrameUrl }
-        },
-        userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
-      });
+  _id: message._id,
+  content: message.content,
+  isAction: message.isAction,
+  isPat: message.isPat || false,
+  isRecalled: false,
+  isDeleted: false,
+  createdAt: message.createdAt,
+  roomId,
+  replyTo: replyToData,
+  isAudio: message.isAudio || false,
+  audioUrl: message.audioUrl || null,
+  audioDuration: message.audioDuration || null,
+  isEmoji: message.isEmoji || false,
+  emojiId: message.emojiId,
+  emojiUrl: message.emojiUrl,
+  personaId: {
+    _id: persona._id,
+    name: persona.name,
+    displayName: persona.displayName,
+    avatar: persona.avatar,
+    sameNameNumber: persona.sameNameNumber,
+    avatarFrame: avatarFrameUrl,
+    equipped: { avatarFrame: avatarFrameUrl }
+  },
+  userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
+});
+
     } catch (error) {
       console.error('发送消息失败:', error);
       socket.emit('error', { message: '发送消息失败' });

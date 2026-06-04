@@ -1,11 +1,10 @@
 // client/src/components/emoji/EmojiPicker.tsx
-// 修复：移除 Gif 导入（因为 lucide-react 没有 Gif），使用正确的类型导入
-
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
-  X, Search, Star, Clock, Grid3x3, Plus, FolderPlus, 
-  Trash2, ChevronLeft
+  X, Search, Star, Grid3x3, Plus, FolderPlus, 
+  Trash2, ChevronLeft, Settings
 } from 'lucide-react';
 import { 
   getMyEmojis, getFrequentEmojis, getFavoriteEmojis,
@@ -27,6 +26,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   onClose, 
   position = 'bottom' 
 }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('my');
   const [emojis, setEmojis] = useState<EmojiType[]>([]);
   const [categories, setCategories] = useState<EmojiCategoryType[]>([]);
@@ -135,6 +135,10 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
+    if (newCategoryName.length > 20) {
+      alert('分组名称不能超过20个字符');
+      return;
+    }
     try {
       await createCategory(newCategoryName.trim());
       await loadCategories();
@@ -142,6 +146,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       setShowCreateCategory(false);
     } catch (error) {
       console.error('创建分组失败:', error);
+      alert('创建失败，分组名可能已存在');
     }
   };
 
@@ -212,9 +217,23 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
             收藏
           </button>
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded-lg transition">
-          <X className="w-4 h-4 text-gray-400" />
-        </button>
+        
+        {/* 右侧按钮组 */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              navigate('/emojis');
+              onClose();
+            }}
+            className="p-1.5 hover:bg-gray-700 rounded-lg transition"
+            title="管理表情包"
+          >
+            <Settings className="w-4 h-4 text-gray-400" />
+          </button>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-700 rounded-lg transition">
+            <X className="w-4 h-4 text-gray-400" />
+          </button>
+        </div>
       </div>
 
       {/* 搜索栏 */}
@@ -256,6 +275,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
           <button
             onClick={() => setShowCreateCategory(true)}
             className="p-0.5 hover:bg-gray-700 rounded transition"
+            title="新建分组"
           >
             <Plus className="w-3.5 h-3.5 text-gray-400" />
           </button>
@@ -272,7 +292,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             <Grid3x3 className="w-8 h-8 mb-1" />
             <p className="text-xs">
-              {isSearching ? '没有找到相关表情' : activeTab === 'my' ? '暂无表情，点击 + 添加~' : '暂无表情'}
+              {isSearching ? '没有找到相关表情' : activeTab === 'my' ? '暂无表情，点击⚙️管理~' : '暂无表情'}
             </p>
           </div>
         ) : (
@@ -310,8 +330,8 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
       {/* 创建分组弹窗 */}
       {showCreateCategory && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-xl p-4 w-72">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateCategory(false)}>
+          <div className="bg-gray-800 rounded-xl p-4 w-72" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-white font-medium text-sm mb-3">新建分组</h3>
             <input
               type="text"
@@ -321,6 +341,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
               maxLength={20}
               className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-3 focus:outline-none focus:ring-1 focus:ring-purple-500"
               autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
             />
             <div className="flex gap-2">
               <button
