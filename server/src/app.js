@@ -527,9 +527,9 @@ io.on('connection', (socket) => {
     
     const Message = require('./models/Message');
     
-    // 🔥 修复：如果是表情消息且内容为空，设置默认内容
+    // 🔥 修复：如果是表情消息，content 设为 '[表情]'
     let finalContent = cleanContent;
-    if (isEmoji && (!cleanContent || cleanContent.trim() === '')) {
+    if (isEmoji) {
       finalContent = '[表情]';
     }
     

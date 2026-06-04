@@ -903,14 +903,23 @@ const ChatHome = () => {
     return;
   }
   
-  // 🔥 修复：表情消息使用默认文本
-  let messageContent = isEmoji ? '[表情]' : (isAction ? `/me ${content}` : content);
+  // 🔥 修复：表情消息使用 '[表情]' 作为内容
+  let messageContent: string;
+  if (isEmoji) {
+    messageContent = '[表情]';
+  } else if (isAction) {
+    messageContent = `/me ${content}`;
+  } else {
+    messageContent = content;
+  }
+  
+  console.log('📤 发送消息:', { isEmoji, emojiId, emojiUrl: isEmoji ? content : undefined });
   
   socketService.emit('send-message', {
     roomId: selectedRoom._id,
     userId: user.uid,
     personaId: pid,
-    content: messageContent,  // 使用修复后的内容
+    content: messageContent,
     isAction,
     replyToId: replyToMessage?._id,
     isEmoji,
