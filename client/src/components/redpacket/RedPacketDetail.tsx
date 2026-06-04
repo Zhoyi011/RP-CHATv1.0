@@ -191,6 +191,19 @@ export const RedPacketDetail: React.FC<RedPacketDetailProps> = ({
                             className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700"
                           >
                             <div className="flex items-center gap-2">
+                              {/* 使用 AvatarFrame size="sm" */}
+                              {(record as any).avatar ? (
+                                <AvatarFrame
+                                  avatarUrl={(record as any).avatar}
+                                  frameName={getFrameNameFromUrl((record as any).avatarFrame)}
+                                  size="sm"
+                                  className="flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
+                                  {(record.personaName || '?').charAt(0).toUpperCase()}
+                                </div>
+                              )}
                               <span className="text-gray-600 dark:text-gray-400 text-sm">
                                 {record.personaName}
                               </span>

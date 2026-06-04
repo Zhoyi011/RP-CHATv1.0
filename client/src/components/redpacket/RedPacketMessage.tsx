@@ -67,8 +67,8 @@ export const RedPacketMessage: React.FC<RedPacketMessageProps> = ({
 
   const getStatusColor = () => {
     if (isExpired || isFinished) return 'text-gray-400';
-    if (hasClaimed) return 'text-green-500';
-    return 'text-red-500';
+    if (hasClaimed) return 'text-green-400';
+    return 'text-yellow-300';
   };
 
   return (

@@ -77,6 +77,8 @@ export interface RedPacketRecord {
   amount: number;
   createdAt: string;
   isLucky?: boolean;
+  avatar?: string;  // 🔥 添加
+  avatarFrame?: string;  // 🔥 添加
 }
 
 export interface SendRedPacketRequest {

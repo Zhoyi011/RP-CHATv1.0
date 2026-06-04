@@ -291,15 +291,18 @@ router.post('/:personaId/use', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '你已经拥有这个角色了' });
     }
     
-    // 创建用户的角色副本
+    // 🔥 创建用户的角色副本 - 添加所有必要字段
     const userPersona = new Persona({
       name: original.name,
+      displayName: original.displayName || original.name,
       description: original.description,
-      tags: original.tags,
+      tags: original.tags || [],
       avatar: original.avatar,
       userId: req.userId,
       originalPersonaId: original._id,
-      status: 'approved'
+      createdBy: req.userId,  // 🔥 关键修复
+      status: 'approved',
+      sameNameNumber: original.sameNameNumber
     });
     
     await userPersona.save();
@@ -309,13 +312,13 @@ router.post('/:personaId/use', authMiddleware, async (req, res) => {
     await original.save();
     
     res.json({
-      message: `已获得角色 ${userPersona.displayName}`,
+      message: `已获得角色 ${userPersona.displayName || userPersona.name}`,
       persona: userPersona
     });
     
   } catch (error) {
     console.error('使用角色失败:', error);
-    res.status(500).json({ error: '服务器错误' });
+    res.status(500).json({ error: error.message || '服务器错误' });
   }
 });
 
