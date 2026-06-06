@@ -195,7 +195,8 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
           redPacket.senderUserId,
           redPacket.remainingAmount,
           redPacket._id,
-          `红包过期退款：${redPacket.message || '红包'} 剩余 ${redPacket.remainingAmount} 钻石`
+          `红包过期退款：${redPacket.message || '红包'} 剩余 ${redPacket.remainingAmount} 钻石`,
+            'refund'
         );
       }
       redPacket.status = 'expired';
@@ -285,7 +286,13 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
     await record.save();
 
     // 添加免费钻石到领取者账户
-    await DiamondService.addFreeDiamonds(userId, claimAmount, 'redpacket_receive', redPacket._id, `抢红包获得 ${claimAmount} 钻石`);
+    await DiamondService.addPaidDiamonds(
+        userId, 
+        claimAmount, 
+        redPacket._id, 
+        `抢红包获得 ${claimAmount} 钻石`,
+        'redpacket_receive'
+    );
 
     // 更新消息中的红包信息
     try {

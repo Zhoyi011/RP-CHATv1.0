@@ -4,24 +4,26 @@ const TransactionRecord = require('../models/TransactionRecord');
 
 class DiamondService {
   /**
-   * 添加充值钻石
+   * 添加充值钻石（红包获得的钻石也用这个）
+   * @param {string} userId - 用户ID
+   * @param {number} amount - 金额
+   * @param {string} relatedId - 关联ID
+   * @param {string} description - 描述
+   * @param {string} type - 交易类型 (recharge, redpacket_receive, gift_receive, refund)
    */
-  static async addPaidDiamonds(userId, amount, relatedId = null, description = '') {
+  static async addPaidDiamonds(userId, amount, relatedId = null, description = '', type = 'recharge') {
     const user = await User.findById(userId);
     if (!user) throw new Error('用户不存在');
-    
-    const beforeBalance = user.getTotalDiamonds();
-    const beforePaid = user.paidDiamonds || 0;
     
     await user.addPaidDiamonds(amount);
     
     // 记录交易
     const record = new TransactionRecord({
       userId,
-      type: 'recharge',
+      type: type,  // 🔥 使用传入的 type
       amount: amount,
       diamondType: 'paid',
-      description: description || `充值获得 ${amount} 钻石`,
+      description: description || `获得 ${amount} 钻石`,
       relatedId,
       balanceAfter: user.getTotalDiamonds()
     });
@@ -37,26 +39,21 @@ class DiamondService {
 
   /**
    * 添加免费钻石
+   * @param {string} userId - 用户ID
+   * @param {number} amount - 金额
+   * @param {string} type - 交易类型 (daily_sign, gift_receive, admin_add)
+   * @param {string} relatedId - 关联ID
+   * @param {string} description - 描述
    */
   static async addFreeDiamonds(userId, amount, type = 'daily_sign', relatedId = null, description = '') {
     const user = await User.findById(userId);
     if (!user) throw new Error('用户不存在');
     
-    const beforeBalance = user.getTotalDiamonds();
-    
     await user.addFreeDiamonds(amount);
-    
-    // 记录交易
-    const typeMap = {
-      'daily_sign': 'daily_sign',
-      'redpacket_receive': 'redpacket_receive',
-      'gift_receive': 'gift_receive',
-      'admin_add': 'admin_add'
-    };
     
     const record = new TransactionRecord({
       userId,
-      type: typeMap[type] || 'daily_sign',
+      type: type,
       amount: amount,
       diamondType: 'free',
       description: description || `获得 ${amount} 钻石`,
@@ -80,24 +77,30 @@ class DiamondService {
     const user = await User.findById(userId);
     if (!user) throw new Error('用户不存在');
     
-    const beforeBalance = user.getTotalDiamonds();
     const beforePaid = user.paidDiamonds || 0;
     const beforeFree = user.freeDiamonds || 0;
     
     await user.deductDiamonds(amount, requirePaid);
     
-    // 记录交易
-    const typeMap = {
-      'shop_buy': 'shop_buy',
-      'redpacket_send': 'redpacket_send',
-      'gift_send': 'gift_send'
-    };
+    // 判断实际扣除的钻石类型
+    let deductedFrom = 'free';
+    if (requirePaid) {
+      deductedFrom = 'paid';
+    } else {
+      // 优先扣免费钻石，所以如果免费钻石足够，则从免费扣除
+      const freeAmount = Math.min(beforeFree, amount);
+      if (freeAmount >= amount) {
+        deductedFrom = 'free';
+      } else {
+        deductedFrom = 'paid';
+      }
+    }
     
     const record = new TransactionRecord({
       userId,
-      type: typeMap[type] || 'shop_buy',
-      amount: -amount,  // 负数表示支出
-      diamondType: requirePaid ? 'paid' : (beforePaid > beforePaid - amount ? 'paid' : 'free'),
+      type: type,
+      amount: -amount,
+      diamondType: deductedFrom,
       description: description || `消费 ${amount} 钻石`,
       relatedId,
       balanceAfter: user.getTotalDiamonds()
@@ -113,17 +116,22 @@ class DiamondService {
   }
 
   /**
-   * 获取用户交易记录
+   * 检查充值钻石是否足够
    */
-  static async getTransactions(userId, limit = 50, offset = 0) {
-    return await TransactionRecord.getUserTransactions(userId, limit, offset);
+  static async hasEnoughPaidDiamonds(userId, amount) {
+    const user = await User.findById(userId);
+    if (!user) return false;
+    return user.hasEnoughPaidDiamonds(amount);
   }
 
   /**
-   * 获取用户交易统计
+   * 获取用户交易记录
    */
-  static async getTransactionStats(userId) {
-    return await TransactionRecord.getUserStats(userId);
+  static async getTransactions(userId, limit = 50, offset = 0) {
+    return await TransactionRecord.find({ userId })
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit);
   }
 }
 
