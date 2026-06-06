@@ -8,7 +8,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import PersonaSearch from './PersonaSearch';
 import { useResponsive } from '../../hooks/useResponsive';
 import AvatarFrame from '../common/AvatarFrame';
-
+import toast from 'react-hot-toast';
 // 辅助函数：从 URL 中提取头像框文件名
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
@@ -59,19 +59,20 @@ const PersonaManager = () => {
   };
 
   const handleReview = async (personaId: string, status: 'approved' | 'rejected', comment?: string) => {
-    setReviewLoading(personaId);
-    try {
-      await personaApi.reviewPersona(personaId, status, comment);
-      await loadPendingPersonas();
-      await loadMyPersonas();
-      alert(`角色已${status === 'approved' ? '通过' : '拒绝'}`);
-    } catch (error) {
-      console.error('审核失败:', error);
-      alert('审核失败，请重试');
-    } finally {
-      setReviewLoading(null);
-    }
-  };
+  setReviewLoading(personaId);
+  try {
+    await personaApi.reviewPersona(personaId, status, comment);
+    await loadPendingPersonas();
+    await loadMyPersonas();
+    // 🔥 审核通过后角色会自动出现在用户的"我的角色"列表中
+    toast.success(`角色已${status === 'approved' ? '通过' : '拒绝'}`);
+  } catch (error) {
+    console.error('审核失败:', error);
+    toast.error('审核失败，请重试');
+  } finally {
+    setReviewLoading(null);
+  }
+};
 
   // 获取头像框文件名
   const getFrameName = (persona: Persona): string | null => {

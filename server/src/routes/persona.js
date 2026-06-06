@@ -1,3 +1,4 @@
+// server/src/routes/persona.js
 const express = require('express');
 const router = express.Router();
 const Persona = require('../models/Persona');
@@ -25,13 +26,48 @@ const authMiddleware = (req, res, next) => {
 // 创建角色申请
 router.post('/request', authMiddleware, async (req, res) => {
   try {
-    const { name, description, tags } = req.body;
+    const { name, description, tags, avatar } = req.body;
     
+    // 验证必填字段
     if (!name || name.trim().length < 2) {
       return res.status(400).json({ error: '角色名称至少需要2个字符' });
     }
+    if (!description || description.trim().length < 10) {
+      return res.status(400).json({ error: '角色描述至少需要10个字符' });
+    }
+    // 🔥 头像必填
+    if (!avatar || avatar.trim().length === 0) {
+      return res.status(400).json({ error: '请上传角色头像' });
+    }
     
-    // ✅ 获取当前用户的 ObjectId
+    // 验证标签（最多5个，每个最多15字符）
+    let validTags = [];
+    if (tags && Array.isArray(tags)) {
+      if (tags.length > 5) {
+        return res.status(400).json({ error: '标签最多5个' });
+      }
+      for (const tag of tags) {
+        if (tag.length > 15) {
+          return res.status(400).json({ error: '单个标签不能超过15个字符' });
+        }
+        if (tag.trim()) {
+          validTags.push(tag.trim());
+        }
+      }
+    }
+    
+    // 🔥 检查用户是否已有同名角色（已批准）
+    const existing = await Persona.findOne({
+      name: name.trim(),
+      userId: req.userId,
+      status: 'approved'
+    });
+    
+    if (existing) {
+      return res.status(400).json({ error: '你已经拥有同名的角色了' });
+    }
+    
+    // 获取当前用户
     const User = require('../models/User');
     const user = await User.findById(req.userId);
     
@@ -39,13 +75,17 @@ router.post('/request', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
     
+    // 🔥 创建角色申请（直接设置 userId = 申请人，审核通过后直接可用）
     const persona = new Persona({
       name: name.trim(),
-      description: description || '',
-      tags: tags || [],
-      userId: req.userId,
-      createdBy: req.userId,  // ✅ 添加 createdBy 字段
-      status: 'pending'
+      displayName: name.trim(),
+      description: description.trim(),
+      tags: validTags,
+      avatar: avatar,  // 头像必填
+      userId: req.userId,  // 直接绑定用户
+      createdBy: req.userId,
+      status: 'pending',
+      sameNameNumber: 1  // 临时值，审核通过时重新计算
     });
     
     await persona.save();
@@ -82,7 +122,7 @@ router.get('/my', authMiddleware, async (req, res) => {
 
 // 获取待审核角色（管理员/群主）
 router.get('/pending', authMiddleware, async (req, res) => {
-  if (req.userRole !== 'admin' && req.userRole !== 'owner') {
+  if (req.userRole !== 'admin' && req.userRole !== 'owner' && req.userRole !== 'super_admin') {
     return res.status(403).json({ error: '需要管理员权限' });
   }
   
@@ -98,9 +138,9 @@ router.get('/pending', authMiddleware, async (req, res) => {
   }
 });
 
-// 审核角色
+// 🔥 审核角色（通过后直接可用，不需要再"使用"）
 router.post('/review/:id', authMiddleware, async (req, res) => {
-  if (req.userRole !== 'admin' && req.userRole !== 'owner') {
+  if (req.userRole !== 'admin' && req.userRole !== 'owner' && req.userRole !== 'super_admin') {
     return res.status(403).json({ error: '需要管理员权限' });
   }
   
@@ -111,20 +151,30 @@ router.post('/review/:id', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '无效的审核状态' });
     }
     
-    const persona = await Persona.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        reviewComment: comment || '',
-        reviewedBy: req.userId,
-        reviewedAt: new Date()
-      },
-      { new: true }
-    );
+    const persona = await Persona.findById(req.params.id);
     
     if (!persona) {
       return res.status(404).json({ error: '角色不存在' });
     }
+    
+    if (status === 'approved') {
+      // 🔥 重新计算同名编号（基于所有已批准的同名角色）
+      const sameNameNumber = await Persona.getNextSameNameNumber(persona.name, persona._id);
+      persona.sameNameNumber = sameNameNumber;
+      persona.status = 'approved';
+      persona.reviewComment = comment || '';
+      persona.reviewedBy = req.userId;
+      persona.reviewedAt = new Date();
+      // userId 已经在创建时设置，不需要再改
+    } else {
+      // 拒绝：可以删除或标记为拒绝
+      persona.status = 'rejected';
+      persona.reviewComment = comment || '未通过审核';
+      persona.reviewedBy = req.userId;
+      persona.reviewedAt = new Date();
+    }
+    
+    await persona.save();
     
     res.json({
       message: `角色已${status === 'approved' ? '通过' : '拒绝'}`,
@@ -133,8 +183,7 @@ router.post('/review/:id', authMiddleware, async (req, res) => {
         name: persona.name,
         displayName: persona.displayName,
         status: persona.status,
-        sameNameNumber: persona.sameNameNumber,
-        globalNumber: persona.globalNumber
+        sameNameNumber: persona.sameNameNumber
       }
     });
     
@@ -146,7 +195,7 @@ router.post('/review/:id', authMiddleware, async (req, res) => {
 
 // ========== 角色搜索和主页 ==========
 
-// 搜索角色
+// 🔥 搜索角色（只返回他人的已批准角色，不包含自己的）
 router.get('/search', authMiddleware, async (req, res) => {
   try {
     const { q, limit = 20, page = 1 } = req.query;
@@ -157,8 +206,10 @@ router.get('/search', authMiddleware, async (req, res) => {
     
     const searchRegex = new RegExp(q, 'i');
     
+    // 🔥 只搜索已批准且不属于当前用户的角色
     const query = {
       status: 'approved',
+      userId: { $ne: req.userId },  // 排除自己的角色
       $or: [
         { name: searchRegex },
         { displayName: searchRegex },
@@ -192,41 +243,31 @@ router.get('/:personaId', authMiddleware, async (req, res) => {
     const persona = await Persona.findById(req.params.personaId)
       .populate('createdBy', 'username')
       .populate('guardians.userId', 'username avatar')
-      .populate('relationships.targetPersonaId', 'name displayName avatar globalNumber');
+      .populate('relationships.targetPersonaId', 'name displayName avatar sameNameNumber');
     
     if (!persona) {
       return res.status(404).json({ error: '角色不存在' });
     }
     
-    // ✅ 获取装备的图片 URL
+    // 获取装备的图片 URL
     const ShopItem = require('../models/ShopItem');
     let equippedWithUrls = { avatarFrame: null, ring: null, relationshipCard: null };
     
     if (persona.equipped) {
-      // 头像框
       if (persona.equipped.avatarFrame) {
         const frame = await ShopItem.findById(persona.equipped.avatarFrame);
-        if (frame) {
-          equippedWithUrls.avatarFrame = frame.image;
-        }
+        if (frame) equippedWithUrls.avatarFrame = frame.image;
       }
-      // 戒指
       if (persona.equipped.ring) {
         const ring = await ShopItem.findById(persona.equipped.ring);
-        if (ring) {
-          equippedWithUrls.ring = ring.image;
-        }
+        if (ring) equippedWithUrls.ring = ring.image;
       }
-      // 关系卡
       if (persona.equipped.relationshipCard) {
         const card = await ShopItem.findById(persona.equipped.relationshipCard);
-        if (card) {
-          equippedWithUrls.relationshipCard = card.image;
-        }
+        if (card) equippedWithUrls.relationshipCard = card.image;
       }
     }
     
-    // 返回角色数据，包含装备图片 URL
     res.json({
       _id: persona._id,
       name: persona.name,
@@ -235,7 +276,6 @@ router.get('/:personaId', authMiddleware, async (req, res) => {
       avatar: persona.avatar,
       tags: persona.tags,
       status: persona.status,
-      globalNumber: persona.globalNumber,
       sameNameNumber: persona.sameNameNumber,
       userId: persona.userId,
       usageCount: persona.usageCount,
@@ -247,7 +287,8 @@ router.get('/:personaId', authMiddleware, async (req, res) => {
       guardians: persona.guardians,
       totalGuardianAmount: persona.totalGuardianAmount,
       relationships: persona.relationships,
-      equipped: equippedWithUrls  // ✅ 返回带图片 URL 的装备
+      equipped: equippedWithUrls,
+      guardianValue: persona.guardianValue || 0
     });
   } catch (error) {
     console.error('获取角色详情失败:', error);
@@ -271,56 +312,8 @@ router.get('/:personaId/card', async (req, res) => {
   }
 });
 
-// 使用角色（创建副本）
-router.post('/:personaId/use', authMiddleware, async (req, res) => {
-  try {
-    const original = await Persona.findById(req.params.personaId);
-    
-    if (!original || original.status !== 'approved') {
-      return res.status(404).json({ error: '角色不存在或未审核' });
-    }
-    
-    // 检查用户是否已经拥有这个角色
-    const existing = await Persona.findOne({
-      name: original.name,
-      userId: req.userId,
-      status: 'approved'
-    });
-    
-    if (existing) {
-      return res.status(400).json({ error: '你已经拥有这个角色了' });
-    }
-    
-    // 🔥 创建用户的角色副本 - 添加所有必要字段
-    const userPersona = new Persona({
-      name: original.name,
-      displayName: original.displayName || original.name,
-      description: original.description,
-      tags: original.tags || [],
-      avatar: original.avatar,
-      userId: req.userId,
-      originalPersonaId: original._id,
-      createdBy: req.userId,  // 🔥 关键修复
-      status: 'approved',
-      sameNameNumber: original.sameNameNumber
-    });
-    
-    await userPersona.save();
-    
-    // 增加原角色的使用次数
-    original.usageCount = (original.usageCount || 0) + 1;
-    await original.save();
-    
-    res.json({
-      message: `已获得角色 ${userPersona.displayName || userPersona.name}`,
-      persona: userPersona
-    });
-    
-  } catch (error) {
-    console.error('使用角色失败:', error);
-    res.status(500).json({ error: error.message || '服务器错误' });
-  }
-});
+// 🔥 删除 /use 路由 - 不再需要复制角色功能
+// 用户直接创建自己的角色即可
 
 // ========== 角色互动功能 ==========
 
@@ -334,7 +327,16 @@ router.post('/:personaId/guardian', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '角色不存在' });
     }
     
-    await persona.addGuardian(req.userId, amount);
+    // 检查金币/钻石是否足够（需要实现）
+    // await user.deductCoins(amount);
+    
+    persona.guardians.push({
+      userId: req.userId,
+      amount,
+      createdAt: new Date()
+    });
+    persona.totalGuardianAmount = (persona.totalGuardianAmount || 0) + amount;
+    await persona.save();
     
     res.json({
       message: '守护成功',
@@ -360,6 +362,12 @@ router.post('/:personaId/relationship', authMiddleware, async (req, res) => {
     
     if (persona.userId.toString() !== req.userId) {
       return res.status(403).json({ error: '只能修改自己的角色关系' });
+    }
+    
+    // 检查是否已经是关系
+    const existing = persona.relationships.find(r => r.targetPersonaId.toString() === targetPersonaId);
+    if (existing) {
+      return res.status(400).json({ error: '已经建立过关系了' });
     }
     
     persona.relationships.push({ targetPersonaId, type, cardId, createdAt: new Date() });
@@ -426,7 +434,6 @@ router.post('/:personaId/post', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: '只能发布自己的角色动态' });
     }
     
-    // 动态存储在 Persona 的 posts 数组中（需要在模型中添加）
     if (!persona.posts) persona.posts = [];
     persona.posts.unshift({
       content,
@@ -448,7 +455,7 @@ router.post('/:personaId/post', authMiddleware, async (req, res) => {
   }
 });
 
-// 获取角色动态列表（修复版）
+// 获取角色动态列表
 router.get('/:personaId/posts', authMiddleware, async (req, res) => {
   try {
     const { limit = 20, page = 1 } = req.query;
@@ -493,38 +500,8 @@ router.post('/:personaId/posts/:postId/like', authMiddleware, async (req, res) =
     await persona.save();
     res.json({ message: liked ? '已取消点赞' : '点赞成功', likes: post.likes.length });
   } catch (error) {
+    console.error('点赞失败:', error);
     res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 生成角色卡图片
-router.get('/:personaId/card', authMiddleware, async (req, res) => {
-  try {
-    const persona = await Persona.findById(req.params.personaId)
-      .populate('createdBy', 'username');
-    
-    if (!persona) {
-      return res.status(404).json({ error: '角色不存在' });
-    }
-    
-    // 简单返回一个 SVG 角色卡（或重定向到默认图片）
-    const svg = `
-      <svg width="400" height="500" xmlns="http://www.w3.org/2000/svg">
-        <rect width="400" height="500" fill="#1a1a2e" rx="20"/>
-        <circle cx="200" cy="120" r="60" fill="#3b82f6"/>
-        <text x="200" y="135" text-anchor="middle" fill="white" font-size="40" font-weight="bold">${persona.name.charAt(0)}</text>
-        <text x="200" y="220" text-anchor="middle" fill="white" font-size="24" font-weight="bold">${persona.displayName || persona.name}</text>
-        <text x="200" y="260" text-anchor="middle" fill="#94a3b8" font-size="14">${persona.description?.substring(0, 50) || ''}</text>
-        <rect x="50" y="400" width="300" height="2" fill="#334155"/>
-        <text x="200" y="440" text-anchor="middle" fill="#64748b" font-size="12">RP Chat 角色卡</text>
-        <text x="200" y="460" text-anchor="middle" fill="#64748b" font-size="10">${persona.createdBy?.username || '未知'}</text>
-      </svg>
-    `;
-    
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.send(svg);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 });
 

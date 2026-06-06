@@ -1,9 +1,11 @@
+// client/src/components/persona/PersonaSearch.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { personaApi, type Persona } from '../../services/api';
 import { useDebounce } from '../../hooks/useDebounce';
 import { smartConvert, isTraditional } from '../../services/translateApi';
+import { Eye } from 'lucide-react';
 
 interface Props {
   onSelect?: (persona: Persona) => void;
@@ -16,7 +18,6 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [using, setUsing] = useState(false);
   const [converting, setConverting] = useState(false);
   
   const navigate = useNavigate();
@@ -25,43 +26,25 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
   // 简繁转换函数
   const normalizeSearchTerm = useCallback(async (term: string): Promise<string> => {
     if (!term.trim()) return term;
-    
-    // 检测当前输入是简体还是繁体，生成另一个版本
     const isTraditionalChar = isTraditional(term);
-    
     if (isTraditionalChar) {
-      // 输入的是繁体，转成简体用于搜索
-      const simplified = await smartConvert(term);
-      console.log(`🔍 [PersonaSearch] 繁体 "${term}" → 简体 "${simplified}"`);
-      return simplified;
+      return await smartConvert(term);
     } else {
-      // 输入的是简体，转成繁体用于搜索
-      const traditional = await smartConvert(term);
-      console.log(`🔍 [PersonaSearch] 简体 "${term}" → 繁体 "${traditional}"`);
-      return traditional;
+      return await smartConvert(term);
     }
   }, []);
 
-  // 扩展搜索词（同时搜索简体和繁体）
   const getSearchVariants = useCallback(async (term: string): Promise<string[]> => {
     if (!term.trim()) return [term];
-    
     const variants = [term];
-    
-    // 检测当前输入类型，添加转换版本
     const isTraditionalChar = isTraditional(term);
-    
     if (isTraditionalChar) {
-      // 繁体输入：添加简体版本
       const simplified = await smartConvert(term);
       if (simplified !== term) variants.push(simplified);
     } else {
-      // 简体输入：添加繁体版本
       const traditional = await smartConvert(term);
       if (traditional !== term) variants.push(traditional);
     }
-    
-    // 去重
     return [...new Set(variants)];
   }, []);
 
@@ -73,26 +56,18 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
     
     try {
       setLoading(true);
-      
-      // 获取搜索词的简繁变体
       const searchVariants = await getSearchVariants(debouncedSearch);
       console.log(`🔍 [PersonaSearch] 搜索变体:`, searchVariants);
       
-      // 使用第一个变体进行搜索（后端可以处理简繁）
-      // 同时将变体信息传递给后端（可选）
       const data = await personaApi.searchPersonas(debouncedSearch, page);
       
-      // 前端二次过滤：确保结果包含简繁匹配
       let filteredPersonas = data.personas;
-      
-      // 如果后端搜索不够精确，前端再过滤一次
       if (searchVariants.length > 1) {
         const lowerSearchTerms = searchVariants.map(v => v.toLowerCase());
         filteredPersonas = data.personas.filter(persona => {
           const name = (persona.displayName || persona.name).toLowerCase();
           const description = (persona.description || '').toLowerCase();
           const tags = (persona.tags || []).join(' ').toLowerCase();
-          
           return lowerSearchTerms.some(term => 
             name.includes(term) || description.includes(term) || tags.includes(term)
           );
@@ -112,22 +87,13 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
     search();
   }, [search]);
 
-  const handleUsePersona = async (persona: Persona) => {
-    setUsing(true);
-    try {
-      await personaApi.usePersona(persona._id);
-      alert(`已获得角色 ${persona.displayName || persona.name}！`);
-      if (onSelect) onSelect(persona);
-      if (onClose) onClose();
-      navigate('/persona');
-    } catch (error: any) {
-      alert(error.message || '使用失败');
-    } finally {
-      setUsing(false);
-    }
+  // 🔥 查看详情（不再提供"使用"功能）
+  const handleViewDetail = (persona: Persona) => {
+    if (onSelect) onSelect(persona);
+    if (onClose) onClose();
+    navigate(`/persona/${persona._id}`);
   };
 
-  // 添加简繁转换按钮的处理
   const handleConvertSearch = async () => {
     if (!searchTerm.trim()) return;
     setConverting(true);
@@ -196,7 +162,6 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
               />
             </div>
             
-            {/* 简繁转换按钮 */}
             <button
               onClick={handleConvertSearch}
               disabled={converting || !searchTerm.trim()}
@@ -232,7 +197,8 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 hover:shadow-md transition"
+                className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 hover:shadow-md transition cursor-pointer"
+                onClick={() => handleViewDetail(persona)}
               >
                 <div className="flex items-start gap-4">
                   {/* 头像 */}
@@ -244,8 +210,8 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-800 dark:text-gray-200">{persona.displayName || persona.name}</h3>
-                      {persona.globalNumber && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">#{persona.globalNumber}</span>
+                      {persona.sameNameNumber && persona.sameNameNumber > 1 && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">#{persona.sameNameNumber}</span>
                       )}
                       {persona.usageCount !== undefined && persona.usageCount > 0 && (
                         <span className="text-xs text-gray-400">🎭 {persona.usageCount}次使用</span>
@@ -261,13 +227,13 @@ const PersonaSearch: React.FC<Props> = ({ onSelect, onClose }) => {
                     </div>
                   </div>
                   
-                  {/* 使用按钮 */}
+                  {/* 🔥 查看详情按钮（替代原来的"使用"按钮） */}
                   <button
-                    onClick={() => handleUsePersona(persona)}
-                    disabled={using}
-                    className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-cyan-700 transition disabled:opacity-50 whitespace-nowrap shadow-md"
+                    onClick={() => handleViewDetail(persona)}
+                    className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-blue-600 hover:to-cyan-700 transition shadow-md flex items-center gap-1 whitespace-nowrap"
                   >
-                    {using ? '使用中...' : '+ 使用此角色'}
+                    <Eye className="w-4 h-4" />
+                    查看详情
                   </button>
                 </div>
               </motion.div>

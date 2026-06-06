@@ -509,7 +509,7 @@ export const authApi = {
 export const personaApi = {
   getMyPersonas: () => request<Persona[]>('/persona/my'),
   
-  createRequest: (data: { name: string; description: string; tags: string[] }) =>
+  createRequest: (data: { name: string; description: string; tags: string[]; avatar: string }) =>
     request<{ message: string; persona: Persona }>('/persona/request', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -531,11 +531,8 @@ export const personaApi = {
   getPersonaDetail: (personaId: string) =>
     request<Persona>(`/persona/${personaId}`),
     
-  usePersona: (personaId: string) =>
-    request<{ message: string; persona: Persona }>(`/persona/${personaId}/use`, {
-      method: 'POST',
-    }),
-    
+  // 🔥 删除 usePersona 方法
+  
   addGuardian: (personaId: string, amount: number) =>
     request<{ message: string; totalGuardianAmount: number }>(`/persona/${personaId}/guardian`, {
       method: 'POST',
