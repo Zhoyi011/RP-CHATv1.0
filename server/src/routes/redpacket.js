@@ -84,7 +84,7 @@ router.post('/send', authMiddleware, async (req, res) => {
     }
 
     // 扣除钻石
-    await DiamondService.deductDiamonds(userId, totalAmount, true);
+    await DiamondService.deductDiamonds(userId, totalAmount, true, 'redpacket_send', redPacket._id, `发送红包 ${totalAmount} 钻石`);
 
     // 创建红包
     const redPacket = new RedPacket({
@@ -276,7 +276,7 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
     await record.save();
 
     // 添加免费钻石到领取者账户
-    await DiamondService.addFreeDiamonds(userId, claimAmount);
+    await DiamondService.addFreeDiamonds(userId, claimAmount, 'redpacket_receive', redPacket._id, `抢红包获得 ${claimAmount} 钻石`);
 
     // 更新消息中的红包信息
     try {
