@@ -83,10 +83,7 @@ router.post('/send', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '充值钻石不足，请充值后再发红包' });
     }
 
-    // 扣除钻石
-    await DiamondService.deductDiamonds(userId, totalAmount, true, 'redpacket_send', redPacket._id, `发送红包 ${totalAmount} 钻石`);
-
-    // 创建红包
+    // 创建红包（先创建再扣钻石，以便获取 redPacket._id）
     const redPacket = new RedPacket({
       senderPersonaId: senderPersona._id,
       senderUserId: userId,
@@ -100,12 +97,16 @@ router.post('/send', authMiddleware, async (req, res) => {
       remainingCount: type !== 'personal' ? count : 1,
       targetPersonaId: type === 'personal' ? targetPersonaId : null,
       targetUserId: type === 'personal' ? (await Persona.findById(targetPersonaId)).userId : null,
-      status: 'active'
+      status: 'active',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
     });
 
     await redPacket.save();
 
-    // 保存红包消息到聊天记录（刷新后还能显示）
+    // 扣除钻石（现在有 redPacket._id 了）
+    await DiamondService.deductDiamonds(userId, totalAmount, true, 'redpacket_send', redPacket._id, `发送红包：${message || '恭喜发财'} 花费 ${totalAmount} 钻石`);
+
+    // 保存红包消息到聊天记录
     const redpacketMessageContent = JSON.stringify({
       type: 'redpacket',
       redPacketId: redPacket._id,
@@ -118,7 +119,7 @@ router.post('/send', authMiddleware, async (req, res) => {
       targetPersonaId: type === 'personal' ? targetPersonaId : null,
       createdAt: new Date().toISOString(),
       status: 'active',
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      expiresAt: redPacket.expiresAt
     });
 
     const redpacketMessage = new Message({
@@ -188,6 +189,15 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
 
     // 检查过期
     if (redPacket.isExpired()) {
+      // 如果有剩余金额，退还给发送者
+      if (redPacket.remainingAmount > 0) {
+        await DiamondService.addPaidDiamonds(
+          redPacket.senderUserId,
+          redPacket.remainingAmount,
+          redPacket._id,
+          `红包过期退款：${redPacket.message || '红包'} 剩余 ${redPacket.remainingAmount} 钻石`
+        );
+      }
       redPacket.status = 'expired';
       await redPacket.save();
       return res.status(400).json({ error: '红包已过期' });
@@ -234,7 +244,6 @@ router.post('/:redPacketId/claim', authMiddleware, async (req, res) => {
       if (redPacket.remainingCount === 1) {
         claimAmount = redPacket.remainingAmount;
       }
-      // 检查是否手气最佳（比较所有历史记录中的最大值）
       const currentMaxAmount = redPacket.records.length > 0 
         ? Math.max(...redPacket.records.map(r => r.amount)) 
         : 0;

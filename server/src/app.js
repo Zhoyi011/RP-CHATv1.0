@@ -720,6 +720,10 @@ io.on('connection', (socket) => {
   });
 });
 
+// ===== 启动红包过期检查服务 =====
+const RedPacketExpireService = require('./services/redpacketExpireService');
+RedPacketExpireService.startSchedule(5); // 每5分钟检查一次
+
 console.log('✅ [app] 所有初始化完成，等待请求...');
 
 module.exports.io = io;

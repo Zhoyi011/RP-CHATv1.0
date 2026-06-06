@@ -5,14 +5,15 @@ import { toast } from 'react-hot-toast';
 import { redeemApi, type RedemptionRecord } from '../../services/api';
 import RedeemModal from './RedeemModal';
 import RedemptionHistory from './RedemptionHistory';
+import { TransactionHistory } from './TransactionHistory';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface UserInfo {
   _id: string;
   username: string;
   diamonds: number;
-  paidDiamonds: number;    // 🔥 新增：充值钻石
-  freeDiamonds: number;    // 🔥 新增：免费钻石
+  paidDiamonds: number;
+  freeDiamonds: number;
   email: string;
 }
 
@@ -27,6 +28,7 @@ const Wallet: React.FC = () => {
   const [historyRecords, setHistoryRecords] = useState<RedemptionRecord[]>([]);
   const [totalReceived, setTotalReceived] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeTab, setActiveTab] = useState<'diamonds' | 'transactions'>('diamonds');
 
   // 获取用户信息
   const fetchUserInfo = async () => {
@@ -110,7 +112,7 @@ const Wallet: React.FC = () => {
 
       {/* 主要内容 */}
       <div className="p-4 space-y-4">
-        {/* 钻石余额卡片 - 改为显示区分 */}
+        {/* 钻石余额卡片 */}
         <div className={`rounded-2xl p-5 ${isDark ? 'bg-gradient-to-r from-purple-900/50 to-pink-900/50' : 'bg-gradient-to-r from-purple-100 to-pink-100'}`}>
           <p className={`text-sm ${isDark ? 'text-purple-300' : 'text-purple-600'} mb-2`}>
             钻石余额
@@ -122,7 +124,7 @@ const Wallet: React.FC = () => {
             <span className={`text-xl ${isDark ? 'text-purple-300' : 'text-purple-500'}`}>💎</span>
           </div>
           
-          {/* 🔥 钻石分类 */}
+          {/* 钻石分类 */}
           <div className="grid grid-cols-2 gap-3 mt-2">
             <div className={`rounded-xl p-2 text-center ${isDark ? 'bg-white/10' : 'bg-white/60'}`}>
               <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>充值钻石</p>
@@ -174,8 +176,39 @@ const Wallet: React.FC = () => {
           </p>
         </div>
 
-        {/* 使用记录 */}
-        <RedemptionHistory records={historyRecords} totalReceived={totalReceived} />
+        {/* 🔥 标签页切换 */}
+        <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setActiveTab('diamonds')}
+            className={`pb-2 px-3 text-sm font-medium transition-all ${
+              activeTab === 'diamonds'
+                ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            充值记录
+          </button>
+          <button
+            onClick={() => setActiveTab('transactions')}
+            className={`pb-2 px-3 text-sm font-medium transition-all ${
+              activeTab === 'transactions'
+                ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            交易流水
+          </button>
+        </div>
+
+        {/* 充值记录 */}
+        {activeTab === 'diamonds' && (
+          <RedemptionHistory records={historyRecords} totalReceived={totalReceived} />
+        )}
+
+        {/* 🔥 交易流水 */}
+        {activeTab === 'transactions' && (
+          <TransactionHistory />
+        )}
       </div>
 
       {/* 充值弹窗 */}
