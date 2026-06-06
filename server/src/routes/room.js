@@ -181,15 +181,61 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
       }
       
       let formattedLastMessage = null;
-      if (lastMessage) {
-        formattedLastMessage = {
-          content: lastMessage.isRecalled ? '消息已被撤回' : lastMessage.content,
-          senderName: lastMessage.personaId?.displayName || lastMessage.personaId?.name || '未知',
-          createdAt: lastMessage.createdAt,
-          isAction: lastMessage.isAction || false,
-          isRecalled: lastMessage.isRecalled || false
-        };
-      }
+if (lastMessage) {
+  let displayContent = lastMessage.content;
+  
+  // 判断消息类型并格式化显示
+  if (!lastMessage.isRecalled) {
+    // 红包消息
+    if (displayContent && (displayContent.includes('"type":"redpacket"') || 
+        displayContent.includes('"type":"random"') ||
+        displayContent.includes('"type":"fixed"') ||
+        displayContent.includes('"type":"personal"'))) {
+      try {
+        const data = JSON.parse(displayContent);
+        displayContent = `🧧 红包：${data.message || '恭喜发财'}`;
+      } catch (e) {}
+    }
+    // 音乐消息
+    else if (displayContent && displayContent.includes('"type":"music"')) {
+      try {
+        const data = JSON.parse(displayContent);
+        displayContent = `🎵 音乐：${data.title || '未知歌曲'}`;
+      } catch (e) {}
+    }
+    // 礼物消息
+    else if (displayContent && displayContent.includes('"type":"gift"')) {
+      try {
+        const data = JSON.parse(displayContent);
+        displayContent = `🎁 礼物：${data.itemName || '未知礼物'}`;
+      } catch (e) {}
+    }
+    // 表情消息
+    else if (lastMessage.isEmoji) {
+      displayContent = '😊 表情';
+    }
+    // 语音消息
+    else if (lastMessage.isAudio) {
+      displayContent = '🎙️ 语音消息';
+    }
+    // 动作消息
+    else if (lastMessage.isAction) {
+      // 保持原样，前面有 * 号
+    }
+    // 普通消息过长截断
+    else if (displayContent && displayContent.length > 35) {
+      displayContent = displayContent.substring(0, 35) + '...';
+    }
+  }
+  
+  formattedLastMessage = {
+    content: lastMessage.isRecalled ? '消息已被撤回' : displayContent,
+    senderName: lastMessage.personaId?.displayName || lastMessage.personaId?.name || '未知',
+    createdAt: lastMessage.createdAt,
+    isAction: lastMessage.isAction || false,
+    isRecalled: lastMessage.isRecalled || false
+  };
+}
       
       return {
         _id: room._id,
@@ -631,7 +677,6 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
             displayName: persona.displayName || persona.name,
             avatar: persona.avatar,
             sameNameNumber: persona.sameNameNumber,
-            globalNumber: persona.globalNumber
           },
           role: pr.role,
           title: pr.title || '',
