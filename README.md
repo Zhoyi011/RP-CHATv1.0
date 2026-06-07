@@ -1,4 +1,4 @@
-以下是合并后的完整项目文档，包含所有历史记录、好友系统、以及本次新增的语音消息、音乐分享功能。
+以下是合并后的完整项目文档，根据 `structure.txt` 验证了所有文件的存在性，并整合了全部功能模块。
 
 ```markdown
 # RP Chat - 项目上下文文档
@@ -32,23 +32,32 @@
 | `package.json` | 项目依赖和脚本 |
 | `vite.config.ts` | Vite 构建配置 |
 | `tsconfig.json` | TypeScript 主配置 |
+| `tsconfig.app.json` | 应用 TS 配置 |
 | `tsconfig.node.json` | Node.js 环境 TypeScript 配置 |
 | `tailwind.config.cjs` | TailwindCSS 配置 |
 | `postcss.config.cjs` | PostCSS 配置 |
 | `eslint.config.js` | ESLint 代码检查 |
 | `vercel.json` | Vercel 部署配置 |
 | `index.html` | HTML 入口文件 |
+| `.gitattributes` | Git LFS 配置（大文件存储） |
+| `.gitignore` | Git 忽略文件 |
+| `README.md` | 项目说明文档 |
 
 #### `public/` - 静态资源
 
-| 文件 | 职责 |
-|------|------|
+| 文件/目录 | 职责 |
+|-----------|------|
 | `favicon.svg` | 网站图标 |
 | `fonts/MaokenZhuyuanTi.ttf` | 猫啃珠圆体字体（全局使用） |
-| `frames/` | 头像框图片目录（.png 格式） |
-| `wallpapers/` | AFK 隐私保护壁纸目录（已废弃，改用 GitHub Releases 托管） |
+| `frames/cat.png` | 猫猫头像框 |
+| `frames/demon.png` | 恶魔头像框 |
+| `frames/purple.png` | 紫色头像框 |
+| `frames/star.png` | 星星头像框 |
+| `frames/star1.png` | 星星头像框变体 |
+| `wallpapers/desktop/desktop_1~7.mp4` | 电脑端 AFK 壁纸（已废弃，改用 GitHub Releases） |
+| `wallpapers/mobile/mobile_1~2.mp4` | 手机端 AFK 壁纸（已废弃） |
 
-> **注意**：由于 Vercel 部署限制（单文件最大 50MB），视频壁纸现已通过 GitHub Releases + jsDelivr CDN 托管，不再存储在 `public/wallpapers/` 目录。
+> **注意**：由于 Vercel 部署限制（单文件最大 50MB），视频壁纸现已通过 GitHub Releases + jsDelivr CDN 托管。
 
 #### `src/` - 源代码
 
@@ -73,15 +82,16 @@
 | `/persona` | `PersonaManager` | 角色管理 |
 | `/persona/create` | `PersonaCreate` | 创建角色 |
 | `/persona/:personaId` | `PersonaDetail` | 角色详情（皮主页） |
-| `/settings` | `Settings` | 账号设置（含维护模式控制） |
+| `/settings` | `Settings` | 账号设置 |
 | `/search` | `SearchPage` | 全局搜索 |
 | `/changelog` | `Changelog` | 更新日志 |
 | `/feed` | `MobileFeed` | 动态页（手机） |
 | `/home` | `MobileHome` | 主页（手机） |
 | `/shop` | `Shop` | 商城 |
 | `/inventory` | `Inventory` | 背包 |
-| `/wallet` | `Wallet` | 钱包（充值码兑换） |
-| `/onboarding` | `OnboardingWizard` | 新用户引导流程 |
+| `/wallet` | `Wallet` | 钱包 |
+| `/emojis` | `EmojiManager` | 表情管理 |
+| `/onboarding` | `OnboardingWizard` | 新用户引导 |
 | `/privacy` | `PrivacyPolicy` | 隐私政策 |
 | `/terms` | `TermsOfService` | 服务条款 |
 | `/group/:roomId` | `GroupDetail` | 群聊详情页 |
@@ -93,22 +103,23 @@
 
 ##### `src/components/` - 组件目录
 
-**`components/auth/` - 认证相关**
-
-| 文件 | 职责 |
-|------|------|
-| `InviteCode.tsx` | 邀请码验证页面（必须输入才能激活账号） |
-| `Login.tsx` | 登录表单（支持邮箱/Google，含 hCaptcha） |
-| `Register.tsx` | 注册表单（邮箱/密码） |
-
 **`components/admin/` - 管理员组件**
 
 | 文件 | 职责 |
 |------|------|
-| `CreateInvite.tsx` | 创建邀请码（管理员） |
-| `CreateRedeemCode.tsx` | 创建充值码（super_admin/owner） |
-| `MaintenanceControl.tsx` | 维护模式控制（开关 + 管理员豁免） |
-| `MaintenanceScheduler.tsx` | 定时维护计划管理 |
+| `CreateInvite.tsx` | 创建邀请码 |
+| `CreateRedeemCode.tsx` | 创建充值码 |
+| `MaintenanceControl.tsx` | 维护模式控制 |
+| `MaintenanceScheduler.tsx` | 定时维护计划 |
+
+**`components/auth/` - 认证组件**
+
+| 文件 | 职责 |
+|------|------|
+| `InviteCode.tsx` | 邀请码验证页面 |
+| `Login.tsx` | 登录表单（邮箱/Google） |
+| `LoginNew.tsx` | 新版登录页面 |
+| `Register.tsx` | 注册表单 |
 
 ---
 
@@ -116,24 +127,29 @@
 
 | 文件 | 职责 |
 |------|------|
-| `AIChat.tsx` | AI 聊天弹窗组件 |
+| `AIChat.tsx` | AI 聊天弹窗 |
 | `AIChatRoom.tsx` | AI 对戏主界面 |
 | `AISettings.tsx` | AI 角色设置 |
-| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页加载、私聊 Tab 使用 FriendList、语音消息发送、音乐分享、消息去重** |
-| **`ChatInput.tsx`** | **消息输入框（表情、简繁转换、回复预览、@提及、录音按钮、音乐分享按钮）** |
-| `CreateRoom.tsx` | 创建群聊弹窗 |
+| **`ChatHome.tsx`** | **聊天主界面（群聊/私聊/AI对戏 Tab），支持消息分页、语音、音乐、红包、礼物** |
+| **`ChatInput.tsx`** | **消息输入框（表情、@提及、录音、音乐、礼物、红包）** |
+| `CreateRoom.tsx` | 创建群聊 |
 | `GroupDetail.tsx` | 群聊详情页 |
 | `GroupSettings.tsx` | 群聊设置（头衔管理） |
 | `JoinRoom.tsx` | 加入群聊 |
 | `LinkPreviewCard.tsx` | 链接预览卡片 |
 | `LinkPreviewContainer.tsx` | 链接预览容器 |
-| `PatPanel.tsx` | 拍一拍面板（双击头像触发） |
-| `PendingRequests.tsx` | 入群申请审核列表 |
-| **`PrivateChat.tsx`** | **私聊功能（基于角色 targetPersonaId，需好友关系）** |
+| `MessageBubble.tsx` | 消息气泡组件 |
+| `PatPanel.tsx` | 拍一拍面板 |
+| `PendingRequests.tsx` | 入群申请审核 |
+| `PrivateChat.tsx` | 私聊功能 |
 | `RoomMembers.tsx` | 房间成员列表 |
 | `RoomSettings.tsx` | 房间设置 |
-| **`TranslatableMessage.tsx`** | **可翻译消息组件（中英/多语言），支持语音消息播放、音乐卡片渲染** |
+| **`TranslatableMessage.tsx`** | **消息渲染（文字/语音/音乐/红包/礼物/表情）** |
 | `UserPersonaSettings.tsx` | 用户角色设置（AI 用） |
+| `AudioPlayer.tsx` | 音频播放器 |
+| `AudioRecorderButton.tsx` | 长按录音按钮 |
+| `MusicCard.tsx` | 音乐卡片 |
+| `MusicSearchModal.tsx` | 音乐搜索弹窗 |
 
 ---
 
@@ -141,142 +157,91 @@
 
 | 文件 | 职责 |
 |------|------|
-| **`AvatarFrame.tsx`** | **头像框显示（支持独立配置 scale/offset）** |
-| **`AvatarUpload.tsx`** | **头像上传弹窗（Cloudinary）** |
-| **`AFKScreen.tsx`** | **AFK 隐私保护遮挡屏幕（全屏壁纸，支持视频循环播放、双视频层无缝切换、主循环定时器、健康检查）** |
-| **`DraggableAFKStatus.tsx`** | **可拖拽橙色锁头控制面板 + 功能菜单（暂停/播放/循环/跳过/显示解锁界面）** |
+| **`AFKScreen.tsx`** | **AFK 隐私保护遮挡屏幕** |
+| **`AvatarFrame.tsx`** | **头像框显示组件** |
+| **`AvatarUpload.tsx`** | **头像上传弹窗** |
 | `Changelog.tsx` | 更新日志展示 |
+| `ConnectionStatus.tsx` | 连接状态指示器 |
 | `ContextMenu.tsx` | 右键菜单 |
-| `CustomDatePicker.tsx` | 自定义日期选择器 |
+| **`DraggableAFKStatus.tsx`** | **可拖拽橙色锁头控制面板** |
 | `EmojiPicker.tsx` | 表情选择器 |
-| `GlassDatePicker.tsx` | 毛玻璃效果日期时间选择器 |
+| `GlassDatePicker.tsx` | 毛玻璃日期选择器 |
+| `LinkCard.tsx` | 链接卡片 |
 | `MaintenancePage.tsx` | 维护模式页面 |
 | `NotificationSettings.tsx` | 通知设置 |
-| **`PersonaSwitchPanel.tsx`** | **角色切换弹窗（搜索、最近使用）** |
+| **`PersonaSwitchPanel.tsx`** | **角色切换弹窗** |
 | `SearchPage.tsx` | 全局搜索页面 |
 
-> **注意**：`AFKStatus.tsx` 和 `ConnectionStatus.tsx` 已废弃，功能已合并到 `DraggableAFKStatus.tsx`。
-
 ---
 
-**`components/voice/` 🎙️ 语音消息系统（新增）**
+**`components/debug/` - 调试组件**
 
 | 文件 | 职责 |
 |------|------|
-| **`AudioRecorderButton.tsx`** | **长按录音按钮组件（长按录音、上滑取消、时长限制）** |
-| **`AudioPlayer.tsx`** | **音频播放器组件（播放/暂停、进度条、音量控制）** |
-
----
-
-**`components/music/` 🎵 音乐分享系统（新增）**
-
-| 文件 | 职责 |
-|------|------|
-| **`MusicSearchModal.tsx`** | **音乐搜索弹窗（YouTube + Bilibili 双平台，平台切换按钮）** |
-| **`MusicCard.tsx`** | **音乐卡片组件（信息展示 + 嵌入播放器）** |
-
----
+| `DebugPanel.tsx` | 调试面板（开发环境） |
 
 **`components/diamond/` - 钻石系统**
 
 | 文件 | 职责 |
 |------|------|
-| `DailyDiamond.tsx` | 每日签到（连续奖励） |
+| `DailyDiamond.tsx` | 每日签到 |
 | `DiamondBalance.tsx` | 钻石余额显示 |
 
----
-
-**`components/friends/` ⭐ 好友系统**
+**`components/emoji/` - 表情包系统**
 
 | 文件 | 职责 |
 |------|------|
-| **`AddFriendModal.tsx`** | **两步流程：搜索角色 → 选择自己角色 → 填写理由** |
-| **`FriendList.tsx`** | **好友列表，支持发消息和删除** |
-| **`FriendRequests.tsx`** | **好友申请列表，支持同意/拒绝** |
+| `EmojiManager.tsx` | 表情管理页面 |
+| `EmojiMessage.tsx` | 表情消息渲染 |
+| `EmojiPicker.tsx` | 表情选择器 |
+| `EmojiUploader.tsx` | 表情上传组件 |
 
----
+**`components/feed/` - 动态页面**
+
+| 文件 | 职责 |
+|------|------|
+| `MobileFeed.tsx` | 手机端动态页 |
+
+**`components/friends/` - 好友系统**
+
+| 文件 | 职责 |
+|------|------|
+| `AddFriendModal.tsx` | 添加好友弹窗 |
+| `FriendList.tsx` | 好友列表 |
+| `FriendRequests.tsx` | 好友申请列表 |
+
+**`components/gift/` - 礼物系统**
+
+| 文件 | 职责 |
+|------|------|
+| `GiftMessage.tsx` | 礼物消息卡片 |
+| `GiftModal.tsx` | 赠送礼物弹窗 |
+
+**`components/guardian/` - 守护系统**
+
+| 文件 | 职责 |
+|------|------|
+| `GuardianRanking.tsx` | 守护榜组件 |
+
+**`components/home/` - 手机端主页**
+
+| 文件 | 职责 |
+|------|------|
+| `MobileHome.tsx` | 手机端主页 |
+
+**`components/inventory/` - 背包系统**
+
+| 文件 | 职责 |
+|------|------|
+| `Inventory.tsx` | 背包页面 |
 
 **`components/layout/` - 布局组件**
 
 | 文件 | 职责 |
 |------|------|
-| `DesktopLayout.tsx` | 桌面端布局（侧边栏 + 左下角色切换 + 右上手动AFK按钮 + **好友按钮组 + Framer Motion 动画**） |
-| `MobileLayout.tsx` | 移动端布局（顶部栏简化，所有功能整合到侧边菜单） |
-| `TabletLayout.tsx` | 平板端布局（顶部栏添加好友按钮，侧边菜单整合好友功能） |
-
----
-
-**`components/persona/` ⭐ 角色系统**
-
-| 文件 | 职责 |
-|------|------|
-| `PersonaCreate.tsx` | 创建角色（含头像上传） |
-| **`PersonaDetail.tsx`** | **角色详情页（皮主页）** |
-| `PersonaEquipments.tsx` | 角色装备显示 |
-| `PersonaGuardianList.tsx` | 守护榜 |
-| `PersonaList.tsx` | 角色列表（网格） |
-| `PersonaManager.tsx` | 角色管理主页 |
-| `PersonaPosts.tsx` | 角色动态（发帖、点赞） |
-| `PersonaRelationships.tsx` | 亲密关系 |
-| `PersonaSearch.tsx` | 角色搜索 |
-
----
-
-**`components/shop/` & `components/inventory/` - 商城背包**
-
-| 文件 | 职责 |
-|------|------|
-| `Shop.tsx` | 商城页面（购买头像框等） |
-| `Inventory.tsx` | 背包页面（装备物品） |
-
----
-
-**`components/feed/` & `components/home/` - 手机端页面**
-
-| 文件 | 职责 |
-|------|------|
-| `MobileFeed.tsx` | 手机端动态页（**好友动态，只显示角色信息**） |
-| `MobileHome.tsx` | 手机端主页（资产、签到、快捷入口） |
-
----
-
-**`components/settings/` - 设置页面**
-
-| 文件 | 职责 |
-|------|------|
-| `Settings.tsx` | 应用设置（账号/偏好/管理面板/AFK设置） |
-
----
-
-**`components/user/` - 用户相关**
-
-| 文件 | 职责 |
-|------|------|
-| `UserList.tsx` | 用户列表（私聊） |
-
----
-
-**`components/wallet/` - 钱包系统**
-
-| 文件 | 职责 |
-|------|------|
-| `Wallet.tsx` | 钱包主页（余额、充值记录） |
-| `RedeemModal.tsx` | 充值码输入弹窗 |
-| `RedemptionHistory.tsx` | 充值记录列表 |
-
----
-
-**`components/onboarding/` - 新用户引导**
-
-| 文件 | 职责 |
-|------|------|
-| `OnboardingWizard.tsx` | 引导流程控制器 |
-| `OnboardingProfile.tsx` | 填写用户名/昵称/生日 |
-| `OnboardingPersona.tsx` | 创建或跳过角色 |
-| `OnboardingRoom.tsx` | 创建或跳过群聊 |
-| `OnboardingComplete.tsx` | 完成引导 |
-
----
+| `DesktopLayout.tsx` | 桌面端布局 |
+| `MobileLayout.tsx` | 移动端布局 |
+| `TabletLayout.tsx` | 平板端布局 |
 
 **`components/legal/` - 法律页面**
 
@@ -285,58 +250,137 @@
 | `PrivacyPolicy.tsx` | 隐私政策 |
 | `TermsOfService.tsx` | 服务条款 |
 
+**`components/onboarding/` - 新用户引导**
+
+| 文件 | 职责 |
+|------|------|
+| `OnboardingComplete.tsx` | 完成引导 |
+| `OnboardingPersona.tsx` | 创建角色引导 |
+| `OnboardingProfile.tsx` | 填写资料引导 |
+| `OnboardingRoom.tsx` | 创建群聊引导 |
+| `OnboardingWizard.tsx` | 引导流程控制器 |
+
+**`components/persona/` ⭐ 角色系统**
+
+| 文件 | 职责 |
+|------|------|
+| `PersonaCreate.tsx` | 创建角色（头像必填、标签验证） |
+| `PersonaDetail.tsx` | 角色详情页（皮主页） |
+| `PersonaEquipments.tsx` | 角色装备显示 |
+| `PersonaGuardianList.tsx` | 守护榜 |
+| `PersonaList.tsx` | 角色列表 |
+| `PersonaManager.tsx` | 角色管理主页（含审核） |
+| `PersonaPosts.tsx` | 角色动态 |
+| `PersonaRelationships.tsx` | 亲密关系 |
+| `PersonaSearch.tsx` | 角色搜索 |
+
+**`components/profile/` - 用户资料**
+
+| 文件 | 职责 |
+|------|------|
+| `Profile.tsx` | 用户资料页面 |
+
+**`components/redpacket/` - 红包系统**
+
+| 文件 | 职责 |
+|------|------|
+| `RedPacketDetail.tsx` | 红包详情/抢红包弹窗 |
+| `RedPacketMessage.tsx` | 红包消息卡片 |
+| `RedPacketModal.tsx` | 发红包弹窗 |
+
+**`components/settings/` - 设置页面**
+
+| 文件 | 职责 |
+|------|------|
+| `Settings.tsx` | 应用设置（账号/偏好/管理面板） |
+
+**`components/shop/` - 商城**
+
+| 文件 | 职责 |
+|------|------|
+| `Shop.tsx` | 商城页面（含赠送按钮） |
+
+**`components/user/` - 用户相关**
+
+| 文件 | 职责 |
+|------|------|
+| `UserList.tsx` | 用户列表 |
+
+**`components/wallet/` - 钱包系统**
+
+| 文件 | 职责 |
+|------|------|
+| `RedeemModal.tsx` | 充值码输入弹窗 |
+| `RedemptionHistory.tsx` | 充值记录 |
+| `TransactionHistory.tsx` | 交易流水 |
+| `Wallet.tsx` | 钱包主页 |
+
 ---
 
 ##### `src/contexts/`
 
 | 文件 | 职责 |
 |------|------|
-| `ThemeContext.tsx` | 深色/浅色模式上下文（仅 localStorage，AFK 模式下强制锁定浅色） |
-| **`AFKContext.tsx`** | **AFK 状态管理（5分钟无操作自动进入，ESC退出，手动进入，拖拽位置记忆）** |
-| **`FriendContext.tsx`** | **好友状态管理：列表、申请、发送、同意、拒绝、删除、搜索** |
+| `AFKContext.tsx` | AFK 状态管理 |
+| `FriendContext.tsx` | 好友状态管理 |
+| `ThemeContext.tsx` | 深色/浅色模式 |
 
 ##### `src/hooks/`
 
 | 文件 | 职责 |
 |------|------|
-| `useDebounce.ts` | 防抖 hook |
-| `useFont.ts` | 字体加载 hook |
-| `useKeyboardHeight.ts` | 移动端键盘高度检测 |
-| `useLongPress.ts` | 长按事件 hook |
-| `usePermissions.ts` | 权限检查 hook |
-| `useQuickSwitchPersona.ts` | Tab 键快捷切换角色 |
-| `useResponsive.ts` | 响应式断点检测 |
+| `useAFK.ts` | AFK 相关 Hook |
+| `useDebounce.ts` | 防抖 |
+| `useFont.ts` | 字体加载 |
+| `useGroupPermission.ts` | 群组权限 |
+| `useKeyboardHeight.ts` | 键盘高度检测 |
+| `useLongPress.ts` | 长按事件 |
+| `useMediaSession.ts` | 媒体会话 |
+| `usePermissions.ts` | 权限检查 |
+| `useQuickSwitchPersona.ts` | Tab 键切换角色 |
+| `useResponsive.ts` | 响应式断点 |
 | `useUnreadCount.ts` | 未读消息计数 |
-| **`useGroupPermission.ts`** | **群组权限 Hook（检查群主/管理员）** |
-| **`useMediaSession.ts`** | **媒体会话 Hook（预留，用于音频/视频媒体控制）** |
 
 ##### `src/services/`
 
 | 文件 | 职责 |
 |------|------|
-| **`api.ts`** | **API 调用封装（核心，含 401 拦截防循环，GET 请求自动添加 _t 时间戳防缓存）** |
+| **`api.ts`** | **API 调用封装（核心）** |
+| `agoraService.ts` | 声网语音（已放弃） |
+| `audioRecorderService.ts` | 录音核心服务 |
 | `diamondApi.ts` | 钻石系统 API |
-| **`friendApi.ts`** | **完整好友 API 类型和方法** |
+| `emojiApi.ts` | 表情 API |
+| `friendApi.ts` | 好友 API |
+| `giftApi.ts` | 礼物 API |
+| `guardianApi.ts` | 守护榜 API |
 | `linkPreviewApi.ts` | 链接预览 API |
 | `Notification.ts` | 浏览器通知 |
-| **`socket.ts`** | **Socket.IO 连接管理（传入 userId，好友事件监听方法）** |
+| `redpacketApi.ts` | 红包 API |
+| `socket.ts` | Socket.IO 连接管理 |
+| `transactionApi.ts` | 交易 API |
 | `translateApi.ts` | 简繁转换 API |
-| **`audioRecorderService.ts`** | **录音核心服务（MP3 格式优先，时长限制）** |
-| `agoraService.ts` | 声网语音（已放弃） |
+
+##### `src/types/`
+
+| 文件 | 职责 |
+|------|------|
+| `ai.ts` | AI 角色类型 |
+| `gift.ts` | 礼物/红包类型 |
 
 ##### `src/utils/`
 
 | 文件 | 职责 |
 |------|------|
-| `linkParser.ts` | URL 提取和解析 |
+| `antiDebug.ts` | 反调试工具 |
+| `linkParser.ts` | URL 解析 |
 | `renderMarkdown.ts` | Markdown 渲染 |
-| `timeFormat.ts` | 消息时间格式化 |
+| `timeFormat.ts` | 时间格式化 |
 
 ##### `src/firebase/`
 
 | 文件 | 职责 |
 |------|------|
-| `config.ts` | Firebase 配置（Google 登录） |
+| `config.ts` | Firebase 配置 |
 
 ##### `src/animations/`
 
@@ -354,8 +398,12 @@
 |------|------|
 | `package.json` | 依赖和脚本 |
 | `.env` | 环境变量 |
+| `.gitignore` | Git 忽略文件 |
 | `render.yaml` | Render 部署配置 |
-| `.gitattributes` | Git LFS 配置（大文件存储） |
+| `check-invite.js` | 检查邀请码脚本 |
+| `fix-invite.js` | 修复邀请码脚本 |
+| `force-fix.js` | 强制修复脚本 |
+| `update-invite.js` | 更新邀请码脚本 |
 
 #### `src/` - 源代码
 
@@ -363,167 +411,173 @@
 
 | 文件 | 职责 |
 |------|------|
-| **`app.js`** | **Express 入口 + Socket.IO 配置 + 路由注册（含 /api/friend、/api/private-chat、/api/music）** |
+| **`app.js`** | **Express 入口 + Socket.IO 配置 + 路由注册** |
 
-##### `src/models/` - 数据模型
+##### `src/models/` - 数据模型（共 28 个模型）
 
 | 模型 | 职责 | 关键字段 |
 |------|------|----------|
-| `User.js` | 用户模型 | username, email, password, diamonds, role, hasAccess, onboarded, equippedItems |
-| `Persona.js` | 角色模型 | name, displayName, description, avatar, userId, status, sameNameNumber, equipped |
-| `Room.js` | 房间模型 | name, description, createdBy, members, isPublic, requireApproval |
-| **`Message.js`** | **消息模型** | **content, roomId, personaId, isAction, isPat, isAudio, audioUrl, audioDuration, musicData, replyTo, isRecalled, isDeleted, mentions** |
-| **`Friend.js`** | **角色间好友关系** | **personaId, friendPersonaId** |
-| **`FriendRequest.js`** | **角色间好友申请** | **fromPersonaId, toPersonaId, status, reason** |
-| `InviteCode.js` | 邀请码模型 | code, type, createdBy, usedBy, expiresAt, maxUses, usesCount |
-| `RedeemCode.js` | 充值码模型 | code, diamondAmount, createdBy, isUsed, usedBy, expiresAt |
-| `RedemptionRecord.js` | 充值记录模型 | userId, redeemCodeId, code, diamondAmount, previousBalance, newBalance |
-| `SystemSettings.js` | 系统设置模型 | key, value（维护模式等） |
-| `MaintenanceSchedule.js` | 维护计划模型 | name, startTime, endTime, message, isActive, repeatWeekly |
-| `Title.js` | 头衔模型 | name, roomId, createdBy, assignedTo |
-| `ActivePersona.js` | 激活角色模型 | userId, personaId |
-| `PersonaRoom.js` | 角色-房间关联 | personaId, roomId, role |
-| `AIPersona.js` | AI 角色模型 | name, personality, replyStyle |
-| `Post.js` | 帖子模型 | content, images, likes, likeCount |
-| `ShopItem.js` | 商城商品模型 | name, type, price, rarity, image |
-| `UserInventory.js` | 用户库存模型 | itemId, isEquipped |
-| `Changelog.js` | 更新日志模型 | sha, message, commitType |
-| `DebugAuth.js` | 调试授权模型 | code, userId, isUsed, expiresAt |
+| `User.js` | 用户模型 | username, email, password, diamonds, paidDiamonds, freeDiamonds, role |
+| `Persona.js` | 角色模型 | name, displayName, description, avatar, userId, status, sameNameNumber, tags |
+| `Room.js` | 房间模型 | name, description, createdBy, members |
+| **`Message.js`** | **消息模型** | content, isAudio, audioUrl, audioDuration, musicData, isRedPacket, redPacketId, isGift, giftData, isEmoji, emojiId |
+| `Friend.js` | 好友关系 | personaId, friendPersonaId |
+| `FriendRequest.js` | 好友申请 | fromPersonaId, toPersonaId, status, reason |
+| `InviteCode.js` | 邀请码 | code, type, createdBy, usedBy, expiresAt |
+| `RedeemCode.js` | 充值码 | code, diamondAmount, createdBy, isUsed |
+| `RedemptionRecord.js` | 充值记录 | userId, redeemCodeId, code, diamondAmount |
+| **`TransactionRecord.js`** | **交易流水** | userId, type, amount, paidAmount, freeAmount, balanceAfter, relatedId |
+| `SystemSettings.js` | 系统设置 | key, value |
+| `MaintenanceSchedule.js` | 维护计划 | name, startTime, endTime, isActive |
+| `Title.js` | 头衔 | name, roomId, assignedTo |
+| `ActivePersona.js` | 激活角色 | userId, personaId |
+| `PersonaRoom.js` | 角色-房间关联 | personaId, roomId |
+| `AIPersona.js` | AI 角色 | name, personality, replyStyle |
+| `Post.js` | 帖子 | content, images, likes |
+| `ShopItem.js` | 商城商品 | name, type, price, isGiftable, guardValue |
+| `UserInventory.js` | 用户库存 | itemId, isEquipped |
+| `Changelog.js` | 更新日志 | sha, message, commitType |
+| `DebugAuth.js` | 调试授权 | code, userId |
+| **`UserEmoji.js`** | **用户表情** | userId, url, usageCount, groupId, tags |
+| **`EmojiCategory.js`** | **表情分组** | userId, name, emojiIds |
+| **`GiftRecord.js`** | **礼物记录** | fromPersonaId, toPersonaId, itemId, diamondAmount, guardValue |
+| **`RedPacket.js`** | **红包** | senderId, type, totalAmount, count, remainingAmount, message |
+| **`RedPacketRecord.js`** | **红包领取记录** | redPacketId, receiverId, amount |
+| `AuditLog.js` | 审计日志 | userId, action, details |
+| `VoiceRoom.js` | 语音房 | creatorId, memberCount |
+| `UserPersonaForAI.js` | AI 用户角色 | name, description |
+| `UserReadRecord.js` | 阅读记录 | lastReadAt |
 
-##### `src/routes/` - API 路由
+##### `src/routes/` - API 路由（共 25 个路由）
 
 | 文件 | 主要接口 |
 |------|----------|
-| `auth.js` | 登录、注册、Google 登录、邀请码验证、获取用户信息 |
-| `user.js` | 用户资料、修改密码、删除账户、引导状态、用户名检查 |
-| `persona.js` | 角色 CRUD、审核、搜索、守护、亲密关系、动态 |
-| `room.js` | 房间 CRUD、消息（**支持分页游标 before 参数**）、审核、撤回、删除、转让、@提及 |
-| `pat.js` | 拍一拍（预设动作、自定义、发送） |
-| `redeem.js` | 充值码创建、使用、列表、统计 |
-| `admin.js` | 维护模式开关、管理员豁免、维护计划 |
-| `diamond.js` | 钻石余额、每日签到 |
-| `shop.js` | 商品列表、购买、装备、卸下 |
-| **`upload.js`** | **Cloudinary 图片/音频上传/删除（音频强制转 MP3）** |
+| `auth.js` | 登录、注册、Google 登录、邀请码 |
+| `user.js` | 用户资料、修改密码、删除账户 |
+| `persona.js` | 角色 CRUD、审核、搜索、守护 |
+| `room.js` | 房间 CRUD、消息分页、撤回、删除、@提及 |
+| `pat.js` | 拍一拍 |
+| `redeem.js` | 充值码 |
+| `admin.js` | 维护模式 |
+| `diamond.js` | 钻石余额、签到、交易流水 |
+| `shop.js` | 商品、购买、装备 |
+| `upload.js` | Cloudinary 图片/音频上传 |
 | `translate.js` | 简繁转换、多语言翻译 |
-| `ai.js` | AI 对话（DeepSeek） |
+| `ai.js` | AI 对话 |
 | `aiPersona.js` | AI 角色 CRUD |
-| `post.js` | 帖子发布、点赞、删除 |
+| `post.js` | 帖子 |
 | `search.js` | 全局搜索 |
-| `changelog.js` | GitHub 更新日志同步 |
-| `linkPreview.js` | URL 元数据抓取 |
+| `changelog.js` | 更新日志同步 |
+| `linkPreview.js` | 链接预览 |
 | `security.js` | 安全报告 |
-| **`friend.js`** | **完整好友 API：获取列表、获取申请、搜索角色、发送申请、处理申请、删除好友、获取动态** |
-| **`privateChat.js`** | **私聊路由：验证好友关系后获取消息历史** |
-| **`music.js`** | **音乐搜索 API（YouTube + Bilibili 双平台）** |
-| **`youtube.js`** | **YouTube 视频详情 API（Data API v3）** |
+| **`friend.js`** | **好友 API** |
+| **`privateChat.js`** | **私聊 API** |
+| **`music.js`** | **音乐搜索（YouTube + Bilibili）** |
+| **`youtube.js`** | **YouTube 视频详情** |
+| **`emoji.js`** | **表情 API（上传、删除、分组、举报）** |
+| **`gift.js`** | **礼物 API** |
+| **`redpacket.js`** | **红包 API** |
+| **`guardian.js`** | **守护榜 API** |
+| `voice.js` | 语音房 |
 
-##### `src/middleware/` - 中间件
+##### `src/middlewares/` - 中间件
 
 | 文件 | 职责 |
 |------|------|
-| `securityMiddleware.js` | 安全中间件（限流、IP黑名单、注入检测、恶意UA、告警） |
-| `securityLogger.js` | 安全日志记录 |
-| `roleMiddleware.js` | 角色权限中间件（super_admin/owner/admin 检查） |
 | `auditLog.js` | 审计日志 |
-| `mentionHandler.js` | @提及处理中间件 |
+| `mentionHandler.js` | @提及处理 |
+| `roleMiddleware.js` | 角色权限 |
+| `securityLogger.js` | 安全日志 |
+| `securityMiddleware.js` | 安全中间件（限流、IP黑名单） |
 
 ##### `src/services/` - 业务服务
 
 | 文件 | 职责 |
 |------|------|
-| `aiService.js` | DeepSeek API 调用 |
-| `translateService.js` | 简繁转换 + 多语言翻译（Google Translate） |
-| `discordAlert.js` | Discord Webhook 告警（安全、部署、反馈） |
-| **`uploadService.js`** | **Cloudinary 上传（图片 + 音频，音频转 MP3）** |
+| `aiService.js` | DeepSeek API |
+| `api.ts` | API 类型定义 |
+| `cardService.js` | 卡片服务 |
 | `contentFilter.js` | 脏话过滤 |
+| **`diamondService.js`** | **钻石服务（含交易记录）** |
+| `discordAlert.js` | Discord 告警 |
+| `linkService.js` | 链接处理 |
 | `markdownService.js` | Markdown 解析 |
+| **`redpacketExpireService.js`** | **红包过期检查服务** |
+| `securityReport.js` | 安全报告 |
+| `translateService.js` | 翻译服务 |
+| `uploadService.js` | Cloudinary 上传 |
+| `verificationCode.js` | 验证码服务 |
 
 ##### `src/utils/` - 工具函数
 
 | 文件 | 职责 |
 |------|------|
-| **`socketHelper.js`** | **Socket 通知辅助函数 `emitToUser`** |
+| **`socketHelper.js`** | **Socket 通知辅助函数（emitToUser, emitToRoom）** |
 
 ##### `src/scripts/` - 维护脚本
 
 | 文件 | 职责 |
 |------|------|
-| `health-check.js` | 系统健康检查（数据库、API、性能） |
-| `createAdmin.js` | 创建管理员账号 |
+| `backup.js` | 数据库备份 |
 | `clean-db.js` | 清理数据库 |
-| `init-shop.js` | 初始化商城商品 |
-| `init-avatar-frames.js` | 初始化头像框商品 |
-| `fix-room-owner.js` | 修复房间群主 |
-| `fix-room.js` | 修复房间数据 |
-| `fix-persona-data.js` | 修复角色数据 |
+| `clear-diamonds.js` | 清空钻石 |
+| `createAdmin.js` | 创建管理员 |
 | `fix-global-numbers.js` | 修复全局编号 |
+| `fix-issues.js` | 修复问题 |
+| `fix-paid-diamonds.js` | 修复付费钻石 |
+| `fix-persona-data-raw.js` | 修复角色数据（原始） |
+| `fix-persona-data.js` | 修复角色数据 |
+| `fix-room-owner.js` | 修复房间群主 |
+| `fix-room.js` | 修复房间 |
+| `health-check.js` | 健康检查 |
+| `init-global-numbers.js` | 初始化全局编号 |
+| `initAvatarFrames.js` | 初始化头像框 |
+| `initNewFrames.js` | 初始化新头像框 |
+| `initShop.js` | 初始化商城 |
+| `migrate-persona.js` | 角色数据迁移 |
 | `migrate-to-persona-rooms.js` | 迁移到角色房间 |
+| `refund-expired-redpackets.js` | 退款过期红包 |
+| `restore-transactions.js` | 恢复交易流水 |
+| `test-discord.js` | 测试 Discord |
 | `test-link-preview.js` | 测试链接预览 |
-| `test-discord.js` | 测试 Discord Webhook |
 
 ##### `.github/workflows/` - GitHub Actions
 
 | 文件 | 职责 |
 |------|------|
-| `discord-updates.yml` | 代码推送时发送 Discord 通知 |
+| `backup.yml` | 数据库备份工作流 |
+| `discord.yml` | Discord 通知工作流 |
 
 ---
 
 ## 🔗 关键数据流
 
-### 1. 发送消息流程（支持回复和提及）
-用户点击回复按钮 → 设置 replyToMessage → 输入框显示回复预览 → 用户输入内容（可 @ 成员） → 前端解析 @ 提及 → 发送消息带 replyToId 和 mentions → 后端 mentionHandler 处理 → 保存消息到 MongoDB → 广播 new-message → 前端显示消息和引用内容，@ 成员高亮。
+### 1. 发送消息流程
+用户输入内容（可 @ 成员）→ 前端解析 @ 提及 → 发送消息 → 后端 mentionHandler 处理 → 保存到 MongoDB → 广播 new-message
 
-### 2. 语音消息流程（新增）
-用户长按录音按钮 → 录音中（显示时长）→ 松手 → 上传音频到 Cloudinary（强制转 MP3）→ Socket 发送消息（含 audioUrl、audioDuration）→ 后端保存（isAudio: true）→ 广播 → 接收方显示音频播放器。
+### 2. 语音消息流程
+用户长按录音按钮 → 录音中 → 松手 → 上传音频到 Cloudinary → Socket 发送消息（含 audioUrl）→ 广播 → 接收方显示音频播放器
 
-### 3. 音乐分享流程（新增）
-点击音乐按钮 → 选择平台（YouTube/Bilibili）→ 搜索歌曲 → 选择歌曲 → 获取视频详情 → Socket 发送 JSON 消息（musicData 字段）→ 后端保存 → 广播 → 接收方解析 JSON → 渲染 MusicCard → 点击卡片展开播放器（YouTube iframe / Bilibili 播放器）。
+### 3. 音乐分享流程
+点击音乐按钮 → 选择平台（YouTube/Bilibili）→ 搜索 → 选择歌曲 → 获取详情 → Socket 发送 JSON 消息 → 广播 → 渲染 MusicCard
 
-### 4. 消息分页加载流程
-用户滚动到聊天顶部 → 触发 loadMoreMessages → 发送 GET /api/room/:roomId/messages?before=最早消息ID → 后端返回 50 条更早的消息 → 前端 prepend 到消息列表顶部 → 保持滚动位置。
+### 4. 红包流程
+发红包（随机/固定/个人）→ 聊天显示红包卡片 → 用户点击抢红包 → 后端验证 → 增加钻石 → 记录领取 → 手气最佳标记
 
-### 5. 消息撤回流程
-用户右键/长按消息 → 选择撤回（5分钟内）→ 后端标记 isRecalled → 广播 message-recalled → 所有人看到撤回提示。
+### 5. 礼物流程
+商城选择商品 → 点击赠送 → 选择好友 → 扣钻石 → 发送礼物消息 → 增加对方守护值 → 更新守护榜
 
-### 6. 消息删除流程
-用户右键/长按消息 → 选择删除（仅自己）→ 后端标记 isDeleted → 仅删除者本人看不到。
+### 6. 表情包流程
+上传表情（单张/批量）→ Cloudinary 压缩转 WebP → 保存到用户表情库 → 聊天时选择发送 → 使用次数 +1
 
-### 7. AI 对戏流程
-点击 AI 对戏 Tab → 加载默认 AI 角色 → 发送消息 → 调用 DeepSeek API → 返回带动作描写的回复。
+### 7. 好友系统流程
+搜索角色 → 填写申请理由 → 发送申请 → Socket 通知对方 → 同意/拒绝 → 创建好友关系 → 可私聊
 
-### 8. 每日签到流程
-打开签到面板 → GET 签到信息 → 点击领取 → POST 领取 → 计算连续奖励（5,5,8,8,10,15,20 循环）→ 更新钻石。
+### 8. AFK 隐私保护流程
+用户无操作 5 分钟 → 进入 AFK 模式 → 播放动态壁纸 → 双视频层无缝循环 → 橙色锁头控制面板
 
-### 9. 角色切换流程
-点击切换按钮 → 打开 PersonaSwitchPanel → 选择角色 → API 更新激活角色 → localStorage 保存 → 触发事件更新界面。
-
-### 10. 头像上传流程
-点击更换头像 → 选择图片 → 上传到 Cloudinary → 返回 URL → 更新数据库 → 刷新页面。
-
-### 11. 头像框系统
-购买头像框 → 装备到角色 → 显示时根据 frameId 应用配置（scale, offsetX, offsetY）→ 在头像周围显示。
-
-### 12. @提及流程
-用户在输入框输入 `@` → 弹出成员列表 → 选择成员 → 插入 `@用户名` → 发送时后端解析 mentions → 为被提及者创建通知 → 被提及者收到高亮消息。
-
-### 13. 维护模式流程
-管理员在设置面板开启维护模式 → 后端设置 SystemSettings → 所有非管理员请求返回 503 → Socket.IO 拒绝连接。
-
-### 14. 拍一拍流程
-双击头像 → 弹出拍一拍面板 → 选择预设动作或自定义 → 后端生成消息（格式：{actor} 动作 {target}）→ 保存为 isPat: true → 广播 → 前端显示 ✨ 样式。
-
-### 15. 充值码流程
-管理员创建充值码 → 用户在钱包输入充值码 → 后端验证 → 增加钻石 → 记录使用。
-
-### 16. 新用户引导流程
-注册成功 → 输入邀请码 → 引导页（用户名/昵称/生日）→ 创建角色 → 创建/加入群聊 → 进入聊天页。
-
-### 17. AFK 隐私保护流程
-用户无操作 5 分钟（开发环境 30 秒）→ AFKContext 检测 → 设置 isAFK = true → AFKScreen 全屏显示 → 播放壁纸视频（顺序循环，双视频层无缝切换）→ 出现可拖拽橙色锁头按钮 → 点击锁头展开功能菜单（暂停/播放/循环/跳过/显示解锁界面）→ 用户按 ESC 或点击退出按钮 → 恢复界面。**手动 AFK**：点击顶部栏锁头图标 → 立即进入 AFK 模式。
-
-### 18. 好友系统流程
-**发送申请**：用户 A 搜索角色 B → 选择自己的角色 → 填写申请理由（30字内）→ 发送 → 后端创建 FriendRequest → Socket 通知角色 B 所属用户 → 角色 B 收到实时通知。**处理申请**：角色 B 同意/拒绝 → 后端更新状态 → 同意时创建 Friend 双向关系 → 双方收到 Socket 通知。**私聊**：双方成为好友后 → 私聊 Tab 显示好友列表 → 选择好友 → 验证好友关系 → 加载历史消息 → 实时通信。
+### 9. 角色系统流程（新版）
+用户申请创建角色 → 管理员审核 → 通过后直接归属于申请人 → 计算同名编号（已批准数量+1）→ 无全局编号
 
 ---
 
@@ -549,7 +603,7 @@ CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 # YouTube API（音乐搜索）
 YOUTUBE_API_KEY=your_youtube_api_key
 
-# Discord 告警（可选）
+# Discord 告警
 DISCORD_WEBHOOK_SECURITY=https://discord.com/api/webhooks/...
 DISCORD_WEBHOOK_DEPLOY=https://discord.com/api/webhooks/...
 DISCORD_WEBHOOK_FEEDBACK=https://discord.com/api/webhooks/...
@@ -562,171 +616,85 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 
 ## 🚀 部署信息
 
-| 服务 | 平台 | 地址 | 备注 |
-|------|------|------|------|
-| 前端 | Vercel | https://rp-chat-v1-0.vercel.app | 自动部署 main 分支 |
-| 后端 | Render | https://rp-chatv1-0.onrender.com | 免费实例，无请求会休眠 |
+| 服务 | 平台 | 地址 |
+|------|------|------|
+| 前端 | Vercel | https://rp-chat-v1-0.vercel.app |
+| 后端 | Render | https://rp-chatv1-0.onrender.com |
 
 ---
 
 ## 📝 功能清单
 
-### ✅ 已完成功能
-
-#### 💬 核心聊天
+### ✅ 核心聊天
 - [x] 消息发送/接收（Socket.IO 实时）
-- [x] 消息回复（引用回复，气泡内显示）
-- [x] 消息撤回（5分钟内，所有人可见）
-- [x] 消息删除（软删除，仅自己不可见）
+- [x] 消息回复、撤回、删除
 - [x] 动作扮演（`/me` 命令）
 - [x] 简繁转换 + 表情选择器
-- [x] Tab 键快捷切换角色
-- [x] 链接预览卡片
-- [x] Markdown 渲染
-- [x] **@提及功能（成员选择、通知、高亮）**
-- [x] **拍一拍功能（双击头像，预设+自定义动作，使用 isPat 字段存储）**
-- [x] **消息分页加载（游标分页，滚动自动加载历史）**
-- [x] **消息去重优化（修复 React key 重复警告）**
+- [x] @提及功能
+- [x] 拍一拍功能
+- [x] 消息分页加载
+- [x] 消息去重优化
 
-#### 🎙️ 语音消息系统（2026-06-04 新增）
-- [x] **长按录音按钮（上滑取消、时长限制）**
-- [x] **音频播放器组件（播放/暂停、进度条、音量控制）**
-- [x] **后端音频上传（Cloudinary 存储，强制转 MP3）**
-- [x] **Socket.IO 实时推送语音消息**
-- [x] **消息气泡集成音频播放器**
+### 🎙️ 语音消息系统
+- [x] 长按录音按钮（上滑取消、时长限制）
+- [x] 音频播放器（播放/暂停、进度条）
+- [x] Cloudinary 音频上传（MP3 转码）
 
-#### 🎵 音乐分享系统（2026-06-04 新增）
-- [x] **音乐搜索弹窗（YouTube + Bilibili 双平台，平台切换按钮）**
-- [x] **音乐卡片组件（信息展示 + 嵌入播放器）**
-- [x] **后端 YouTube 搜索 API（Data API v3）**
-- [x] **后端 Bilibili 搜索 API（公开 API + 详情接口）**
-- [x] **卡片嵌入播放器（YouTube iframe + Bilibili 移动版播放器）**
-- [x] **播放失败降级（跳转链接）**
+### 🎵 音乐分享系统
+- [x] YouTube + Bilibili 双平台搜索
+- [x] 音乐卡片 + 嵌入播放器
+- [x] 播放失败降级
 
-#### 👤 角色系统
+### 😀 表情包系统
+- [x] 单张/批量上传（最多10张）
+- [x] 自动压缩转 WebP
+- [x] 分组管理、收藏功能
+- [x] 使用统计、搜索、举报
+
+### 🎁 礼物/红包/守护系统
+- [x] 赠送礼物、守护值计算
+- [x] 全站守护榜、角色守护者列表
+- [x] 随机/固定/个人三种红包
+- [x] 红包过期自动退款
+- [x] 充值钻石/免费钻石分类
+
+### 👤 角色系统
 - [x] 角色创建/编辑/删除
-- [x] 角色搜索（简繁转换）
-- [x] 角色详情页（皮主页）
-- [x] 角色动态（发帖、点赞）
-- [x] 亲密关系 + 守护榜
-- [x] 角色头像上传（Cloudinary）
-- [x] 角色切换面板（弹窗 + 搜索 + 最近使用）
-- [x] 记住上次使用的角色（localStorage）
+- [x] 审核机制（申请 → 审核 → 归属）
+- [x] 同名编号（只计算已批准）
+- [x] 头像必填、标签限制
+- [x] 角色搜索（只能查看他人角色）
 
-#### 🖼️ 头像框系统
-- [x] 商城购买头像框
-- [x] 装备/卸下头像框
-- [x] 每个头像框独立配置（scale, offsetX, offsetY）
-- [x] 所有头像显示位置统一使用 AvatarFrame
+### 👥 好友系统
+- [x] 角色间添加好友
+- [x] 好友申请 Socket 通知
+- [x] 同意/拒绝/删除好友
+- [x] 角色间私聊（需好友关系）
 
-#### 🏠 群聊系统
-- [x] 创建群聊
-- [x] 申请加入（审核机制）
-- [x] 群主/管理员权限
-- [x] 转让群主 + 踢出成员
-- [x] 未读消息计数（红点提示）
-- [x] 消息时间分隔线 + 气泡时间戳
-- [x] **头衔管理（创建/删除/分配）**
-- [x] **群组权限 Hook（useGroupPermission）**
+### 🛡️ AFK 隐私保护系统
+- [x] 5分钟自动进入
+- [x] 全屏动态壁纸（电脑7个/手机2个）
+- [x] 双视频层无缝切换
+- [x] 可拖拽橙色锁头控制面板
+- [x] 功能菜单（暂停/循环/跳过/解锁）
 
-#### 🤖 AI 对戏
-- [x] DeepSeek API 接入
-- [x] AI 角色自定义（名称、性格、回复风格）
-- [x] 用户角色设置（让 AI 认识你）
-- [x] 聊天历史保存（localStorage）
+### 💎 经济系统
+- [x] 每日签到（循环奖励）
+- [x] 充值码系统
+- [x] 交易流水记录
+- [x] 商城 + 背包 + 头像框
 
-#### 💎 经济系统
-- [x] 每日签到（连续奖励：5,5,8,8,10,15,20 循环）
-- [x] 钻石为主货币
-- [x] 商城 + 背包
-- [x] **充值码系统（管理员创建，用户兑换）**
-
-#### 🔐 认证与安全
-- [x] 邮箱密码登录 + 注册
-- [x] Google OAuth 登录
-- [x] 修改密码 + 删除账户
+### 🔐 认证与安全
+- [x] 邮箱密码登录 + Google 登录
 - [x] 邀请码机制
-- [x] **安全中间件（限流、请求验证）**
-- [x] **安全日志记录**
-- [x] **Discord 告警（安全事件、部署通知等）**
-- [x] **维护模式（管理员可开关，支持定时计划）**
+- [x] 安全中间件（限流、IP黑名单）
+- [x] Discord 告警
+- [x] 维护模式
 
-#### 👥 好友系统
-- [x] **角色间添加好友（基于 Persona 独立）**
-- [x] **好友申请 Socket 实时通知**
-- [x] **同意/拒绝好友申请**
-- [x] **删除好友**
-- [x] **角色间私聊（需好友关系）**
-- [x] **好友动态（只显示角色信息）**
-- [x] **搜索角色功能**
-- [x] **手机端/桌面端/平板端布局适配**
-- [x] **申请理由（30字限制）**
-- [x] **拒绝后重新申请冷却（30分钟）**
-
-#### 🛡️ AFK 隐私保护系统（v2.0）
-- [x] 无操作 5 分钟后自动进入隐私保护模式
-- [x] 全屏动态壁纸（支持视频/图片）
-- [x] 电脑/手机分离壁纸（7个电脑端 + 2个手机端）
-- [x] 顺序循环播放（1→2→3→...→N→1）
-- [x] 双视频层无缝切换（淡入淡出，避免空白暴露）
-- [x] 主循环定时器（3分钟强制切换，防止卡顿）
-- [x] 健康检查（每5秒检测视频状态，自动恢复播放）
-- [x] 密码保护（可选）
-- [x] 手动进入按钮（电脑端右上角锁头图标）
-- [x] ESC 键退出
-- [x] **可拖拽橙色锁头控制面板（位置记忆）**
-- [x] **功能菜单（暂停/播放/循环/跳过/显示解锁界面）**
-- [x] **毛玻璃 UI 美化（渐变 + 毛玻璃 + 脉冲光环）**
-- [x] **GitHub Releases + jsDelivr CDN 壁纸托管**
-- [x] **AFK 模式下强制锁定浅色模式**
-- [x] 连接状态指示器（在线/挂机/离线/异常）
-
-#### 📱 布局与主题
-- [x] 深色模式（仅 localStorage，无系统跟随）
+### 📱 布局与主题
+- [x] 深色模式
 - [x] 响应式布局（手机/平板/桌面）
 - [x] 手机端底部 Tab（聊天/动态/主页）
-- [x] 电脑端侧边栏 + 左下角色切换 + 好友按钮组
-- [x] 移动端键盘适配
-- [x] 手机端动态页和主页美化
-- [x] **手机端菜单按钮整合好友功能**
-
-#### 🌐 翻译功能
-- [x] 简繁转换（OpenCC）
-- [x] 多语言翻译（Google Translate）
-- [x] 消息内翻译按钮（悬停显示）
-- [x] 设置中切换翻译目标语言
-
-#### 💰 钱包系统
-- [x] 钱包页面（余额、充值记录）
-- [x] 充值码兑换
-- [x] 管理员创建充值码（单个/批量）
-
-#### 🎭 新用户引导
-- [x] 引导流程（用户名/昵称/生日）
-- [x] 角色创建引导
-- [x] 群聊创建/加入引导
-
-#### 📋 其他
-- [x] 更新日志（自动同步 GitHub commits）
-- [x] 隐私政策 + 服务条款页面
-- [x] 全局搜索
-- [x] GitHub Actions Discord 通知
-- [x] Framer Motion 动画
-- [x] **API 缓存问题修复（GET 请求自动添加 _t 时间戳）**
-- [x] **CORS 和网络连接优化（智能环境检测）**
-- [x] **Git LFS 配置（壁纸大文件存储）**
-- [x] **API 401 防循环跳转**
-
-### ⏳ 开发中
-- [ ] 消息搜索（全文搜索）
-- [ ] 帖子评论功能
-- [ ] 邮箱验证（需要邮件服务）
-
-### ❌ 已放弃/删除
-- [ ] 语音房（agoraService 已配置但未使用）
-- [ ] Apple 登录（网页不支持）
-- [ ] 金币作为主货币（改为钻石）
-- [ ] 全局编号（改为只显示同名编号）
 
 ---
 
@@ -739,40 +707,43 @@ User (用户)
   ├── 1:N → Message (消息)
   ├── 1:N → Post (帖子)
   ├── 1:N → UserInventory (背包)
-  ├── 1:N → AIPersona (AI角色)
-  └── 1:N → RedemptionRecord (充值记录)
+  ├── 1:N → UserEmoji (表情)
+  ├── 1:N → EmojiCategory (表情分组)
+  ├── 1:N → RedemptionRecord (充值记录)
+  ├── 1:N → TransactionRecord (交易流水)
+  ├── 1:N → GiftRecord (送出的礼物)
+  ├── 1:N → RedPacket (发送的红包)
+  └── 1:N → RedPacketRecord (抢到的红包)
 
 Persona (角色)
   ├── N:N → PersonaRoom (加入的房间)
   ├── 1:N → Message (发送的消息)
   ├── 1:N → Post (发布的帖子)
   ├── N:N → Friend (好友关系)
-  └── N:N → FriendRequest (好友申请)
+  ├── N:N → FriendRequest (好友申请)
+  ├── 1:N → GiftRecord (收到的礼物)
+  └── 1:N → RedPacketRecord (抢到的红包)
 
 Room (房间)
   ├── 1:N → Message (房间消息)
-  └── 1:N → PersonaRoom (成员)
+  ├── 1:N → PersonaRoom (成员)
+  ├── 1:N → Title (头衔)
+  └── 1:N → RedPacket (房间红包)
 
 Message (消息)
   ├── 自关联 → replyTo (回复)
-  ├── 字段 → isPat (拍一拍标记)
-  ├── 字段 → isAudio, audioUrl, audioDuration (语音消息)
-  └── 字段 → musicData (音乐分享 JSON)
+  ├── 字段 → isAudio, audioUrl, audioDuration
+  ├── 字段 → musicData
+  ├── 字段 → isRedPacket, redPacketId
+  ├── 字段 → isGift, giftData
+  └── 字段 → isEmoji, emojiId
 
 ShopItem (商品)
-  └── 1:N → UserInventory (库存)
+  ├── 1:N → UserInventory (库存)
+  └── 1:N → GiftRecord (礼物记录)
 
-SystemSettings (系统设置)
-  └── 单例模式 (key-value)
-
-Title (头衔)
-  └── N:1 → Room (所属房间)
-
-Friend (好友)
-  └── personaId + friendPersonaId (复合唯一索引)
-
-FriendRequest (好友申请)
-  └── fromPersonaId + toPersonaId + status
+RedPacket (红包)
+  └── 1:N → RedPacketRecord (领取记录)
 ```
 
 ---
@@ -785,7 +756,7 @@ FriendRequest (好友申请)
 |------|------|------|
 | `join-room` | `{ roomId, userId, personaId }` | 加入聊天室 |
 | `leave-room` | `{}` | 离开聊天室 |
-| `send-message` | `{ roomId, userId, personaId, content, isAction, replyToId, mentions, isAudio, audioUrl, audioDuration, musicData }` | 发送消息（支持文本/语音/音乐） |
+| `send-message` | `{ roomId, userId, personaId, content, replyToId, mentions, isAudio, audioUrl, audioDuration, musicData, isRedPacket, redPacketData, isGift, giftData, isEmoji, emojiId }` | 发送消息 |
 | `switch-persona` | `{ userId, newPersonaId }` | 切换角色 |
 | `pong` | `{}` | 心跳响应 |
 
@@ -795,15 +766,14 @@ FriendRequest (好友申请)
 |------|------|------|
 | `connected` | `{ id, timestamp }` | 连接成功 |
 | `ping` | `{}` | 心跳检测 |
-| `new-message` | `Message`（含 isPat、isAudio、musicData） | 新消息 |
+| `new-message` | `Message` | 新消息 |
 | `message-recalled` | `{ messageId, recalledByName }` | 消息被撤回 |
 | `message-deleted` | `{ messageId }` | 消息被删除 |
 | `room-online-count` | `{ roomId, count }` | 在线人数更新 |
-| `user-joined` | `{ userId, personaId, onlineCount }` | 用户加入 |
-| `user-left` | `{ userId }` | 用户离开 |
 | `persona-switched` | `{ userId, newPersonaId }` | 角色切换通知 |
-| **`friend-request-received`** | **`{ request }`** | **好友申请实时通知** |
-| **`friend-request-updated`** | **`{ requestId, status, fromPersonaId, toPersonaId }`** | **好友申请状态更新** |
+| `friend-request-received` | `{ request }` | 好友申请通知 |
+| `friend-request-updated` | `{ requestId, status }` | 好友申请状态更新 |
+| `redpacket-received` | `{ redPacketId }` | 新红包通知 |
 
 ---
 
@@ -822,32 +792,6 @@ FriendRequest (好友申请)
 
 ---
 
-## 🔌 AFK 系统自定义事件
-
-| 事件名 | 触发时机 | 用途 |
-|--------|----------|------|
-| `showAFKUI` | 点击锁头 | 显示隐私保护模式 UI |
-| `hideAFKUI` | 关闭面板 | 隐藏 UI |
-| `toggleAFKUI` | 点击锁头 | 切换 UI 显示/隐藏 |
-| `afkUIShown` | UI 显示后 | 触发自动隐藏定时器 |
-| `afkUIHidden` | UI 隐藏后 | 清除定时器 |
-
-### DraggableAFKStatus 组件 Props
-
-```tsx
-interface DraggableAFKStatusProps {
-  size?: 'sm' | 'md' | 'lg';
-  onPauseToggle?: (paused: boolean) => void;
-  onRepeatToggle?: (repeating: boolean) => void;
-  onSkip?: () => void;
-  onShowUI?: () => void;
-  isVideoPaused?: boolean;
-  isRepeating?: boolean;
-}
-```
-
----
-
 ## 🤖 AI 维护指南
 
 > ### 给下次对话的 AI：
@@ -855,35 +799,22 @@ interface DraggableAFKStatusProps {
 > 1. **请务必先阅读本文档再回答问题！**
 > 2. 修改代码前，**请先询问用户手上的文件内容**
 > 3. 保持代码风格一致，注意移动端兼容性
-> 4. 动画使用 Framer Motion，类型需要 `as const`
 > 
 > ### 关键配置位置：
 > 
 > | 配置项 | 文件位置 |
 > |--------|----------|
 > | 头像框配置 | `AvatarFrame.tsx` 的 `frameAdjustments` |
-> | AFK 配置 | `AFKContext.tsx` 的 `AFK_CONFIG`（超时时间） |
-> | AFK 壁纸 URL | `AFKScreen.tsx` 的 `DESKTOP_WALLPAPERS` / `MOBILE_WALLPAPERS` |
-> | AFK 锁头组件 | `DraggableAFKStatus.tsx` |
-> | **语音消息** | `AudioRecorderButton.tsx` + `AudioPlayer.tsx` + `audioRecorderService.ts` |
-> | **音乐分享** | `MusicSearchModal.tsx` + `MusicCard.tsx` + `music.js` |
-> | **好友系统** | `FriendContext.tsx` + `friendApi.ts` + `Friend.js`/`FriendRequest.js` |
-> | **Socket 通知** | `socketHelper.js` 的 `emitToUser` |
-> | Cloudinary | `CLOUDINARY_URL` 环境变量 |
-> | DeepSeek API | `aiService.js` |
-> | YouTube API | `YOUTUBE_API_KEY` 环境变量 + `youtube.js` |
-> | Socket.IO | `app.js` + `socket.ts` |
-> | 路由守卫 | `App.tsx` + `api.ts` 401 拦截 |
-> | API 缓存 | `api.ts` 中的 `_t` 时间戳参数 |
-> | Discord 告警 | `discordAlert.js` + 环境变量 |
-> | 维护模式 | `admin.js` + `SystemSettings` 模型 |
-> | 提及处理 | `mentionHandler.js` 中间件 |
-> | 头衔系统 | `title.js` 路由 + `Title` 模型 |
-> | 群组权限 | `useGroupPermission.ts` Hook |
-> | 拍一拍 | `pat.js` + `PatPanel.tsx` + `Message.js` 的 `isPat` 字段 |
-> | 充值码 | `redeem.js` + `Wallet.tsx` |
-> | 翻译 | `translateService.js` + `TranslatableMessage.tsx` |
-> | 消息分页 | `room.js` 的 `before` 参数 + `ChatHome.tsx` 的滚动监听 |
+> | AFK 配置 | `AFKContext.tsx` 的 `AFK_CONFIG` |
+> | 语音消息 | `AudioRecorderButton.tsx` + `audioRecorderService.ts` |
+> | 音乐分享 | `MusicSearchModal.tsx` + `music.js` |
+> | 表情包 | `EmojiManager.tsx` + `emoji.js` |
+> | 红包系统 | `redpacket.js` + `redpacketExpireService.js` |
+> | 礼物系统 | `gift.js` + `diamondService.js` |
+> | 好友系统 | `FriendContext.tsx` + `friend.js` |
+> | 钻石交易 | `TransactionRecord.js` + `diamondService.js` |
+> | 角色系统 | `Persona.js` + `persona.js` |
+> | Socket 通知 | `socketHelper.js` |
 > 
 > ### 手机端路由：
 > 
@@ -892,34 +823,6 @@ interface DraggableAFKStatusProps {
 > | 聊天 | `/chat` |
 > | 动态 | `/feed` |
 > | 主页 | `/home` |
-> 
-> ### 账号设置路径：
-> 
-> - 账号设置：`/settings`
-> - 角色主页：`/persona/:personaId`
-> - 钱包：`/wallet`
-> 
-> ### 维护模式：
-> 
-> - 管理员在 `/settings` 中开启/关闭
-> - 开启后普通用户无法访问任何 API 和 WebSocket
-> - 支持定时维护计划
-> 
-> ### 新用户引导流程：
-> 
-> 注册 → 邀请码 → `/onboarding`（填信息）→ 创建角色 → 创建/加入群聊 → `/chat`
-> 
-> ### 好友系统部署注意事项：
-> 
-> 1. **后端**：确保 MongoDB 旧索引 `userId_1_friendId_1` 已删除
-> 2. **前端**：确保登录时保存 `userId` 到 localStorage
-> 3. **Socket**：确保连接时传入正确的 `userId`（MongoDB `_id`）
-> 
-> ### 语音/音乐部署注意事项：
-> 
-> 1. **Cloudinary**：需配置音频上传（自动转 MP3）
-> 2. **YouTube API**：需配置 `YOUTUBE_API_KEY` 环境变量
-> 3. **Bilibili API**：使用公开 API，无需认证
 
 ---
 
@@ -927,17 +830,19 @@ interface DraggableAFKStatusProps {
 
 | 日期 | 更新内容 |
 |------|----------|
-| **2026-06-04** | **语音消息系统**：长按录音、音频播放器、Cloudinary 音频上传（MP3 转码）；**音乐分享系统**：YouTube + Bilibili 双平台搜索、音乐卡片、嵌入播放器；**消息去重优化**：修复 React key 重复警告 |
-| 2026-06-03 | 好友系统完整实现：角色间添加好友、Socket 实时通知、好友申请/同意/拒绝/删除、角色间私聊（需好友关系）、好友动态、搜索角色、手机端/桌面端/平板端布局适配、申请理由（30字限制）、拒绝后重新申请冷却（30分钟）、修复 API 401 防循环跳转、修复 `useRef` TypeScript 错误 |
-| 2026-05-31 | AFK 系统完整重构 v2.0：可拖拽橙色锁头控制面板（位置记忆）；功能菜单（暂停/播放/循环/跳过/显示解锁界面）；视频壁纸无缝循环（双视频层、主循环定时器、健康检查）；GitHub Releases + jsDelivr CDN 托管；毛玻璃 UI 美化；AFK 模式下强制锁定浅色模式；修复手动 AFK 遮挡层不显示问题；修复设置页面无限循环；修复拖拽跳跃和重复锁头问题 |
-| 2026-05-30 | AFK 隐私保护系统（5分钟自动进入、全屏视频壁纸、双视频层无缝切换、电脑/手机分离壁纸、密码保护、手动AFK按钮）；拍一拍修复（isPat 字段存储，刷新后样式保留）；消息分页加载（游标分页，滚动自动加载历史）；API 缓存问题修复（GET 请求自动添加 _t 时间戳）；CORS 和网络连接优化（智能环境检测）；Git LFS 配置（壁纸大文件存储） |
-| 2026-05-28 | 拍一拍功能（双击头像，预设/自定义动作）；充值码系统（钱包页面）；多语言翻译（Google Translate，消息内翻译）；新用户引导流程；全局编号移除（只保留同名编号）；定时维护计划；动画优化（Framer Motion）；安全中间件优化（翻译接口白名单） |
-| 2026-05-27 | 管理员豁免选项；头像上传优化；PersonaManager 头像显示；动态功能修复 |
-| 2026-05-26 | 头像框系统集成；安全系统；认证升级；@提及功能；头衔系统；群组管理修复 |
-| 2026-05-23 | 修复头像上传（Cloudinary），完善头像框系统 |
-| 2026-05-22 | 完成头像框功能、角色切换面板、手机端重构 |
-| 2026-05-21 | 完成 AI 对戏模块、商城系统、帖子系统、每日签到 |
-| 2026-05-18 | 完成消息回复、撤回、删除功能 |
+| **2026-06-06** | **角色系统重构**：审核机制、同名编号计算、头像必填、标签限制、删除全局编号；**钻石交易系统**：交易流水记录、收入/支出统计 |
+| **2026-06-05** | **红包系统**：随机/固定/个人红包、24小时过期退款、红包卡片；**礼物系统**：赠送礼物、守护值、守护榜 |
+| **2026-06-04** | **表情包系统**：批量上传、分组管理、收藏、搜索、举报；**语音消息系统**；**音乐分享系统** |
+| 2026-06-03 | 好友系统完整实现 |
+| 2026-05-31 | AFK 系统完整重构 v2.0 |
+| 2026-05-30 | AFK 隐私保护系统 |
+| 2026-05-28 | 拍一拍、充值码、多语言翻译 |
+| 2026-05-27 | 管理员豁免、头像上传优化 |
+| 2026-05-26 | 头像框系统、安全系统、@提及 |
+| 2026-05-23 | 修复头像上传 |
+| 2026-05-22 | 头像框功能、手机端重构 |
+| 2026-05-21 | AI 对戏、商城、帖子、签到 |
+| 2026-05-18 | 消息回复、撤回、删除 |
 
 ---
 
@@ -945,64 +850,23 @@ interface DraggableAFKStatusProps {
 
 | 问题 | 严重程度 | 说明 |
 |------|----------|------|
-| 部分手机浏览器视频无法自动播放 | 🔴 高 | 需要用户首次交互后播放，iOS 需要 `playsInline` 属性 |
-| AFK 状态切换时短暂空白 | 🟡 中 | 视频切换时仍有极短空白（已优化但未完全解决） |
+| 部分手机浏览器视频无法自动播放 | 🔴 高 | 需要用户首次交互后播放 |
+| AFK 状态切换时短暂空白 | 🟡 中 | 已优化但未完全解决 |
 | 手机端视频可能卡顿 | 🟡 中 | 大文件在低端手机上可能播放不流畅 |
-
----
-
-### 🔧 近期修复的问题详情
-
-| 问题 | 解决方案 | 日期 |
-|------|----------|------|
-| 消息重复渲染 | `handleNewMessage` 添加去重检查，按 `_id` 去重 | 2026-06-04 |
-| Socket 通知失败 | Socket 连接时传入 MongoDB `_id` 而非 Firebase UID | 2026-06-03 |
-| 好友索引冲突 | 删除旧的 `userId_1_friendId_1` 索引 | 2026-06-03 |
-| 拒绝后无法再次申请 | 发送申请前删除 `rejected` 记录 | 2026-06-03 |
-| 手机端菜单按钮无反应 | 将好友功能整合到侧边菜单 | 2026-06-03 |
-| API 401 无限循环 | 添加 `isAuthPage()` 检测 | 2026-06-03 |
-| `useRef` TypeScript 错误 | `useRef<ReturnType<typeof setTimeout> \| undefined>(undefined)` | 2026-06-03 |
-| 手动 AFK 按钮不显示遮挡层 | 移除重复的 `AFKProvider` 包装 | 2026-05-31 |
-| 设置页面无限循环 | 拆分 `useEffect` 依赖，添加 `useRef` 防重复 | 2026-05-31 |
-| 视频播放到一半停止 | 添加主循环定时器（3分钟强制切换）+ 健康检查 | 2026-05-31 |
-| 视频切换不流畅 | 优化 `readyState` 检测，增加淡入淡出时间至 500ms | 2026-05-31 |
-| 橙色锁头拖拽跳跃 | 使用 `useMotionValue` 替代 React state | 2026-05-31 |
-| 两个橙色锁头 | 删除布局文件中的重复 `<DraggableAFKStatus />` | 2026-05-31 |
-| 视频控制功能无效 | 修复闭包问题，使用 `ref` 传递暂停状态 | 2026-05-31 |
-| 夜间模式问题 | 修改 `ThemeContext.tsx` 强制锁定浅色模式 | 2026-05-31 |
-
----
-
-### 📊 功能运作流程速查
-
-#### 语音消息流程
-```
-用户长按录音按钮 → 录音中（显示时长）→ 松手 → 上传音频到 Cloudinary → Socket 发送消息（含 audioUrl）→ 后端保存 → 广播 → 接收方显示音频播放器
-```
-
-#### 音乐分享流程
-```
-点击音乐按钮 → 选择平台（YouTube/Bilibili）→ 搜索 → 选择歌曲 → 获取视频详情 → Socket 发送 JSON 消息 → 后端保存 → 广播 → 接收方解析 JSON → 渲染 MusicCard → 点击卡片展开播放器
-```
-
-#### AFK 模式流程
-```
-用户无操作 5 分钟 → 进入 AFK 模式 → 播放动态壁纸 → 双视频层无缝循环 → 显示橙色锁头 → 点击锁头展开菜单（暂停/循环/跳过/解锁）→ 按 ESC 或解锁退出
-```
 
 ---
 
 *本文档由 AI 维护，每次重要更新后请同步更新*
 ```
 
-以上是合并后的完整项目文档，包含：
-- 所有历史功能（头像框、安全系统、@提及、头衔、充值码、AFK 系统、好友系统等）
-- **新增语音消息系统**：长按录音、音频播放器、Cloudinary 音频上传
-- **新增音乐分享系统**：YouTube + Bilibili 双平台搜索、音乐卡片、嵌入播放器
-- **消息去重优化**：修复 React key 重复警告
-- **新增模型字段**：`isAudio`、`audioUrl`、`audioDuration`、`musicData`
-- **新增路由**：`music.js`、`youtube.js`
-- **新增组件**：`AudioRecorderButton.tsx`、`AudioPlayer.tsx`、`MusicSearchModal.tsx`、`MusicCard.tsx`
-- **新增服务**：`audioRecorderService.ts`
-- **环境变量**：`YOUTUBE_API_KEY`
-- 所有修复问题详情和功能运作流程速查
+以上是合并后的完整项目文档，已根据 `structure.txt` 验证了所有文件的存在性，并整合了以下所有功能模块：
+
+- **表情包系统**：上传、分组、收藏、搜索、举报
+- **礼物/红包/守护系统**：三种红包、礼物赠送、守护值、守护榜
+- **角色系统重构**：审核机制、同名编号、头像必填、标签限制
+- **钻石交易系统**：交易流水、收入/支出统计
+- **语音消息系统**：长按录音、音频播放器
+- **音乐分享系统**：YouTube + Bilibili 双平台
+- **好友系统**：角色间好友、私聊
+- **AFK 系统**：隐私保护、动态壁纸
+- 所有历史功能（头像框、安全系统、@提及、头衔、充值码等）

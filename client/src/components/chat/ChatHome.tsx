@@ -17,7 +17,7 @@ import AIChatRoom from './AIChatRoom';
 import LinkPreviewContainer from './LinkPreviewContainer';
 import toast, { Toaster } from 'react-hot-toast';
 import { notificationService } from '../../services/Notification';
-import { roomApi, personaApi, authApi, uploadApi, type Room, type Persona, type Message, type ReplyToInfo } from '../../services/api';
+import { roomApi, personaApi, authApi, uploadApi, aiApi, type Room, type Persona, type Message, type ReplyToInfo } from '../../services/api';
 import { socketService } from '../../services/socket';
 import { extractUrls } from '../../utils/linkParser';
 import AvatarFrame from '../common/AvatarFrame';
@@ -25,7 +25,7 @@ import { useQuickSwitchPersona } from '../../hooks/useQuickSwitchPersona';
 import TranslatableMessage from './TranslatableMessage';
 import PatPanel from './PatPanel';
 import { smartConvert } from '../../services/translateApi';
-import { Users, MessageCircle, Sparkles, Plus } from 'lucide-react';
+import { Users, MessageCircle, Sparkles, Plus, Lightbulb, Loader2 } from 'lucide-react';
 import MusicSearchModal from './MusicSearchModal';
 import { EmojiMessage } from '../emoji/EmojiMessage';
 import { GiftMessage } from '../gift/GiftMessage';
@@ -807,6 +807,10 @@ const ChatHome = () => {
   const [selectedRedPacketId, setSelectedRedPacketId] = useState<string | null>(null);
   const [showRedPacketDetail, setShowRedPacketDetail] = useState(false);
   
+  // 🧠 AI 建议相关状态
+  const [isGeneratingSuggest, setIsGeneratingSuggest] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+  
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [oldestMessageDate, setOldestMessageDate] = useState<string | null>(null);
@@ -816,6 +820,49 @@ const ChatHome = () => {
   const [personaSearchTerm, setPersonaSearchTerm] = useState('');
   const [availablePersonas, setAvailablePersonas] = useState<Persona[]>([]);
   const personaSwitchPanelRef = useRef<HTMLDivElement>(null);
+
+  // ========== 🧠 生成 AI 建议 ==========
+  const handleGenerateSuggest = useCallback(async () => {
+    if (!selectedRoom || isGeneratingSuggest) {
+      if (!selectedRoom) toast.error('请先选择一个聊天室');
+      return;
+    }
+    
+    setIsGeneratingSuggest(true);
+    
+    try {
+      // 获取最近的消息用于 AI 分析
+      const recentMessages: Array<{ role: 'user' | 'ai' | 'other'; content: string; personaName?: string }> = 
+  messages.slice(-15).map(msg => ({
+    role: msg.personaId?._id === selectedPersona?._id ? ('user' as const) : ('other' as const),
+    content: msg.content,
+    personaName: msg.personaId?.displayName || msg.personaId?.name || '用户',
+  }));
+      
+      const result = await aiApi.getSuggest(selectedRoom._id, recentMessages);
+      
+      if (result.success && result.suggestion) {
+        setAiSuggestion(result.suggestion);
+        toast.success('AI 已生成建议，点击"使用建议"填入输入框', { icon: '✨', duration: 3000 });
+        // 8秒后清除建议
+        setTimeout(() => {
+          setAiSuggestion(null);
+        }, 8000);
+      } else {
+        toast.error('生成建议失败，请稍后再试');
+      }
+    } catch (error) {
+      console.error('生成建议失败:', error);
+      toast.error('生成建议失败，请稍后再试');
+    } finally {
+      setIsGeneratingSuggest(false);
+    }
+  }, [selectedRoom, messages, selectedPersona, isGeneratingSuggest]);
+
+  // 清除 AI 建议（用户使用后调用）
+  const handleClearSuggestion = useCallback(() => {
+    setAiSuggestion(null);
+  }, []);
 
   const saveLastUsedPersona = useCallback((personaId: string) => {
     localStorage.setItem('lastUsedPersonaId', personaId);
@@ -1490,6 +1537,8 @@ const ChatHome = () => {
     setShowUserList(false);
     setShowAIChat(false);
     setReplyToMessage(null);
+    // 切换房间时清除 AI 建议
+    setAiSuggestion(null);
     if (isMobile) setShowChatWindow(true);
   }, [selectedPersona, personas, isMobile]);
 
@@ -1499,6 +1548,7 @@ const ChatHome = () => {
     setSelectedRoom(null);
     setShowAIChat(false);
     setReplyToMessage(null);
+    setAiSuggestion(null);
   }, []);
 
   const handleLeaveRoom = async () => {
@@ -1525,6 +1575,7 @@ const ChatHome = () => {
                 setSelectedRoom(null);
                 setMessages([]);
                 setReplyToMessage(null);
+                setAiSuggestion(null);
               } else toast.error(data.error || '退出失败');
             } catch { toast.error('退出失败'); }
           }} className="flex-1 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition shadow-md">确定退出</button>
@@ -1728,6 +1779,19 @@ const ChatHome = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
               </svg>
             </button>
+            {/* 🧠 AI 建议按钮 */}
+            <button 
+              onClick={handleGenerateSuggest}
+              disabled={isGeneratingSuggest}
+              className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition ${isGeneratingSuggest ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="AI 建议回复"
+            >
+              {isGeneratingSuggest ? (
+                <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+              ) : (
+                <Lightbulb className="w-5 h-5 text-yellow-500" />
+              )}
+            </button>
           </div>
         </div>
 
@@ -1784,6 +1848,8 @@ const ChatHome = () => {
           onSwitchPersona={handleSwitchRoomPersona}
           onLoadRoomPersonas={loadRoomPersonas}
           placeholder="输入消息... "
+          aiSuggestion={aiSuggestion}
+          onUseSuggestion={handleClearSuggestion}
         />
         
         {/* 🎵 音乐搜索弹窗 */}

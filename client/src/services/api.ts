@@ -842,5 +842,53 @@ export const translateApi = {
     }),
 };
 
+// ========== AI 建议 API ==========
+export interface AISuggestRequest {
+  roomId?: string;
+  messages?: Array<{
+    role: 'user' | 'ai' | 'other';
+    content: string;
+    personaName?: string;
+  }>;
+  context?: Record<string, any>;
+}
+
+export interface AISuggestResponse {
+  success: boolean;
+  suggestion: string;
+  messageCount: number;
+}
+
+export interface AIStatusResponse {
+  provider: string;
+  models: {
+    primary: string;
+    fallbacks: string[];
+  };
+  limits: Record<string, { rpm: number; tpm: number }>;
+  status: 'ready' | 'missing_api_key';
+  message: string;
+}
+
+export const aiApi = {
+  /**
+   * 获取 AI 建议的回复内容
+   * @param roomId - 房间 ID（可选，如果提供会自动获取最近消息）
+   * @param messages - 自定义消息历史（可选）
+   * @param context - 额外上下文信息
+   */
+  getSuggest: (roomId?: string, messages?: AISuggestRequest['messages'], context?: Record<string, any>) =>
+    request<AISuggestResponse>('/ai/suggest', {
+      method: 'POST',
+      body: JSON.stringify({ roomId, messages, context }),
+    }),
+    
+  /**
+   * 获取 AI 服务状态
+   */
+  getAIStatus: () =>
+    request<AIStatusResponse>('/ai/status'),
+};
+
 // 导出 request 函数供其他模块使用
 export { request };

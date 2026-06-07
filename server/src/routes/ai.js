@@ -5,6 +5,7 @@ const Persona = require('../models/Persona');
 const AIPersona = require('../models/AIPersona');
 const UserPersonaForAI = require('../models/UserPersonaForAI');
 const aiService = require('../services/aiService');
+const Message = require('../models/Message');
 
 const authMiddleware = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -13,7 +14,9 @@ const authMiddleware = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
     req.userId = decoded.userId;
     next();
-  } catch { res.status(401).json({ error: 'token无效' }); }
+  } catch { 
+    res.status(401).json({ error: 'token无效' }); 
+  }
 };
 
 // ========== 旧版 AI 聊天（兼容 Persona）==========
@@ -74,6 +77,65 @@ router.post('/chat-with-persona', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('AI 对话失败:', error);
     res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 🧠 AI 建议对话功能 ==========
+// 根据群聊最近消息生成回复建议
+router.post('/suggest', authMiddleware, async (req, res) => {
+  try {
+    const { roomId, messages, context } = req.body;
+    
+    // 验证参数
+    if (!roomId && (!messages || messages.length === 0)) {
+      return res.status(400).json({ error: '缺少消息历史或房间ID' });
+    }
+    
+    let recentMessages = messages || [];
+    
+    // 如果只传了 roomId，从数据库获取最近消息
+    if (roomId && (!messages || messages.length === 0)) {
+      try {
+        const roomMessages = await Message.find({ 
+          roomId: roomId,
+          isRecalled: { $ne: true },  // 排除撤回的消息
+          isDeleted: { $ne: true }     // 排除删除的消息
+        })
+          .sort({ createdAt: -1 })
+          .limit(15)
+          .populate('personaId', 'name displayName')
+          .lean();
+        
+        recentMessages = roomMessages.reverse().map(msg => ({
+          role: msg.userId?.toString() === req.userId ? 'user' : 'other',
+          content: msg.content,
+          personaName: msg.personaId?.displayName || msg.personaId?.name || '未知',
+          timestamp: msg.createdAt
+        }));
+      } catch (dbError) {
+        console.error('获取数据库消息失败:', dbError);
+        // 继续使用空消息列表
+      }
+    }
+    
+    // 过滤掉系统消息和过长消息
+    const filteredMessages = recentMessages
+      .filter(m => m.content && 
+                   !m.content.startsWith('[') && 
+                   !m.content.startsWith('*') &&
+                   m.content.length < 200)
+      .slice(-12); // 最多12条
+    
+    const suggestion = await aiService.generateSuggest(roomId, filteredMessages, context || {});
+    
+    res.json({ 
+      success: true, 
+      suggestion,
+      messageCount: filteredMessages.length
+    });
+  } catch (error) {
+    console.error('生成建议失败:', error);
+    res.status(500).json({ error: '生成建议失败，请稍后再试' });
   }
 });
 
@@ -244,13 +306,36 @@ router.get('/persona/:personaId', authMiddleware, async (req, res) => {
   }
 });
 
-// ========== 检查 AI 服务状态 ==========
+// ========== 检查 AI 服务状态（更新为 Gemini）==========
 router.get('/status', authMiddleware, async (req, res) => {
-  res.json({ 
-    provider: 'DeepSeek',
-    model: 'deepseek-chat',
-    status: 'ready'
-  });
+  try {
+    const modelConfig = aiService.getModelConfig ? aiService.getModelConfig() : null;
+    res.json({ 
+      provider: 'Gemini',
+      models: modelConfig ? {
+        primary: modelConfig.primary,
+        fallbacks: modelConfig.fallbacks,
+      } : {
+        primary: 'gemini-3.5-flash',
+        fallbacks: ['gemini-2.5-flash', 'gemini-3.1-flash-lite']
+      },
+      limits: modelConfig ? modelConfig.limits : {
+        'gemini-3.5-flash': { rpm: 5, tpm: 250000 },
+        'gemini-2.5-flash': { rpm: 2, tpm: 250000 },
+        'gemini-3.1-flash-lite': { rpm: 15, tpm: 250000 }
+      },
+      status: process.env.GEMINI_API_KEY ? 'ready' : 'missing_api_key',
+      message: process.env.GEMINI_API_KEY 
+        ? '使用 Gemini 3.5 Flash（限流时自动降级到 2.5 Flash 或 Lite）' 
+        : '请配置 GEMINI_API_KEY'
+    });
+  } catch (error) {
+    res.json({ 
+      provider: 'Gemini',
+      status: process.env.GEMINI_API_KEY ? 'ready' : 'missing_api_key',
+      error: error.message
+    });
+  }
 });
 
 module.exports = router;

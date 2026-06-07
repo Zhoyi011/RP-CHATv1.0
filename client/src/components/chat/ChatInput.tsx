@@ -9,7 +9,7 @@ import AvatarFrame from '../common/AvatarFrame';
 import { GiftModal } from '../gift/GiftModal';
 import { RedPacketModal } from '../redpacket/RedPacketModal';
 import toast from 'react-hot-toast';
-import { Gift, Music2, Send, Mic, X, Loader2, ChevronUp, Gift as GiftIcon, Coins } from 'lucide-react';
+import { Gift, Music2, Send, Mic, Loader2, Coins, Sparkles } from 'lucide-react';
 
 console.log('🔧 [ChatInput] 组件加载');
 
@@ -24,6 +24,9 @@ interface ChatInputProps {
   roomPersonas?: Persona[];
   onSwitchPersona?: (persona: Persona) => void;
   onLoadRoomPersonas?: () => void;
+  // 🧠 AI 建议相关 props
+  aiSuggestion?: string | null;
+  onUseSuggestion?: () => void;
 }
 
 interface MentionableMember {
@@ -52,6 +55,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   roomPersonas = [],
   onSwitchPersona,
   onLoadRoomPersonas,
+  aiSuggestion,
+  onUseSuggestion,
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -93,6 +98,23 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const hasContent = inputValue.trim().length > 0;
   const canSwitchPersona = roomPersonas.length > 1;
+  
+  // 计算最终 placeholder
+  const finalPlaceholder = aiSuggestion 
+    ? `✨ AI 建议: ${aiSuggestion} ✨` 
+    : placeholder;
+
+  // 使用 AI 建议
+  const handleUseSuggestion = () => {
+    if (aiSuggestion) {
+      setInputValue(aiSuggestion);
+      if (onUseSuggestion) onUseSuggestion();
+      // 聚焦输入框
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    }
+  };
 
   // 加载用户背包物品（用于快捷赠送）
   const loadUserItems = async () => {
@@ -633,7 +655,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
                           <button
                             onClick={() => {
                               setShowGiftMenu(false);
-                              // 可以跳转到商城页面
                               window.location.href = '/shop';
                             }}
                             className="w-full text-center text-xs text-blue-500 py-1 hover:underline"
@@ -664,29 +685,42 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
           {/* 输入框容器 */}
           <div className="flex-1 min-w-0 relative">
-            <input 
-              ref={inputRef}
-              type="text" 
-              value={inputValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onFocus={() => {
-                setIsFocused(true);
-                setTimeout(() => {
-                  inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }, 150);
-              }}
-              onBlur={() => setIsFocused(false)}
-              placeholder={placeholder}
-              className={`w-full rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none bg-gray-100 dark:bg-gray-800 ${isFocused ? 'bg-white dark:bg-gray-700 ring-2 ring-blue-500/50 shadow-md' : 'hover:bg-gray-50 dark:hover:bg-gray-700'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={disabled}
-              maxLength={2000}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              enterKeyHint="send"
-            />
+            <div className="relative">
+              <input 
+                ref={inputRef}
+                type="text" 
+                value={inputValue}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  setIsFocused(true);
+                  setTimeout(() => {
+                    inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                  }, 150);
+                }}
+                onBlur={() => setIsFocused(false)}
+                placeholder={finalPlaceholder}
+                className={`w-full rounded-2xl px-4 py-2.5 text-sm transition-all duration-300 outline-none bg-gray-100 dark:bg-gray-800 ${isFocused ? 'bg-white dark:bg-gray-700 ring-2 ring-blue-500/50 shadow-md' : 'hover:bg-gray-50 dark:hover:bg-gray-700'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${aiSuggestion ? 'border-2 border-yellow-400/50' : ''}`}
+                disabled={disabled}
+                maxLength={2000}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                enterKeyHint="send"
+              />
+              
+              {/* AI 建议标记和使用按钮 */}
+              {aiSuggestion && (
+                <button
+                  onClick={handleUseSuggestion}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-800 transition flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  使用建议
+                </button>
+              )}
+            </div>
             
             {/* @ 提及面板 */}
             <AnimatePresence>
