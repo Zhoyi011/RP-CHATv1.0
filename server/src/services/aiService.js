@@ -124,27 +124,58 @@ const buildSystemPrompt = (aiPersona, userPersona) => {
 现在开始对话吧！记住要简短、有动作、符合角色设定。`;
 };
 
-// 构建建议生成 Prompt
+// 构建建议生成 Prompt（优化版）
 const buildSuggestPrompt = (recentMessages, contextInfo = {}) => {
-  const formattedMessages = recentMessages.map(msg => {
-    const senderName = msg.personaName || (msg.role === 'user' ? '用户' : 'AI');
-    return `${senderName}: ${msg.content}`;
-  }).join('\n');
+  // 如果没有历史消息，返回通用问候
+  if (!recentMessages || recentMessages.length === 0) {
+    return '生成一句自然的群聊开场白，例如："大家好~" 或 "有人在线吗？"';
+  }
+  
+  // 格式化最近消息，过滤掉无意义内容
+  const formattedMessages = recentMessages
+    .filter(msg => {
+      // 过滤掉太短或太长的消息
+      const content = msg.content || '';
+      return content.length >= 2 && content.length < 200 && 
+             !content.startsWith('[') && 
+             !content.startsWith('*') &&
+             !content.includes('撤回');
+    })
+    .slice(-10) // 最近10条
+    .map(msg => {
+      const senderName = msg.personaName || (msg.role === 'user' ? '用户' : 'AI');
+      // 截取过长的内容
+      const content = msg.content.length > 100 ? msg.content.substring(0, 100) + '...' : msg.content;
+      return `${senderName}: ${content}`;
+    })
+    .join('\n');
 
   return `## 任务
-你是一个聊天建议助手。根据以下群聊对话历史，生成一句**简短、自然、符合话题**的回复建议。
+你是一个聊天建议助手。根据以下群聊对话历史，生成一句**简短、自然、友好**的回复建议。
 
 ## 对话历史
-${formattedMessages || '（暂无历史消息，这是一个新群聊）'}
+${formattedMessages || '（这是一个新群聊，还没有消息）'}
 
-## 建议要求
-1. 只输出**一句话**，不要超过 30 个字
-2. 不要使用动作描写（不要用 *动作* 或 【动作】）
-3. 内容要自然、贴合当前话题
-4. 如果话题不明朗，可以发一个友好的问候或表情
+## 要求
+1. 只输出**一句话**，10-30个字
+2. 不要用动作描写（不要用 *动作* 或 【动作】）
+3. 内容要自然、友好、贴合话题
+4. 如果话题不明朗，可以发友好的问候（如"大家聊什么呢~"）
+5. **绝对不要输出无意义内容**：如"不用客"、"wwww"、"？"等
+6. 如果是中文对话，就用中文回复
 
 ## 输出格式
-直接输出建议文本，不要加引号或其他标记。`;
+直接输出建议文本，不要加引号或其他标记。
+
+## 示例
+- 用户: 今天好累啊
+  AI建议: 辛苦啦，早点休息~
+  
+- 用户A: 有人看最新那部电影吗？
+  用户B: 还没看，好看吗？
+  AI建议: 我也想看，一起组队去？
+
+现在生成建议：`;
 };
 
 // 使用 Gemini 进行对话
@@ -207,49 +238,77 @@ const chatWithAIPersona = async (aiPersona, message, history = [], userPersona =
   }
 };
 
-// 生成聊天建议
+// 生成聊天建议（优化版）
 const generateSuggest = async (roomId, recentMessages, contextInfo = {}) => {
   if (!genAI) {
     console.error('Gemini API 未配置');
-    return '来聊点什么呢？';
+    return getFallbackSuggestion();
   }
 
   try {
     const prompt = buildSuggestPrompt(recentMessages, contextInfo);
     
     const generationConfig = {
-      temperature: 0.9,
-      topP: 0.95,
+      temperature: 0.7,  // 降低温度，让输出更稳定
+      topP: 0.9,
       topK: 40,
       maxOutputTokens: 60,
     };
 
-    const result = await callWithFallback(prompt, generationConfig);
+    let result;
+    try {
+      result = await callWithFallback(prompt, generationConfig);
+    } catch (error) {
+      console.error('Gemini 调用失败:', error);
+      return getFallbackSuggestion();
+    }
+
     let suggestion = result.response.text();
-    
     suggestion = suggestion.trim();
     suggestion = suggestion.replace(/^["']|["']$/g, '');
     
-    if (suggestion.length > 50) {
-      suggestion = suggestion.substring(0, 50) + '...';
+    // 过滤无意义内容
+    const invalidPatterns = [
+      /^[？?！!。，、]$/,           // 只有标点
+      /^ww+w+$/i,                  // wwwww
+      /^[哈哈呵呵嘿嘿]+$/u,         // 只有哈哈
+      /^.{0,2}$/,                  // 太短（小于2字）
+      /不用客/,                    // 不完整的"不客气"
+      /[\u{1F600}-\u{1F64F}]/u,   // 纯表情
+    ];
+    
+    for (const pattern of invalidPatterns) {
+      if (pattern.test(suggestion)) {
+        console.log('建议被过滤:', suggestion);
+        return getFallbackSuggestion();
+      }
     }
     
-    return suggestion || '来聊点什么呢？';
+    if (suggestion.length < 4 || suggestion.length > 50) {
+      return getFallbackSuggestion();
+    }
+    
+    return suggestion;
   } catch (error) {
     console.error('生成建议失败:', error);
-    
-    // 降级建议
-    const fallbackSuggestions = [
-      '大家今天过得怎么样？',
-      '有人想聊点什么吗？',
-      '最近有什么好玩的事情吗？',
-      '有没有人推荐好看的电影？',
-      '今天天气不错呢~',
-      '大家有什么计划吗？',
-    ];
-    const randomIndex = Math.floor(Math.random() * fallbackSuggestions.length);
-    return fallbackSuggestions[randomIndex];
+    return getFallbackSuggestion();
   }
+};
+
+// 降级建议列表（更自然的开场白）
+const getFallbackSuggestion = () => {
+  const suggestions = [
+    '大家聊什么呢~',
+    '有人在线吗？',
+    '今天过得怎么样？',
+    '有没有什么好玩的分享？',
+    '最近在看什么呀？',
+    '有人一起玩游戏吗？',
+    '周末有什么计划吗？',
+    '感觉今天好安静啊',
+  ];
+  const randomIndex = Math.floor(Math.random() * suggestions.length);
+  return suggestions[randomIndex];
 };
 
 // 兼容旧的简单对话
