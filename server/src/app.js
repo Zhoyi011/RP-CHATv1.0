@@ -200,6 +200,7 @@ const emojiRoutes = require('./routes/emoji');
 const giftRoutes = require('./routes/gift');
 const redpacketRoutes = require('./routes/redpacket');
 const guardianRoutes = require('./routes/guardian');
+const novelRoutes = require('./routes/novel');
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -331,6 +332,7 @@ app.use('/api/emoji', emojiRoutes);
 app.use('/api/gift', standardLimit, giftRoutes);
 app.use('/api/redpacket', standardLimit, redpacketRoutes);
 app.use('/api/guardian', standardLimit, guardianRoutes);
+app.use('/api/novel', novelRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 

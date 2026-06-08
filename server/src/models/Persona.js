@@ -19,13 +19,13 @@ const personaSchema = new mongoose.Schema({
   },
   avatar: {
     type: String,
-    required: true,  // 🔥 改为必填
+    required: true,
     default: ''
   },
   tags: [{
     type: String,
     trim: true,
-    maxlength: 15  // 🔥 标签长度限制
+    maxlength: 15
   }],
   status: {
     type: String,
@@ -37,7 +37,6 @@ const personaSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  // 🔥 删除 globalNumber 字段
   sameNameNumber: {
     type: Number,
     default: 1
@@ -114,6 +113,38 @@ const personaSchema = new mongoose.Schema({
     relationshipCard: { type: mongoose.Schema.Types.ObjectId, ref: 'ShopItem', default: null }
   },
   
+  // ========== 🆕 小说作者相关字段 ==========
+  // 是否为作者
+  isAuthor: {
+    type: Boolean,
+    default: false
+  },
+  // 作者资格批准时间
+  authorApprovedAt: {
+    type: Date,
+    default: null
+  },
+  // 作者可创作的小说数量上限（基础5本，可扩展）
+  novelSlots: {
+    type: Number,
+    default: 5
+  },
+  // 已创作的小说数量
+  createdNovelCount: {
+    type: Number,
+    default: 0
+  },
+  // 粉丝数
+  followersCount: {
+    type: Number,
+    default: 0
+  },
+  // 总赞赏收入（付费钻石）
+  totalDonationIncome: {
+    type: Number,
+    default: 0
+  },
+  
   createdAt: {
     type: Date,
     default: Date.now
@@ -130,7 +161,7 @@ personaSchema.pre('save', function(next) {
   next();
 });
 
-// 🔥 静态方法：计算同名编号（只计算已批准的角色）
+// 静态方法：计算同名编号（只计算已批准的角色）
 personaSchema.statics.getNextSameNameNumber = async function(name, excludeId = null) {
   const query = { 
     name: name, 
@@ -212,7 +243,14 @@ personaSchema.methods.toSafeObject = function() {
     totalGuardianAmount: this.totalGuardianAmount,
     relationships: this.relationships,
     equipped: this.equipped,
-    guardianValue: this.guardianValue || 0
+    guardianValue: this.guardianValue || 0,
+    // 🆕 作者字段
+    isAuthor: this.isAuthor,
+    authorApprovedAt: this.authorApprovedAt,
+    novelSlots: this.novelSlots,
+    createdNovelCount: this.createdNovelCount,
+    followersCount: this.followersCount,
+    totalDonationIncome: this.totalDonationIncome
   };
 };
 

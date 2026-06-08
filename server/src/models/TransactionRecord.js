@@ -11,21 +11,35 @@ const transactionRecordSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: [
-      'recharge',      // 充值
-      'daily_sign',    // 每日签到
-      'redpacket_send', // 发红包（支出）
-      'redpacket_receive', // 抢红包（收入）
-      'gift_send',     // 送礼物（支出）
-      'gift_receive',  // 收礼物（收入）
-      'shop_buy',      // 商城购买（支出）
-      'refund',        // 红包过期退款
-      'admin_add'      // 管理员添加
+      'recharge',           // 充值
+      'daily_sign',         // 每日签到
+      'redpacket_send',     // 发红包（支出）
+      'redpacket_receive',  // 抢红包（收入）
+      'gift_send',          // 送礼物（支出）
+      'gift_receive',       // 收礼物（收入）
+      'shop_buy',           // 商城购买（支出）
+      'refund',             // 红包过期退款
+      'admin_add',          // 管理员添加
+      // 🆕 小说相关交易类型
+      'author_application', // 申请作者（支出，10钻石）
+      'donation',           // 赞赏作者（支出，仅付费钻石）
+      'expand_novel_slot'   // 扩展创作名额（支出）
     ],
     required: true
   },
   amount: {
     type: Number,
     required: true
+  },
+  paidAmount: {
+    type: Number,
+    default: 0,
+    comment: '付费钻石变动'
+  },
+  freeAmount: {
+    type: Number,
+    default: 0,
+    comment: '免费钻石变动'
   },
   diamondType: {
     type: String,
@@ -39,7 +53,7 @@ const transactionRecordSchema = new mongoose.Schema({
   relatedId: {
     type: mongoose.Schema.Types.ObjectId,
     default: null,
-    comment: '关联的ID（红包ID、礼物ID、订单ID等）'
+    comment: '关联的ID（红包ID、礼物ID、订单ID、小说ID等）'
   },
   relatedName: {
     type: String,
