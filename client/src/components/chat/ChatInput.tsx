@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { EmojiPicker } from '../emoji/EmojiPicker';
 import { simplifiedToTraditional, traditionalToSimplified } from '../../services/translateApi';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
+import { useResponsive } from '../../hooks/useResponsive';
 import type { Persona } from '../../services/api';
 import AvatarFrame from '../common/AvatarFrame';
 import { GiftModal } from '../gift/GiftModal';
 import { RedPacketModal } from '../redpacket/RedPacketModal';
 import toast from 'react-hot-toast';
-import { Gift, Music2, Send, Mic, Loader2, Coins, Sparkles } from 'lucide-react';
+import { Gift, Music2, Send, Mic, Loader2, Coins, Sparkles, Plus, X, Languages } from 'lucide-react';
 
 console.log('🔧 [ChatInput] 组件加载');
 
@@ -24,9 +25,9 @@ interface ChatInputProps {
   roomPersonas?: Persona[];
   onSwitchPersona?: (persona: Persona) => void;
   onLoadRoomPersonas?: () => void;
-  // 🧠 AI 建议相关 props
   aiSuggestion?: string | null;
   onUseSuggestion?: () => void;
+  onGetSuggest?: () => void;
 }
 
 interface MentionableMember {
@@ -57,7 +58,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onLoadRoomPersonas,
   aiSuggestion,
   onUseSuggestion,
+  onGetSuggest,
 }) => {
+  const { isMobile } = useResponsive();
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -67,8 +70,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   
+  // 更多菜单状态
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  
   // 礼物/红包相关状态
-  const [showGiftMenu, setShowGiftMenu] = useState(false);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [showRedPacketModal, setShowRedPacketModal] = useState(false);
   const [selectedItemForGift, setSelectedItemForGift] = useState<{ id: string; name: string; image: string; price: number } | null>(null);
@@ -82,7 +87,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   
   // @ 提及相关状态
   const [showMentionPanel, setShowMentionPanel] = useState(false);
-  const [mentionSearch, setMentionSearch] = useState('');
   const [mentionList, setMentionList] = useState<MentionableMember[]>([]);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
@@ -92,31 +96,42 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const personaSwitchRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mentionPanelRef = useRef<HTMLDivElement>(null);
-  const giftMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const sendButtonRef = useRef<HTMLButtonElement>(null);
-  const { keyboardHeight, isKeyboardOpen, isIOS } = useKeyboardHeight();
+  const { keyboardHeight, isKeyboardOpen } = useKeyboardHeight();
 
   const hasContent = inputValue.trim().length > 0;
   const canSwitchPersona = roomPersonas.length > 1;
   
-  // 计算最终 placeholder
+  // 计算最终 placeholder（有建议时显示建议）
   const finalPlaceholder = aiSuggestion 
     ? `✨ AI 建议: ${aiSuggestion} ✨` 
     : placeholder;
 
-  // 使用 AI 建议
+  // 使用 AI 建议（填入输入框）
   const handleUseSuggestion = () => {
     if (aiSuggestion) {
       setInputValue(aiSuggestion);
       if (onUseSuggestion) onUseSuggestion();
-      // 聚焦输入框
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
     }
   };
 
-  // 加载用户背包物品（用于快捷赠送）
+  // 不采用建议（清除）
+  const handleDismissSuggestion = () => {
+    if (onUseSuggestion) onUseSuggestion();
+  };
+
+  // 生成 AI 建议
+  const handleGetSuggest = () => {
+    if (onGetSuggest && !disabled) {
+      onGetSuggest();
+    }
+  };
+
+  // 加载用户背包物品
   const loadUserItems = async () => {
     setLoadingItems(true);
     try {
@@ -126,7 +141,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
       });
       if (response.ok) {
         const data = await response.json();
-        // 只显示可赠送的物品
         const giftableItems = data.filter((item: any) => item.shopItem?.isGiftable !== false);
         setUserItems(giftableItems);
       }
@@ -137,11 +151,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // 点击外部关闭礼物菜单
+  // 点击外部关闭更多菜单
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (giftMenuRef.current && !giftMenuRef.current.contains(e.target as Node)) {
-        setShowGiftMenu(false);
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -184,7 +198,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
     if (atMatch) {
       const searchTerm = atMatch[1];
-      setMentionSearch(searchTerm);
       setShowMentionPanel(true);
       fetchMentionableMembers(searchTerm);
     } else {
@@ -202,7 +215,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
     setInputValue(newText);
     setShowMentionPanel(false);
-    setMentionSearch('');
     setTimeout(() => {
       inputRef.current?.focus();
     }, 50);
@@ -232,7 +244,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    if (e.key === 'Enter' && !e.shiftKey && !showMentionPanel && !showGiftMenu) {
+    if (e.key === 'Enter' && !e.shiftKey && !showMentionPanel && !showMoreMenu) {
       e.preventDefault();
       if (hasContent) {
         handleSend();
@@ -268,6 +280,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsTranslating(false);
     }
+    setShowMoreMenu(false);
   };
 
   // 发送文本消息
@@ -312,13 +325,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const duration = recordingDuration;
         
-        // 清理计时器
         if (recordingTimerRef.current) {
           clearInterval(recordingTimerRef.current);
           recordingTimerRef.current = null;
         }
         
-        // 停止所有音轨
         stream.getTracks().forEach(track => track.stop());
         
         if (duration >= 1 && onSendAudio) {
@@ -335,11 +346,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setIsRecording(true);
       setRecordingDuration(0);
       
-      // 计时器
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration(prev => {
           if (prev >= 60) {
-            // 最长60秒，自动停止
             if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
               mediaRecorderRef.current.stop();
             }
@@ -361,7 +370,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // 处理发送按钮：有文字时发送，无文字时长按录音
   const handleSendButtonMouseDown = (e: React.MouseEvent) => {
     if (hasContent) return;
     e.preventDefault();
@@ -370,16 +378,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSendButtonMouseUp = () => {
     if (hasContent) return;
-    if (isRecording) {
-      stopRecording();
-    }
+    if (isRecording) stopRecording();
   };
 
   const handleSendButtonMouseLeave = () => {
     if (hasContent) return;
-    if (isRecording) {
-      stopRecording();
-    }
+    if (isRecording) stopRecording();
   };
 
   const handleSendButtonTouchStart = (e: React.TouchEvent) => {
@@ -390,9 +394,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSendButtonTouchEnd = () => {
     if (hasContent) return;
-    if (isRecording) {
-      stopRecording();
-    }
+    if (isRecording) stopRecording();
   };
 
   // 🎨 发送表情消息
@@ -418,37 +420,95 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setShowPersonaSwitch(false);
   };
 
-  // 快捷赠送礼物
-  const handleQuickGift = (item: any) => {
-    setSelectedItemForGift({
-      id: item.shopItem?._id || item.itemId,
-      name: item.shopItem?.name || item.name,
-      image: item.shopItem?.previewImage || item.shopItem?.image || '',
-      price: item.shopItem?.price || 0,
-    });
+  // 打开礼物弹窗
+  const handleOpenGift = () => {
+    setShowMoreMenu(false);
+    loadUserItems();
     setShowGiftModal(true);
-    setShowGiftMenu(false);
   };
 
   // 打开发红包弹窗
   const handleOpenRedPacket = () => {
+    setShowMoreMenu(false);
     setShowRedPacketModal(true);
-    setShowGiftMenu(false);
   };
 
-  // 打开礼物菜单前加载物品
-  const handleOpenGiftMenu = () => {
-    if (!showGiftMenu) {
-      loadUserItems();
-    }
-    setShowGiftMenu(!showGiftMenu);
+  // 打开音乐搜索
+  const handleOpenMusic = () => {
+    setShowMoreMenu(false);
+    onOpenMusicSearch?.();
   };
 
-  // 格式化录音时间
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // 更多菜单项（音乐、礼物、红包、简繁转换）
+  const moreMenuItems = [
+    { icon: <Music2 className="w-4 h-4" />, label: '分享音乐', onClick: handleOpenMusic, color: 'from-pink-500 to-rose-500' },
+    { icon: <Gift className="w-4 h-4" />, label: '送礼物', onClick: handleOpenGift, color: 'from-orange-500 to-red-500' },
+    { icon: <Coins className="w-4 h-4" />, label: '发红包', onClick: handleOpenRedPacket, color: 'from-red-500 to-amber-500' },
+    { icon: <Languages className="w-4 h-4" />, label: '简繁转换', onClick: handleTranslate, color: 'from-green-500 to-teal-500', disabled: !hasContent || isTranslating },
+  ];
+
+  // 角色切换按钮（头像）
+  const renderPersonaButton = () => {
+    const frameName = getFrameNameFromUrl(selectedPersona?.avatarFrame || selectedPersona?.equipped?.avatarFrame);
+    
+    return (
+      <div className="relative flex-shrink-0" ref={personaSwitchRef}>
+        <motion.button
+          type="button"
+          onClick={() => setShowPersonaSwitch(!showPersonaSwitch)}
+          whileTap={{ scale: 0.95 }}
+          className="focus:outline-none"
+          title="切换角色"
+        >
+          <AvatarFrame
+            avatarUrl={selectedPersona?.avatar || ''}
+            frameName={frameName}
+            size="sm"
+          />
+        </motion.button>
+
+        <AnimatePresence>
+          {showPersonaSwitch && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50"
+            >
+              <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400">切换发言角色</p>
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                {roomPersonas.map(persona => {
+                  const isActive = selectedPersona?._id === persona._id;
+                  const pFrameName = getFrameNameFromUrl(persona.avatarFrame || persona.equipped?.avatarFrame);
+                  return (
+                    <button
+                      key={persona._id}
+                      onClick={() => handleSwitchPersona(persona)}
+                      className={`w-full px-3 py-2.5 flex items-center gap-3 text-left ${isActive ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <AvatarFrame avatarUrl={persona.avatar || ''} frameName={pFrameName} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{persona.displayName || persona.name}</p>
+                        <p className="text-[10px] text-gray-400">#{persona.sameNameNumber || '?'}</p>
+                      </div>
+                      {isActive && <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
   };
 
   return (
@@ -462,7 +522,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         `}
         animate={{ paddingBottom: isKeyboardOpen ? Math.max(keyboardHeight - 40, 0) : 12 }}
         transition={{ duration: 0.25, ease: 'easeOut' }}
-        style={{ paddingTop: 12, paddingLeft: 16, paddingRight: 16 }}
+        style={{ paddingTop: 12, paddingLeft: 12, paddingRight: 12 }}
       >
         {/* 动作扮演提示 */}
         <AnimatePresence>
@@ -476,83 +536,74 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <span className="text-[10px] bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
                 🎭 动作扮演模式
               </span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                你的角色将以第三人称执行动作
-              </span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="flex items-end gap-2 relative">
-          {/* 角色切换按钮 */}
-          {canSwitchPersona && (
-            <div className="relative flex-shrink-0 pb-0.5" ref={personaSwitchRef}>
-              <motion.button
-                type="button"
-                onClick={() => setShowPersonaSwitch(!showPersonaSwitch)}
-                whileTap={{ scale: 0.9 }}
-                whileHover={{ scale: 1.05 }}
-                className={`
-                  w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200
-                  ${showPersonaSwitch 
-                    ? 'text-purple-500 bg-purple-50 dark:bg-purple-900/30 shadow-sm' 
-                    : 'text-gray-400 hover:text-purple-500 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }
-                `}
-                title="切换发言角色"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-              </motion.button>
+        <div className="flex items-center gap-2 relative">
+          {/* 1. 角色切换按钮（头像） */}
+          {renderPersonaButton()}
 
-              <AnimatePresence>
-                {showPersonaSwitch && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute bottom-full left-0 mb-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 overflow-hidden"
-                  >
-                    <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                      <p className="text-xs font-medium text-gray-600 dark:text-gray-400">切换发言角色</p>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      {roomPersonas.map(persona => {
-                        const isActive = selectedPersona?._id === persona._id;
-                        const frameName = getFrameNameFromUrl(persona.avatarFrame || persona.equipped?.avatarFrame);
-                        return (
-                          <motion.button
-                            key={persona._id}
-                            onClick={() => handleSwitchPersona(persona)}
-                            whileHover={{ backgroundColor: '#f9fafb' }}
-                            whileTap={{ scale: 0.98 }}
-                            className={`w-full px-3 py-2.5 flex items-center gap-3 transition-all duration-150 text-left ${isActive ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                          >
-                            <AvatarFrame avatarUrl={persona.avatar || ''} frameName={frameName} size="sm" className="chat-input-menu flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{persona.displayName || persona.name}</p>
-                              <p className="text-[10px] text-gray-400">#{persona.sameNameNumber || '?'}</p>
-                            </div>
-                            {isActive && <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+          {/* 2. 更多菜单按钮（+） */}
+          <div className="relative flex-shrink-0" ref={moreMenuRef}>
+            <motion.button
+              type="button"
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              whileTap={{ scale: 0.9 }}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition ${showMoreMenu ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              title="更多功能"
+            >
+              {showMoreMenu ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+            </motion.button>
 
-          {/* 🎨 表情按钮 */}
-          <div className="relative flex-shrink-0 pb-0.5" ref={emojiContainerRef}>
+            <AnimatePresence>
+              {showMoreMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50 overflow-hidden"
+                >
+                  {moreMenuItems.map((item, idx) => (
+                    <button
+                      key={idx}
+                      onClick={item.onClick}
+                      disabled={item.disabled}
+                      className={`w-full px-4 py-2.5 flex items-center gap-3 transition text-left ${item.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-r ${item.color} flex items-center justify-center text-white`}>
+                        {item.icon}
+                      </div>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 3. AI 建议按钮（💡）- 点击生成建议 */}
+          <motion.button
+            type="button"
+            onClick={handleGetSuggest}
+            whileTap={{ scale: 0.9 }}
+            className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition ${
+              aiSuggestion 
+                ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/30' 
+                : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/30'
+            }`}
+            title="AI 建议回复"
+          >
+            <Sparkles className="w-5 h-5" />
+          </motion.button>
+
+          {/* 4. 表情按钮（😊） */}
+          <div className="relative flex-shrink-0" ref={emojiContainerRef}>
             <motion.button
               type="button"
               onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.05 }}
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${showEmojiPicker ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition ${showEmojiPicker ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
               title="表情"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -569,121 +620,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </AnimatePresence>
           </div>
 
-          {/* 🎵 音乐分享按钮 */}
-          {onOpenMusicSearch && (
-            <div className="flex-shrink-0 pb-0.5">
-              <motion.button
-                type="button"
-                onClick={onOpenMusicSearch}
-                whileTap={{ scale: 0.9 }}
-                whileHover={{ scale: 1.05 }}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-pink-500 hover:bg-pink-50 dark:hover:bg-pink-900/30 transition-all duration-200"
-                title="分享音乐"
-              >
-                <Music2 className="w-5 h-5" />
-              </motion.button>
-            </div>
-          )}
-
-          {/* 🎁 礼物按钮（包含红包和赠送礼物） */}
-          <div className="relative flex-shrink-0 pb-0.5" ref={giftMenuRef}>
-            <motion.button
-              type="button"
-              onClick={handleOpenGiftMenu}
-              whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.05 }}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/30 transition-all duration-200"
-              title="礼物/红包"
-            >
-              <Gift className="w-5 h-5" />
-            </motion.button>
-
-            <AnimatePresence>
-              {showGiftMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50 overflow-hidden"
-                >
-                  {/* 红包选项 */}
-                  <button
-                    onClick={handleOpenRedPacket}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-left"
-                  >
-                    <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                      <Coins className="w-4 h-4 text-red-500" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800 dark:text-white">发红包</p>
-                      <p className="text-xs text-gray-400">在群里发钻石红包</p>
-                    </div>
-                  </button>
-
-                  <div className="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-
-                  {/* 快捷赠送礼物 */}
-                  <div className="px-3 py-1">
-                    <p className="text-xs text-gray-400 mb-2">快捷赠送</p>
-                    {loadingItems ? (
-                      <div className="flex justify-center py-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                      </div>
-                    ) : userItems.length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-2">暂无可用礼物，先去商城购买~</p>
-                    ) : (
-                      <div className="max-h-48 overflow-y-auto space-y-1">
-                        {userItems.slice(0, 5).map((item) => (
-                          <button
-                            key={item.itemId}
-                            onClick={() => handleQuickGift(item)}
-                            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                          >
-                            <img
-                              src={item.shopItem?.previewImage || item.shopItem?.image || ''}
-                              alt=""
-                              className="w-6 h-6 object-contain"
-                              onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.png'; }}
-                            />
-                            <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 text-left">
-                              {item.shopItem?.name || item.name}
-                            </span>
-                            <span className="text-xs text-yellow-500">💎{item.shopItem?.price || 0}</span>
-                          </button>
-                        ))}
-                        {userItems.length > 5 && (
-                          <button
-                            onClick={() => {
-                              setShowGiftMenu(false);
-                              window.location.href = '/shop';
-                            }}
-                            className="w-full text-center text-xs text-blue-500 py-1 hover:underline"
-                          >
-                            查看更多...
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* 简繁转换按钮 */}
-          <motion.button
-            type="button"
-            onClick={handleTranslate}
-            disabled={!hasContent || isTranslating}
-            whileTap={hasContent && !isTranslating ? { scale: 0.9 } : {}}
-            whileHover={hasContent && !isTranslating ? { scale: 1.05 } : {}}
-            className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-200 ${hasContent && !isTranslating ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}`}
-            title="简繁转换"
-          >
-            {isTranslating ? <motion.svg animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></motion.svg> : <span className="text-sm tracking-wide">简⇄繁</span>}
-          </motion.button>
-
-          {/* 输入框容器 */}
+          {/* 5. 输入框 */}
           <div className="flex-1 min-w-0 relative">
             <div className="relative">
               <input 
@@ -710,15 +647,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 enterKeyHint="send"
               />
               
-              {/* AI 建议标记和使用按钮 */}
+              {/* AI 建议按钮组（有建议时显示） */}
               {aiSuggestion && (
-                <button
-                  onClick={handleUseSuggestion}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-800 transition flex items-center gap-1"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  使用建议
-                </button>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {/* 使用建议按钮 */}
+                  <button
+                    onClick={handleUseSuggestion}
+                    className="text-[10px] bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full hover:bg-yellow-200 transition flex items-center gap-1"
+                    title="使用此建议"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    使用
+                  </button>
+                  {/* 不采用建议按钮 */}
+                  <button
+                    onClick={handleDismissSuggestion}
+                    className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center gap-1"
+                    title="不采用"
+                  >
+                    <X className="w-3 h-3" />
+                    忽略
+                  </button>
+                </div>
               )}
             </div>
             
@@ -759,15 +709,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       </button>
                     ))}
                   </div>
-                  <div className="px-3 py-1.5 text-[10px] text-gray-400 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                    按 ↑ ↓ 选择，Enter 确认
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* 发送/录音按钮 */}
+          {/* 6. 发送/录音按钮 */}
           <motion.button 
             ref={sendButtonRef}
             onClick={hasContent ? handleSend : undefined}
@@ -778,22 +725,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onTouchEnd={!hasContent ? handleSendButtonTouchEnd : undefined}
             disabled={disabled || (!hasContent && !onSendAudio)}
             whileTap={hasContent && !disabled ? { scale: 0.85 } : {}}
-            whileHover={hasContent && !disabled ? { scale: 1.05 } : {}}
             animate={sendAnimation ? { scale: [1, 0.8, 1], rotate: [0, -15, 0] } : {}}
             transition={{ duration: 0.3 }}
-            className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
+            className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition ${
               hasContent 
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md hover:shadow-lg active:shadow-sm' 
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md' 
                 : isRecording
                   ? 'bg-red-500 text-white animate-pulse'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-500'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
             }`}
             title={hasContent ? "发送" : (isRecording ? `录音中 ${formatDuration(recordingDuration)}` : "长按录音")}
           >
             {hasContent ? (
               <Send className="w-4 h-4" />
             ) : isRecording ? (
-              <span className="text-xs font-medium">{formatDuration(recordingDuration)}</span>
+              <span className="text-[10px] font-medium">{formatDuration(recordingDuration)}</span>
             ) : (
               <Mic className="w-4 h-4" />
             )}
@@ -825,9 +771,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           isOpen={showRedPacketModal}
           onClose={() => setShowRedPacketModal(false)}
           roomId={roomId}
-          onSuccess={() => {
-            setShowRedPacketModal(false);
-          }}
+          onSuccess={() => setShowRedPacketModal(false)}
         />
       )}
     </>

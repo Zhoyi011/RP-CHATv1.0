@@ -1850,6 +1850,7 @@ const ChatHome = () => {
           placeholder="输入消息... "
           aiSuggestion={aiSuggestion}
           onUseSuggestion={handleClearSuggestion}
+          onGetSuggest={handleGenerateSuggest}  
         />
         
         {/* 🎵 音乐搜索弹窗 */}
