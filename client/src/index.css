@@ -1,5 +1,4 @@
 /* client/src/index.css */
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -624,4 +623,842 @@ html.dark .space-y-4 {
 
 .animate-fadeSlideUp {
   animation: fadeSlideUp 0.15s ease-out;
+}
+
+/* ========== 墨香阁小说样式 ========== */
+
+/* 小说页面容器 */
+.novel-section {
+  margin-bottom: 60px;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.section-header h2 {
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  color: var(--primary-color);
+  margin-bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-header p {
+  color: var(--light-text);
+  font-size: clamp(0.9rem, 2vw, 1.1rem);
+}
+
+/* 小说网格 */
+.novel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+@media (max-width: 768px) {
+  .novel-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* 小说卡片 */
+.novel-card {
+  background-color: var(--card-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+}
+
+.novel-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-hover);
+}
+
+.novel-cover {
+  height: 180px;
+  background-color: var(--secondary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.novel-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.novel-cover i {
+  font-size: 50px;
+  color: rgba(139, 69, 19, 0.2);
+}
+
+.word-count-badge {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(139, 69, 19, 0.9);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.update-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: rgba(123, 63, 0, 0.9);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.novel-info {
+  padding: 16px;
+}
+
+.novel-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.novel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--light-text);
+  font-size: 0.8rem;
+}
+
+.novel-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.novel-description {
+  color: var(--light-text);
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  height: 60px;
+}
+
+.novel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tag {
+  background-color: rgba(139, 69, 19, 0.1);
+  color: var(--primary-color);
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+}
+
+.read-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* 欢迎区域 */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 60px 0;
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.hero-content {
+  flex: 1;
+  max-width: 600px;
+}
+
+.hero-content h2 {
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  margin-bottom: 20px;
+  color: var(--primary-color);
+  line-height: 1.3;
+}
+
+.hero-content p {
+  font-size: clamp(1rem, 3vw, 1.2rem);
+  margin-bottom: 30px;
+  color: var(--light-text);
+  line-height: 1.7;
+}
+
+.hero-decoration {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  height: 250px;
+}
+
+.ink-splash {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, var(--primary-color) 0%, transparent 70%);
+  opacity: 0.1;
+  border-radius: 50%;
+  position: absolute;
+}
+
+.chinese-ornament {
+  font-family: 'Ma Shan Zheng', cursive;
+  font-size: clamp(120px, 20vw, 180px);
+  color: var(--primary-color);
+  opacity: 0.2;
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 768px) {
+  .hero {
+    flex-direction: column;
+    text-align: center;
+    padding: 40px 0;
+  }
+  
+  .hero-content {
+    max-width: 100%;
+    margin-bottom: 30px;
+  }
+  
+  .hero-decoration {
+    height: 150px;
+  }
+}
+
+/* 关于区域 */
+.about-section {
+  margin-bottom: 60px;
+}
+
+.about-content {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+  .about-content {
+    flex-direction: column;
+    gap: 30px;
+  }
+}
+
+.about-text {
+  flex: 2;
+}
+
+.about-text p {
+  margin-bottom: 20px;
+  color: var(--text-color);
+  line-height: 1.8;
+}
+
+.about-text blockquote {
+  border-left: 4px solid var(--primary-color);
+  padding-left: 20px;
+  margin: 30px 0;
+  color: var(--light-text);
+  font-style: italic;
+}
+
+.about-text blockquote footer {
+  margin-top: 10px;
+  color: var(--primary-color);
+  font-style: normal;
+}
+
+.about-stats {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+}
+
+.stat-item {
+  background-color: var(--card-bg);
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+}
+
+.stat-item h3 {
+  font-size: 0.9rem;
+  color: var(--light-text);
+  margin-bottom: 10px;
+}
+
+.stat-item p {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
+/* 分类标签 */
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.category-tab {
+  transition: all 0.3s ease;
+}
+
+.category-tab.active {
+  background-color: var(--primary-color);
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* 搜索框 */
+.search-box {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-color);
+  border-radius: 30px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  gap: 8px;
+}
+
+.search-box:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(139, 69, 19, 0.1);
+}
+
+.search-box input {
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  outline: none;
+  width: 200px;
+  font-size: 0.9rem;
+}
+
+.search-box input::placeholder {
+  color: var(--light-text);
+}
+
+/* 无结果 */
+.no-results {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--light-text);
+}
+
+.no-results i {
+  font-size: 48px;
+  margin-bottom: 20px;
+  color: var(--border-color);
+}
+
+.no-results h3 {
+  margin-bottom: 10px;
+  color: var(--text-color);
+}
+
+/* ========== 墨香阁完整样式 ========== */
+
+/* 基础样式重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+    --primary-color: #8B4513; /* 深棕色，类似墨色 */
+    --secondary-color: #D4A76A; /* 淡黄色，类似纸张 */
+    --accent-color: #7B3F00; /* 强调色 */
+    --text-color: #333;
+    --light-text: #666;
+    --bg-color: #F9F5EB;
+    --card-bg: #FFFFFF;
+    --border-color: #E6D9C2;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --transition: all 0.3s ease;
+}
+
+.dark-mode {
+    --primary-color: #D4A76A;
+    --secondary-color: #3A2C1C;
+    --accent-color: #E6C9A8;
+    --text-color: #E6D9C2;
+    --light-text: #B8A98F;
+    --bg-color: #1A140E;
+    --card-bg: #2A241C;
+    --border-color: #3A2C1C;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* 全局应用墨香阁背景色 */
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: var(--transition);
+}
+
+/* 小说页面专用样式 */
+.novel-section {
+    margin-bottom: 60px;
+}
+
+.section-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.section-header h2 {
+    font-size: clamp(1.5rem, 4vw, 2.2rem);
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-header p {
+    color: var(--light-text);
+    font-size: clamp(0.9rem, 2vw, 1.1rem);
+}
+
+/* 欢迎区域 */
+.hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 60px 0;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.hero-content {
+    flex: 1;
+    max-width: 600px;
+}
+
+.hero-content h2 {
+    font-size: clamp(1.8rem, 5vw, 2.8rem);
+    margin-bottom: 20px;
+    color: var(--primary-color);
+    line-height: 1.3;
+}
+
+.hero-content p {
+    font-size: clamp(1rem, 3vw, 1.2rem);
+    margin-bottom: 30px;
+    color: var(--light-text);
+    line-height: 1.7;
+}
+
+.hero-decoration {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    height: 250px;
+}
+
+.ink-splash {
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, var(--primary-color) 0%, transparent 70%);
+    opacity: 0.1;
+    border-radius: 50%;
+    position: absolute;
+}
+
+.chinese-ornament {
+    font-family: 'Ma Shan Zheng', cursive;
+    font-size: clamp(120px, 20vw, 180px);
+    color: var(--primary-color);
+    opacity: 0.2;
+    position: relative;
+    z-index: 2;
+}
+
+@media (max-width: 768px) {
+    .hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 40px 0;
+    }
+    .hero-content {
+        max-width: 100%;
+        margin-bottom: 30px;
+    }
+    .hero-decoration {
+        height: 150px;
+    }
+    .ink-splash {
+        width: 150px;
+        height: 150px;
+    }
+}
+
+/* 小说网格 */
+.novel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+    margin-bottom: 40px;
+}
+
+@media (max-width: 768px) {
+    .novel-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
+/* 小说卡片 */
+.novel-card {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+}
+
+.novel-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-hover);
+}
+
+.novel-cover {
+    height: 180px;
+    background-color: var(--secondary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.novel-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.novel-cover i {
+    font-size: 50px;
+    color: rgba(139, 69, 19, 0.2);
+}
+
+/* 字数徽章 */
+.word-count-badge {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background-color: rgba(139, 69, 19, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 2;
+}
+
+.update-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(123, 63, 0, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    z-index: 2;
+}
+
+.novel-info {
+    padding: 16px;
+}
+
+.novel-info h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.novel-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--light-text);
+    font-size: 0.8rem;
+}
+
+.novel-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.novel-description {
+    color: var(--light-text);
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    height: 60px;
+}
+
+.novel-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.tag {
+    background-color: rgba(139, 69, 19, 0.1);
+    color: var(--primary-color);
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+}
+
+.read-btn {
+    width: 100%;
+    justify-content: center;
+}
+
+/* 按钮样式 */
+.btn, .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: 30px;
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+    outline: none;
+}
+
+.btn {
+    background-color: var(--primary-color);
+    color: white;
+    text-decoration: none;
+}
+
+.btn:hover {
+    background-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+}
+
+.btn-outline {
+    background-color: transparent;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.btn-outline:hover {
+    background-color: rgba(139, 69, 19, 0.1);
+}
+
+/* 关于区域 */
+.about-section {
+    margin-bottom: 60px;
+}
+
+.about-content {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+}
+
+@media (max-width: 768px) {
+    .about-content {
+        flex-direction: column;
+        gap: 30px;
+    }
+}
+
+.about-text {
+    flex: 2;
+}
+
+.about-text p {
+    margin-bottom: 20px;
+    color: var(--text-color);
+    line-height: 1.8;
+}
+
+.about-text blockquote {
+    border-left: 4px solid var(--primary-color);
+    padding-left: 20px;
+    margin: 30px 0;
+    color: var(--light-text);
+    font-style: italic;
+}
+
+.about-text blockquote footer {
+    margin-top: 10px;
+    color: var(--primary-color);
+    font-style: normal;
+}
+
+.about-stats {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 16px;
+}
+
+.about-stats .stat-item {
+    background-color: var(--card-bg);
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+}
+
+.about-stats .stat-item h3 {
+    font-size: 0.9rem;
+    color: var(--light-text);
+    margin-bottom: 10px;
+}
+
+.about-stats .stat-item p {
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+/* 分类标签 */
+.category-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.category-tab {
+    padding: 8px 16px;
+    border-radius: 30px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.category-tab.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+/* 搜索框 */
+.search-box {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-color);
+    border-radius: 30px;
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+    gap: 8px;
+}
+
+.search-box:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(139, 69, 19, 0.1);
+}
+
+.search-box input {
+    border: none;
+    background: transparent;
+    color: var(--text-color);
+    outline: none;
+    width: 200px;
+    font-size: 0.9rem;
+}
+
+.search-box input::placeholder {
+    color: var(--light-text);
+}
+
+/* 无结果 */
+.no-results {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--light-text);
+}
+
+.no-results i {
+    font-size: 48px;
+    margin-bottom: 20px;
+    color: var(--border-color);
+}
+
+.no-results h3 {
+    margin-bottom: 10px;
+    color: var(--text-color);
 }

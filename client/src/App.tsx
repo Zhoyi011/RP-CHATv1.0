@@ -29,7 +29,19 @@ import PendingRequests from './components/chat/PendingRequests';
 import MaintenancePage from './components/common/MaintenancePage';
 import Wallet from './components/wallet/Wallet';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
-import { EmojiManager } from './components/emoji/EmojiManager'; // 🎨 新增
+import { EmojiManager } from './components/emoji/EmojiManager';
+
+// 墨香阁小说页面导入
+import NovelHome from './pages/novel/NovelHome';
+import AuthorDashboard from './pages/novel/AuthorDashboard';
+import NovelCreate from './pages/novel/NovelCreate';
+import NovelEdit from './pages/novel/NovelEdit';
+import ChapterManage from './pages/novel/ChapterManage';
+import ChapterEdit from './pages/novel/ChapterEdit';
+import MyFavorites from './pages/novel/MyFavorites';
+import MyFollows from './pages/novel/MyFollows';
+import UserProfile from './pages/novel/UserProfile';
+import AdminApplications from './pages/admin/AdminApplications';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
@@ -236,13 +248,81 @@ function AppContent() {
       />
       
       <Routes>
+        {/* 公开页面 */}
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/invite" element={<InviteCode />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
+        
+        {/* 墨香阁小说页面 - 公开 */}
+        <Route path="/novel" element={<NovelHome />} />
+        
+        {/* 墨香阁 - 需要登录的页面 */}
+        <Route path="/author/dashboard" element={
+          <ProtectedRoute>
+            <AuthorDashboard />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/create" element={
+          <ProtectedRoute>
+            <NovelCreate />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/edit/:novelId" element={
+          <ProtectedRoute>
+            <NovelEdit />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/:novelId/chapters" element={
+          <ProtectedRoute>
+            <ChapterManage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/chapter/create/:novelId" element={
+          <ProtectedRoute>
+            <ChapterEdit />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/chapter/edit/:chapterId" element={
+          <ProtectedRoute>
+            <ChapterEdit />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/favorites" element={
+          <ProtectedRoute>
+            <MyFavorites />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/novel/follows" element={
+          <ProtectedRoute>
+            <MyFollows />
+          </ProtectedRoute>
+        } />
+        
+        {/* 用户/作者资料页面 */}
+        <Route path="/persona/:personaId" element={
+          <ProtectedRoute>
+            <UserProfile />
+          </ProtectedRoute>
+        } />
+        
+        {/* 管理员页面 */}
+        <Route path="/admin/applications" element={
+          <ProtectedRoute>
+            <AdminApplications />
+          </ProtectedRoute>
+        } />
 
+        {/* RP Chat 核心功能 - 需要登录 */}
         <Route path="/chat" element={
           <ProtectedRoute>
             <ChatHome />
@@ -315,7 +395,6 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
-        {/* 🎨 表情包管理页面 */}
         <Route path="/emojis" element={
           <ProtectedRoute>
             <EmojiManager />
@@ -352,6 +431,7 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
+        {/* 404 重定向 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AFKScreen>

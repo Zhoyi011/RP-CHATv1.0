@@ -63,11 +63,22 @@ const novelSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
-
 // 索引优化搜索
+// 1. 全文搜索索引
 novelSchema.index({ title: 'text', description: 'text', authorName: 'text' });
+
+// 2. 分类筛选（首页分类浏览）
 novelSchema.index({ category: 1, status: 1, createdAt: -1 });
+
+// 3. 作者作品列表（作者控制台）
+novelSchema.index({ authorPersonaId: 1, createdAt: -1 });
+
+// 4. 活跃小说默认排序
+novelSchema.index({ isActive: 1, createdAt: -1 });
+
+// 5. 热门榜排序
 novelSchema.index({ views: -1 });
 novelSchema.index({ likes: -1 });
+novelSchema.index({ updatedAt: -1 });
 
 module.exports = mongoose.model('Novel', novelSchema);

@@ -41,12 +41,13 @@ const getActivePersona = async (userId) => {
 // 获取小说列表（分页/分类/搜索）
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 20, category, status, search, sort = 'latest' } = req.query;
+    const { page = 1, limit = 20, category, status, search, sort = 'latest', authorId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     let query = { isActive: true };
     if (category && category !== '全部') query.category = category;
     if (status) query.status = status;
+    if (authorId) query.authorPersonaId = authorId;
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -65,7 +66,7 @@ router.get('/', async (req, res) => {
     }
     
     const [novels, total] = await Promise.all([
-      Novel.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)).populate('authorPersonaId', 'name displayName avatar'),
+      Novel.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount'),
       Novel.countDocuments(query)
     ]);
     
@@ -84,46 +85,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 获取小说详情
-router.get('/:id', async (req, res) => {
-  try {
-    const novel = await Novel.findById(req.params.id).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount totalDonationIncome');
-    if (!novel) return res.status(404).json({ error: '小说不存在' });
-    
-    // 增加浏览量
-    await Novel.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
-    
-    // 获取章节列表
-    const chapters = await Chapter.find({ novelId: novel._id, isPublished: true })
-      .sort({ chapterNumber: 1 })
-      .select('_id chapterNumber title wordCount createdAt');
-    
-    // 获取统计信息
-    const [favoriteCount, followCount, commentCount, donationTotal] = await Promise.all([
-      Favorite.countDocuments({ novelId: novel._id }),
-      FollowAuthor.countDocuments({ authorPersonaId: novel.authorPersonaId._id }),
-      Comment.countDocuments({ novelId: novel._id, isDeleted: false }),
-      Donation.aggregate([
-        { $match: { novelId: novel._id } },
-        { $group: { _id: null, total: { $sum: '$diamondAmount' } } }
-      ])
-    ]);
-    
-    res.json({
-      novel,
-      chapters,
-      stats: {
-        favoriteCount,
-        followCount,
-        commentCount,
-        donationTotal: donationTotal[0]?.total || 0
-      }
-    });
-  } catch (error) {
-    console.error('获取小说详情失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
+// ========== 具体路径的路由（必须在 /:id 之前） ==========
 
 // 获取章节内容
 router.get('/:novelId/chapter/:chapterId', async (req, res) => {
@@ -136,10 +98,8 @@ router.get('/:novelId/chapter/:chapterId', async (req, res) => {
     
     if (!chapter) return res.status(404).json({ error: '章节不存在' });
     
-    // 增加章节浏览量
     await Chapter.findByIdAndUpdate(chapter._id, { $inc: { views: 1 } });
     
-    // 获取前后章节
     const [prevChapter, nextChapter] = await Promise.all([
       Chapter.findOne({ novelId: req.params.novelId, chapterNumber: chapter.chapterNumber - 1, isPublished: true }).select('_id chapterNumber title'),
       Chapter.findOne({ novelId: req.params.novelId, chapterNumber: chapter.chapterNumber + 1, isPublished: true }).select('_id chapterNumber title')
@@ -189,6 +149,95 @@ router.get('/:novelId/comments', async (req, res) => {
   }
 });
 
+// 获取我的申请状态
+router.get('/my-application', authMiddleware, async (req, res) => {
+  try {
+    const { personaId } = req.query;
+    if (!personaId) return res.status(400).json({ error: '请选择角色' });
+    
+    const application = await AuthorApplication.findOne({
+      applicantPersonaId: personaId,
+      applicantUserId: req.userId
+    }).sort({ createdAt: -1 });
+    
+    res.json({ application });
+  } catch (error) {
+    console.error('获取申请状态失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取我的收藏
+router.get('/my/favorites', authMiddleware, async (req, res) => {
+  try {
+    const { personaId } = req.query;
+    if (!personaId) return res.status(400).json({ error: '请选择角色' });
+    
+    const favorites = await Favorite.find({ userId: req.userId, personaId })
+      .populate('novelId')
+      .sort({ createdAt: -1 });
+    
+    res.json({ favorites });
+  } catch (error) {
+    console.error('获取收藏失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取我的关注
+router.get('/my/follows', authMiddleware, async (req, res) => {
+  try {
+    const { personaId } = req.query;
+    if (!personaId) return res.status(400).json({ error: '请选择角色' });
+    
+    const follows = await FollowAuthor.find({ userId: req.userId, personaId })
+      .populate('authorPersonaId', 'name displayName avatar isAuthor followersCount createdNovelCount');
+    
+    res.json({ follows });
+  } catch (error) {
+    console.error('获取关注失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取小说详情（通配符 - 必须放在所有具体路径之后）
+router.get('/:id', async (req, res) => {
+  try {
+    const novel = await Novel.findById(req.params.id).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount totalDonationIncome');
+    if (!novel) return res.status(404).json({ error: '小说不存在' });
+    
+    await Novel.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
+    
+    const chapters = await Chapter.find({ novelId: novel._id, isPublished: true })
+      .sort({ chapterNumber: 1 })
+      .select('_id chapterNumber title wordCount createdAt');
+    
+    const [favoriteCount, followCount, commentCount, donationTotal] = await Promise.all([
+      Favorite.countDocuments({ novelId: novel._id }),
+      FollowAuthor.countDocuments({ authorPersonaId: novel.authorPersonaId._id }),
+      Comment.countDocuments({ novelId: novel._id, isDeleted: false }),
+      Donation.aggregate([
+        { $match: { novelId: novel._id } },
+        { $group: { _id: null, total: { $sum: '$diamondAmount' } } }
+      ])
+    ]);
+    
+    res.json({
+      novel,
+      chapters,
+      stats: {
+        favoriteCount,
+        followCount,
+        commentCount,
+        donationTotal: donationTotal[0]?.total || 0
+      }
+    });
+  } catch (error) {
+    console.error('获取小说详情失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // ========== 需要登录的接口 ==========
 
 // 申请成为作者
@@ -197,26 +246,20 @@ router.post('/apply-author', authMiddleware, async (req, res) => {
     const { personaId } = req.body;
     if (!personaId) return res.status(400).json({ error: '请选择角色' });
     
-    // 验证角色属于当前用户
     const persona = await Persona.findOne({ _id: personaId, userId: req.userId });
     if (!persona) return res.status(404).json({ error: '角色不存在' });
-    
-    // 检查是否已经是作者
     if (persona.isAuthor) return res.status(400).json({ error: '该角色已经是作者了' });
     
-    // 检查是否有待审核的申请
     const existingApplication = await AuthorApplication.findOne({
       applicantPersonaId: personaId,
       status: 'pending'
     });
     if (existingApplication) return res.status(400).json({ error: '已有待审核的申请' });
     
-    // 检查钻石余额
     const user = await User.findById(req.userId);
     const totalDiamonds = (user.paidDiamonds || 0) + (user.freeDiamonds || 0);
     if (totalDiamonds < 10) return res.status(400).json({ error: '钻石不足，需要10钻石' });
     
-    // 扣除钻石（优先使用免费钻石）
     let remainingCost = 10;
     let paidDeduction = 0;
     let freeDeduction = 0;
@@ -236,7 +279,6 @@ router.post('/apply-author', authMiddleware, async (req, res) => {
     
     await user.save();
     
-    // 创建交易记录
     await TransactionRecord.create({
       userId: req.userId,
       type: 'author_application',
@@ -248,7 +290,6 @@ router.post('/apply-author', authMiddleware, async (req, res) => {
       description: `申请作者资格（角色：${persona.displayName || persona.name}）`
     });
     
-    // 创建申请
     const application = await AuthorApplication.create({
       applicantPersonaId: personaId,
       applicantUserId: req.userId,
@@ -262,24 +303,6 @@ router.post('/apply-author', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('申请作者失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 获取我的申请状态
-router.get('/my-application', authMiddleware, async (req, res) => {
-  try {
-    const { personaId } = req.query;
-    if (!personaId) return res.status(400).json({ error: '请选择角色' });
-    
-    const application = await AuthorApplication.findOne({
-      applicantPersonaId: personaId,
-      applicantUserId: req.userId
-    }).sort({ createdAt: -1 });
-    
-    res.json({ application });
-  } catch (error) {
-    console.error('获取申请状态失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
@@ -311,23 +334,6 @@ router.post('/favorite/:novelId', authMiddleware, async (req, res) => {
     }
   } catch (error) {
     console.error('收藏操作失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 获取我的收藏
-router.get('/my/favorites', authMiddleware, async (req, res) => {
-  try {
-    const { personaId } = req.query;
-    if (!personaId) return res.status(400).json({ error: '请选择角色' });
-    
-    const favorites = await Favorite.find({ userId: req.userId, personaId })
-      .populate('novelId')
-      .sort({ createdAt: -1 });
-    
-    res.json({ favorites });
-  } catch (error) {
-    console.error('获取收藏失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
@@ -364,22 +370,6 @@ router.post('/follow/:authorPersonaId', authMiddleware, async (req, res) => {
     }
   } catch (error) {
     console.error('关注操作失败:', error);
-    res.status(500).json({ error: '服务器错误' });
-  }
-});
-
-// 获取我的关注
-router.get('/my/follows', authMiddleware, async (req, res) => {
-  try {
-    const { personaId } = req.query;
-    if (!personaId) return res.status(400).json({ error: '请选择角色' });
-    
-    const follows = await FollowAuthor.find({ userId: req.userId, personaId })
-      .populate('authorPersonaId', 'name displayName avatar isAuthor followersCount');
-    
-    res.json({ follows });
-  } catch (error) {
-    console.error('获取关注失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
@@ -464,12 +454,10 @@ router.post('/donate/:novelId', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: `付费钻石不足，当前仅有 ${paidDiamonds} 付费钻石` });
     }
     
-    // 扣除付费钻石
     user.paidDiamonds = paidDiamonds - diamondAmount;
     user.diamonds = (user.paidDiamonds || 0) + (user.freeDiamonds || 0);
     await user.save();
     
-    // 创建赞赏记录
     await Donation.create({
       fromPersonaId: activePersona._id,
       fromUserId: req.userId,
@@ -480,12 +468,10 @@ router.post('/donate/:novelId', authMiddleware, async (req, res) => {
       message: message || ''
     });
     
-    // 更新作者收入统计
     await Persona.findByIdAndUpdate(novel.authorPersonaId._id, {
       $inc: { totalDonationIncome: diamondAmount }
     });
     
-    // 创建交易记录
     await TransactionRecord.create({
       userId: req.userId,
       type: 'donation',
@@ -516,7 +502,6 @@ router.get('/author/my-novels', authMiddleware, async (req, res) => {
     const { personaId } = req.query;
     if (!personaId) return res.status(400).json({ error: '请选择角色' });
     
-    // 验证角色属于当前用户且是作者
     const persona = await Persona.findOne({ _id: personaId, userId: req.userId });
     if (!persona) return res.status(404).json({ error: '角色不存在' });
     if (!persona.isAuthor) return res.status(403).json({ error: '该角色不是作者' });
@@ -547,12 +532,10 @@ router.post('/author/novel', authMiddleware, async (req, res) => {
     if (!description || description.trim().length === 0) return res.status(400).json({ error: '简介不能为空' });
     if (!category) return res.status(400).json({ error: '请选择分类' });
     
-    // 验证角色属于当前用户且是作者
     const persona = await Persona.findOne({ _id: personaId, userId: req.userId });
     if (!persona) return res.status(404).json({ error: '角色不存在' });
     if (!persona.isAuthor) return res.status(403).json({ error: '该角色不是作者' });
     
-    // 检查创作数量限制
     if (persona.createdNovelCount >= persona.novelSlots) {
       return res.status(400).json({ 
         error: `创作数量已达上限（${persona.novelSlots}/${persona.novelSlots}），可花费10钻石扩展名额`,
@@ -560,13 +543,11 @@ router.post('/author/novel', authMiddleware, async (req, res) => {
       });
     }
     
-    // 处理标签
     let processedTags = [];
     if (tags && Array.isArray(tags)) {
       processedTags = tags.slice(0, 5).map(t => t.trim()).filter(t => t.length > 0);
     }
     
-    // 创建小说
     const novel = await Novel.create({
       title: title.trim(),
       authorPersonaId: personaId,
@@ -577,7 +558,6 @@ router.post('/author/novel', authMiddleware, async (req, res) => {
       cover: cover || ''
     });
     
-    // 更新角色的创作数量
     await Persona.findByIdAndUpdate(personaId, {
       $inc: { createdNovelCount: 1 }
     });
@@ -602,11 +582,9 @@ router.put('/author/novel/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(id);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限编辑' });
     
-    // 更新字段
     if (title !== undefined) novel.title = title.trim();
     if (description !== undefined) novel.description = description.trim();
     if (category !== undefined) novel.category = category;
@@ -633,15 +611,12 @@ router.delete('/author/novel/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(id);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限删除' });
     
-    // 软删除
     novel.isActive = false;
     await novel.save();
     
-    // 减少角色的创作数量
     await Persona.findByIdAndUpdate(novel.authorPersonaId, {
       $inc: { createdNovelCount: -1 }
     });
@@ -670,7 +645,6 @@ router.post('/author/expand-slot', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '钻石不足，需要10钻石' });
     }
     
-    // 扣除钻石（优先使用免费钻石）
     let remainingCost = 10;
     let paidDeduction = 0;
     let freeDeduction = 0;
@@ -690,7 +664,6 @@ router.post('/author/expand-slot', authMiddleware, async (req, res) => {
     
     await user.save();
     
-    // 创建交易记录
     await TransactionRecord.create({
       userId: req.userId,
       type: 'expand_novel_slot',
@@ -702,7 +675,6 @@ router.post('/author/expand-slot', authMiddleware, async (req, res) => {
       description: `扩展创作名额（角色：${persona.displayName || persona.name}）`
     });
     
-    // 增加创作名额
     await Persona.findByIdAndUpdate(personaId, {
       $inc: { novelSlots: 1 }
     });
@@ -732,7 +704,6 @@ router.get('/author/novel/:novelId/chapters', authMiddleware, async (req, res) =
     const novel = await Novel.findById(novelId);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限查看' });
     
@@ -763,21 +734,17 @@ router.post('/author/novel/:novelId/chapter', authMiddleware, async (req, res) =
     const novel = await Novel.findById(novelId);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限添加章节' });
     
-    // 获取下一个章节号
     const lastChapter = await Chapter.findOne({ novelId }).sort({ chapterNumber: -1 });
     const nextChapterNumber = (lastChapter?.chapterNumber || 0) + 1;
     
-    // 计算字数
     const cleanContent = content.replace(/\s+/g, '');
     const chineseChars = cleanContent.match(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g) || [];
     const englishChars = cleanContent.match(/[a-zA-Z0-9]/g) || [];
     const wordCount = chineseChars.length + englishChars.length;
     
-    // 创建章节
     const chapter = await Chapter.create({
       novelId,
       chapterNumber: nextChapterNumber,
@@ -787,7 +754,6 @@ router.post('/author/novel/:novelId/chapter', authMiddleware, async (req, res) =
       isPublished: isPublished !== false
     });
     
-    // 更新小说的总章节数和总字数
     const totalChapters = await Chapter.countDocuments({ novelId, isPublished: true });
     const totalWordCount = await Chapter.aggregate([
       { $match: { novelId: novel._id, isPublished: true } },
@@ -822,15 +788,12 @@ router.put('/author/chapter/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(chapter.novelId);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限编辑' });
     
-    // 更新字段
     if (title !== undefined) chapter.title = title.trim();
     if (content !== undefined) {
       chapter.content = content;
-      // 重新计算字数
       const cleanContent = content.replace(/\s+/g, '');
       const chineseChars = cleanContent.match(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g) || [];
       const englishChars = cleanContent.match(/[a-zA-Z0-9]/g) || [];
@@ -840,7 +803,6 @@ router.put('/author/chapter/:id', authMiddleware, async (req, res) => {
     
     await chapter.save();
     
-    // 更新小说的总字数
     const totalWordCount = await Chapter.aggregate([
       { $match: { novelId: novel._id, isPublished: true } },
       { $group: { _id: null, total: { $sum: '$wordCount' } } }
@@ -866,13 +828,11 @@ router.delete('/author/chapter/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(chapter.novelId);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限删除' });
     
     await chapter.deleteOne();
     
-    // 重新整理章节号
     const remainingChapters = await Chapter.find({ novelId: novel._id }).sort({ chapterNumber: 1 });
     for (let i = 0; i < remainingChapters.length; i++) {
       if (remainingChapters[i].chapterNumber !== i + 1) {
@@ -881,7 +841,6 @@ router.delete('/author/chapter/:id', authMiddleware, async (req, res) => {
       }
     }
     
-    // 更新小说的总章节数和总字数
     const totalChapters = await Chapter.countDocuments({ novelId: novel._id, isPublished: true });
     const totalWordCount = await Chapter.aggregate([
       { $match: { novelId: novel._id, isPublished: true } },
@@ -910,7 +869,6 @@ router.get('/author/chapter/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(chapter.novelId);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 验证权限
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限查看' });
     
@@ -927,7 +885,7 @@ router.get('/author/chapter/:id', authMiddleware, async (req, res) => {
 router.get('/admin/applications', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (user.role !== 'admin' && user.role !== 'super_admin') {
+    if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'owner') {
       return res.status(403).json({ error: '无权限访问' });
     }
     
@@ -947,7 +905,7 @@ router.get('/admin/applications', authMiddleware, async (req, res) => {
 router.put('/admin/applications/:id/review', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (user.role !== 'admin' && user.role !== 'super_admin') {
+    if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'owner') {
       return res.status(403).json({ error: '无权限访问' });
     }
     
@@ -960,7 +918,6 @@ router.put('/admin/applications/:id/review', authMiddleware, async (req, res) =>
     
     const application = await AuthorApplication.findById(id);
     if (!application) return res.status(404).json({ error: '申请不存在' });
-    
     if (application.status !== 'pending') {
       return res.status(400).json({ error: '该申请已处理' });
     }
@@ -972,7 +929,6 @@ router.put('/admin/applications/:id/review', authMiddleware, async (req, res) =>
     await application.save();
     
     if (status === 'approved') {
-      // 更新角色为作者
       await Persona.findByIdAndUpdate(application.applicantPersonaId, {
         isAuthor: true,
         authorApprovedAt: new Date()

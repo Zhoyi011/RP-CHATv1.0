@@ -110,9 +110,6 @@ async function request<T>(
 
 // ========== 上传 API（包含音频） ==========
 export const uploadApi = {
-  /**
-   * 上传用户头像
-   */
   uploadUserAvatar: (file: File): Promise<{ success: boolean; avatar: string; message: string }> => {
     const formData = new FormData();
     formData.append('avatar', file);
@@ -131,9 +128,6 @@ export const uploadApi = {
     });
   },
 
-  /**
-   * 删除用户头像
-   */
   deleteUserAvatar: (): Promise<{ success: boolean; message: string }> => {
     const token = getToken();
     return fetch(`${API_BASE}/upload/user`, {
@@ -148,9 +142,6 @@ export const uploadApi = {
     });
   },
 
-  /**
-   * 上传角色头像
-   */
   uploadPersonaAvatar: (personaId: string, file: File): Promise<{ success: boolean; avatar: string; message: string }> => {
     const formData = new FormData();
     formData.append('avatar', file);
@@ -169,9 +160,6 @@ export const uploadApi = {
     });
   },
 
-  /**
-   * 删除角色头像
-   */
   deletePersonaAvatar: (personaId: string): Promise<{ success: boolean; message: string }> => {
     const token = getToken();
     return fetch(`${API_BASE}/upload/persona/${personaId}`, {
@@ -186,16 +174,9 @@ export const uploadApi = {
     });
   },
 
-  /**
-   * 🎙️ 上传语音消息
-   * @param audioBlob - 录音 Blob 对象
-   * @returns { url: string } 音频文件 URL（MP3 格式）
-   */
   uploadAudio: async (audioBlob: Blob): Promise<{ success: boolean; url: string; message: string }> => {
     const formData = new FormData();
-    // 🔥 使用 .mp3 扩展名，确保最佳兼容性
     const fileName = `voice_${Date.now()}.mp3`;
-    // 🔥 确保 MIME 类型是 audio/mpeg
     const file = new File([audioBlob], fileName, { type: 'audio/mpeg' });
     formData.append('audio', file);
     
@@ -217,9 +198,6 @@ export const uploadApi = {
     return data;
   },
 
-  /**
-   * 删除语音消息（可选，用于撤回时清理）
-   */
   deleteAudio: async (audioUrl: string): Promise<{ success: boolean; message: string }> => {
     const token = getToken();
     const response = await fetch(`${API_BASE}/upload/audio`, {
@@ -258,7 +236,6 @@ export interface User {
   hasAccess: boolean;
   coins: number;
   diamonds: number;
-  // 🔥 新增：区分钻石类型
   paidDiamonds?: number;
   freeDiamonds?: number;
   theme: string;
@@ -282,7 +259,6 @@ export interface User {
     totalPersonas: number;
   };
 }
-
 
 export interface UserSettings {
   theme: 'light' | 'dark' | 'auto';
@@ -331,11 +307,9 @@ export interface Message {
   content: string;
   isAction: boolean;
   isPat?: boolean;
-  // 🎙️ 语音消息字段
   isAudio?: boolean;
   audioUrl?: string;
   audioDuration?: number;
-  // 🎨 表情消息字段 - 🔥 添加这些
   isEmoji?: boolean;
   emojiId?: string;
   emojiUrl?: string;
@@ -360,7 +334,6 @@ export interface Message {
   isDeleted?: boolean;
   replyTo?: ReplyToInfo | null;
 }
-
 
 export interface Persona {
   _id: string;
@@ -410,6 +383,13 @@ export interface Persona {
     avatarFrameId?: string;
   };
   avatarFrame?: string | null;
+  // 🆕 作者相关字段
+  isAuthor?: boolean;
+  authorApprovedAt?: string;
+  novelSlots?: number;
+  createdNovelCount?: number;
+  followersCount?: number;
+  totalDonationIncome?: number;
 }
 
 export interface ActivePersonaResponse {
@@ -531,8 +511,6 @@ export const personaApi = {
   getPersonaDetail: (personaId: string) =>
     request<Persona>(`/persona/${personaId}`),
     
-  // 🔥 删除 usePersona 方法
-  
   addGuardian: (personaId: string, amount: number) =>
     request<{ message: string; totalGuardianAmount: number }>(`/persona/${personaId}/guardian`, {
       method: 'POST',
@@ -871,23 +849,189 @@ export interface AIStatusResponse {
 }
 
 export const aiApi = {
-  /**
-   * 获取 AI 建议的回复内容
-   * @param roomId - 房间 ID（可选，如果提供会自动获取最近消息）
-   * @param messages - 自定义消息历史（可选）
-   * @param context - 额外上下文信息
-   */
   getSuggest: (roomId?: string, messages?: AISuggestRequest['messages'], context?: Record<string, any>) =>
     request<AISuggestResponse>('/ai/suggest', {
       method: 'POST',
       body: JSON.stringify({ roomId, messages, context }),
     }),
     
-  /**
-   * 获取 AI 服务状态
-   */
   getAIStatus: () =>
     request<AIStatusResponse>('/ai/status'),
+};
+
+// ========== 小说 API ==========
+import type { Novel, Chapter, Comment, Favorite, FollowAuthor, AuthorApplication } from '../types/novel';
+
+export interface NovelListResponse {
+  novels: Novel[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface NovelDetailResponse {
+  novel: Novel;
+  chapters: Pick<Chapter, '_id' | 'chapterNumber' | 'title' | 'wordCount' | 'createdAt'>[];
+  stats: {
+    favoriteCount: number;
+    followCount: number;
+    commentCount: number;
+    donationTotal: number;
+  };
+}
+
+export interface ChapterContentResponse {
+  chapter: Chapter;
+  prev: Pick<Chapter, '_id' | 'chapterNumber' | 'title'> | null;
+  next: Pick<Chapter, '_id' | 'chapterNumber' | 'title'> | null;
+}
+
+export const novelApi = {
+  // ========== 公开接口 ==========
+  getNovels: (params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    status?: string;
+    search?: string;
+    sort?: string;
+    authorId?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    if (params?.category && params.category !== '全部') queryParams.append('category', params.category);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.sort) queryParams.append('sort', params.sort);
+    if (params?.authorId) queryParams.append('authorId', params.authorId);
+    const queryString = queryParams.toString();
+    const endpoint = `/novel${queryString ? `?${queryString}` : ''}`;
+    return request<NovelListResponse>(endpoint);
+  },
+  
+  getNovelDetail: (novelId: string) => request<NovelDetailResponse>(`/novel/${novelId}`),
+  
+  getChapter: (novelId: string, chapterId: string) => request<ChapterContentResponse>(`/novel/${novelId}/chapter/${chapterId}`),
+  
+  getComments: (novelId: string, page?: number, limit?: number) => {
+    const queryParams = new URLSearchParams();
+    if (page) queryParams.append('page', String(page));
+    if (limit) queryParams.append('limit', String(limit));
+    const queryString = queryParams.toString();
+    const endpoint = `/novel/${novelId}/comments${queryString ? `?${queryString}` : ''}`;
+    return request<{ comments: Comment[]; pagination: any }>(endpoint);
+  },
+  
+  // ========== 需要登录 ==========
+  applyAuthor: (personaId: string) =>
+    request<{ success: boolean; message: string; application: AuthorApplication }>('/novel/apply-author', {
+      method: 'POST',
+      body: JSON.stringify({ personaId }),
+    }),
+  
+  getMyApplication: (personaId: string) =>
+    request<{ application: AuthorApplication | null }>(`/novel/my-application?personaId=${personaId}`),
+  
+  toggleFavorite: (novelId: string, personaId: string) =>
+    request<{ success: boolean; action: 'added' | 'removed'; message: string }>(`/novel/favorite/${novelId}`, {
+      method: 'POST',
+      body: JSON.stringify({ personaId }),
+    }),
+  
+  getMyFavorites: (personaId: string) =>
+    request<{ favorites: Favorite[] }>(`/novel/my/favorites?personaId=${personaId}`),
+  
+  toggleFollow: (authorPersonaId: string, personaId: string) =>
+    request<{ success: boolean; action: 'followed' | 'unfollowed'; message: string }>(`/novel/follow/${authorPersonaId}`, {
+      method: 'POST',
+      body: JSON.stringify({ personaId }),
+    }),
+  
+  getMyFollows: (personaId: string) =>
+    request<{ follows: FollowAuthor[] }>(`/novel/my/follows?personaId=${personaId}`),
+  
+  addComment: (novelId: string, content: string, chapterId?: string, parentCommentId?: string) =>
+    request<{ success: boolean; comment: Comment }>(`/novel/comment/${novelId}`, {
+      method: 'POST',
+      body: JSON.stringify({ content, chapterId, parentCommentId }),
+    }),
+  
+  likeComment: (commentId: string) =>
+    request<{ success: boolean; likes: number; hasLiked: boolean }>(`/novel/comment/${commentId}/like`, {
+      method: 'POST',
+    }),
+  
+  donate: (novelId: string, diamondAmount: number, message?: string) =>
+    request<{ success: boolean; message: string; newBalance: number }>(`/novel/donate/${novelId}`, {
+      method: 'POST',
+      body: JSON.stringify({ diamondAmount, message }),
+    }),
+  
+  // ========== 作者接口 ==========
+  getMyNovels: (personaId: string) =>
+    request<{ novels: Novel[]; novelSlots: number; createdNovelCount: number; remainingSlots: number }>(
+      `/novel/author/my-novels?personaId=${personaId}`
+    ),
+  
+  createNovel: (data: { personaId: string; title: string; description: string; category: string; tags?: string[]; cover?: string }) =>
+    request<{ success: boolean; message: string; novel: Novel }>('/novel/author/novel', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  updateNovel: (novelId: string, data: Partial<{ title: string; description: string; category: string; tags: string[]; cover: string; status: string }>) =>
+    request<{ success: boolean; message: string; novel: Novel }>(`/novel/author/novel/${novelId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  deleteNovel: (novelId: string) =>
+    request<{ success: boolean; message: string }>(`/novel/author/novel/${novelId}`, {
+      method: 'DELETE',
+    }),
+  
+  expandNovelSlot: (personaId: string) =>
+    request<{ success: boolean; message: string; novelSlots: number; createdNovelCount: number; remainingSlots: number }>(
+      '/novel/author/expand-slot',
+      { method: 'POST', body: JSON.stringify({ personaId }) }
+    ),
+  
+  getAuthorChapters: (novelId: string) =>
+    request<{ chapters: Chapter[] }>(`/novel/author/novel/${novelId}/chapters`),
+  
+  createChapter: (novelId: string, data: { title: string; content: string; isPublished?: boolean }) =>
+    request<{ success: boolean; message: string; chapter: Chapter; chapterNumber: number }>(
+      `/novel/author/novel/${novelId}/chapter`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  
+  updateChapter: (chapterId: string, data: { title?: string; content?: string; isPublished?: boolean }) =>
+    request<{ success: boolean; message: string; chapter: Chapter }>(`/novel/author/chapter/${chapterId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  deleteChapter: (chapterId: string) =>
+    request<{ success: boolean; message: string }>(`/novel/author/chapter/${chapterId}`, {
+      method: 'DELETE',
+    }),
+  
+  getChapterForEdit: (chapterId: string) =>
+    request<{ chapter: Chapter }>(`/novel/author/chapter/${chapterId}`),
+  
+  // ========== 管理员接口 ==========
+  getPendingApplications: () =>
+    request<{ applications: AuthorApplication[] }>('/novel/admin/applications'),
+  
+  reviewApplication: (applicationId: string, status: 'approved' | 'rejected', reviewComment?: string) =>
+    request<{ success: boolean; message: string }>(`/novel/admin/applications/${applicationId}/review`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, reviewComment }),
+    }),
 };
 
 // 导出 request 函数供其他模块使用
