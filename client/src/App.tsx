@@ -30,6 +30,8 @@ import MaintenancePage from './components/common/MaintenancePage';
 import Wallet from './components/wallet/Wallet';
 import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import { EmojiManager } from './components/emoji/EmojiManager';
+import { useResponsive } from './hooks/useResponsive';
+import NovelMobileHome from './pages/novel/NovelMobileHome';
 
 // 墨香阁小说页面导入
 import NovelHome from './pages/novel/NovelHome';
@@ -182,6 +184,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 function AppContent() {
   const { isMaintenance, maintenanceMessage, maintenanceEndTime, checking } = useMaintenanceCheck();
+  const { isMobile } = useResponsive();
   const [theme, setTheme] = React.useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved;
@@ -257,7 +260,7 @@ function AppContent() {
         <Route path="/terms" element={<TermsOfService />} />
         
         {/* 墨香阁小说页面 - 公开 */}
-        <Route path="/novel" element={<NovelHome />} />
+        <Route path="/novel" element={isMobile ? <NovelMobileHome /> : <NovelHome />} />
         
         {/* 墨香阁 - 需要登录的页面 */}
         <Route path="/author/dashboard" element={
