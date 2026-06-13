@@ -16,7 +16,10 @@ import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
 import PrivateChat from '../chat/PrivateChat';
-import { Users, UserPlus, Mail, LogOut, Settings, User as UserIcon } from 'lucide-react';
+import { 
+  Users, UserPlus, Mail, LogOut, Settings, User as UserIcon, 
+  BookOpen, ChevronDown, Lock, Sparkles
+} from 'lucide-react';
 
 interface Props {
   children: React.ReactNode;
@@ -116,7 +119,9 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
     if (path === '/settings') return '账号设置';
     if (path === '/changelog') return '更新日志';
     if (path === '/wallet') return '我的钱包';
-    return 'RP Chat';
+    if (path === '/novel') return '墨香阁';
+    if (path === '/author/dashboard') return '作者控制台';
+    return '万物阁';
   };
 
   const navItems: NavItem[] = [
@@ -165,6 +170,11 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.5 6M17 13l1.5 6M9 21a1 1 0 100-2 1 1 0 000 2zm8 0a1 1 0 100-2 1 1 0 000 2z" />
         </svg>
       ),
+    },
+    {
+      name: '墨香阁',
+      path: '/novel',
+      icon: <BookOpen className="w-5 h-5" />,
     },
     {
       name: '搜索',
@@ -262,6 +272,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
       window.dispatchEvent(new CustomEvent('personaChanged', { detail: persona }));
       refreshCurrentPersona();
+      setShowPersonaMenu(false);
     } catch (error) {
       toast.error('切换失败');
     }
@@ -316,6 +327,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
 
   const isActive = (path: string) => {
     if (path === '/chat') return location.pathname === '/chat' || location.pathname.startsWith('/chat?');
+    if (path === '/novel') return location.pathname === '/novel' || location.pathname.startsWith('/novel/');
     return location.pathname === path;
   };
 
@@ -362,7 +374,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
                 exit={{ opacity: 0 }}
               >
                 <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent" style={{ fontFamily: "'MaokenZhuyuanTi', sans-serif" }}>
-                  RP Chat
+                  万物阁
                 </span>
                 <p className="text-[10px] text-gray-400 dark:text-gray-500" style={{ fontFamily: "'MaokenZhuyuanTi', sans-serif" }}>角色扮演聊天室</p>
               </motion.div>
@@ -371,7 +383,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
         </div>
 
         {/* 导航菜单 */}
-        <nav className="flex-1 py-6 px-3 space-y-1">
+        <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
           {navItems.map((item, index) => (
             <motion.button
               key={item.path}
@@ -399,7 +411,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
               
               <div className="relative z-10 flex items-center gap-3 w-full">
                 <div className="relative">
-                  {item.icon}
+                  {item.name === '墨香阁' ? <BookOpen className="w-5 h-5" /> : item.icon}
                   {item.badge !== undefined && item.badge > 0 && !isActive(item.path) && (
                     <motion.span
                       initial={{ scale: 0 }}
@@ -433,7 +445,6 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
         <div className="border-t border-gray-100 dark:border-gray-800 p-3 space-y-2">
           {/* 好友按钮组 */}
           <div className="flex items-center gap-2 px-1">
-            {/* 好友列表按钮 */}
             <motion.button
               onClick={() => setShowFriendList(true)}
               onMouseEnter={() => setHoveredItem('friends')}
@@ -456,7 +467,6 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
               )}
             </motion.button>
             
-            {/* 添加好友按钮 */}
             <motion.button
               onClick={() => setShowAddFriendModal(true)}
               onMouseEnter={() => setHoveredItem('addFriend')}
@@ -576,15 +586,17 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
             </motion.button>
 
             <AnimatePresence>
-              {showPersonaMenu && !collapsed && (
-                <PersonaSwitchPanel
-                  personas={personasList}
-                  currentPersona={currentPersona}
-                  onSelect={handleSwitchPersona}
-                  onClose={() => setShowPersonaMenu(false)}
-                  position="top"
-                  align="left"
-                />
+              {showPersonaMenu && (
+                <div className="absolute bottom-full left-0 mb-2 z-[9999]">
+                  <PersonaSwitchPanel
+                    personas={personasList}
+                    currentPersona={currentPersona}
+                    onSelect={handleSwitchPersona}
+                    onClose={() => setShowPersonaMenu(false)}
+                    position="top"
+                    align="left"
+                  />
+                </div>
               )}
             </AnimatePresence>
           </div>
@@ -703,6 +715,8 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
                 if (path === '/settings') return '⚙️';
                 if (path === '/changelog') return '📋';
                 if (path === '/wallet') return '💎';
+                if (path === '/novel') return '📚';
+                if (path === '/author/dashboard') return '✍️';
                 return '✨';
               })()}
             </motion.div>
@@ -718,6 +732,8 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
                  location.pathname === '/shop' ? '装扮你的角色' : 
                  location.pathname === '/search' ? '搜索角色、群聊或用户' : 
                  location.pathname === '/wallet' ? '充值钻石，查看记录' :
+                 location.pathname === '/novel' ? '阅读、创作、分享你的故事' :
+                 location.pathname === '/author/dashboard' ? '管理你的作品' :
                  '✨ 享受角色扮演的乐趣'}
               </p>
             </div>
@@ -725,6 +741,23 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
           
           {/* 右侧状态 */}
           <div className="flex items-center gap-2">
+            {/* 墨香阁快捷入口 */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/novel')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 ${
+                location.pathname === '/novel' || location.pathname.startsWith('/novel/')
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
+                  : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+              }`}
+              title="墨香阁"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="text-sm font-medium hidden md:inline">墨香阁</span>
+            </motion.button>
+
+            {/* 手动 AFK 按钮 */}
             <motion.button
               whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
               whileTap={{ scale: 0.9 }}
@@ -732,13 +765,36 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
               className="p-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
               title="立即进入隐私保护模式"
             >
-              <svg className="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+              <Lock className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             </motion.button>
 
+            {/* 连接状态 */}
             <ConnectionStatus showText={true} />
+            
+            {/* 钻石余额 */}
             <DiamondBalance size="sm" />
+
+            {/* 🆕 顶部栏角色切换按钮 */}
+            <div className="relative" ref={personaMenuRef}>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowPersonaMenu(!showPersonaMenu)}
+                className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              >
+                <AvatarFrame
+                  avatarUrl={currentPersona?.avatar || ''}
+                  frameName={frameName}
+                  size="sm"
+                />
+                <div className="hidden lg:block text-left">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {currentPersona?.displayName || currentPersona?.name || '选择角色'}
+                  </p>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPersonaMenu ? 'rotate-180' : ''}`} />
+              </motion.button>
+            </div>
           </div>
         </div>
         

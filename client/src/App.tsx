@@ -325,7 +325,7 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
-        {/* RP Chat 核心功能 - 需要登录 */}
+        {/* 万物阁 核心功能 - 需要登录 */}
         <Route path="/chat" element={
           <ProtectedRoute>
             <ChatHome />

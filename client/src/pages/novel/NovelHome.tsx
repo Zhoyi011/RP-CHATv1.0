@@ -8,6 +8,7 @@ import DiamondBalance from '../../components/diamond/DiamondBalance';
 import PersonaSwitchPanel from '../../components/common/PersonaSwitchPanel';
 import { auth } from '../../firebase/config';
 import toast from 'react-hot-toast';
+import { setGlobalAFKDisabled } from '../../contexts/AFKContext';
 import '../../styles/novel.css';
 
 const NovelHome: React.FC = () => {
@@ -22,6 +23,7 @@ const NovelHome: React.FC = () => {
   const [followsCount, setFollowsCount] = useState(0);
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const personaPanelRef = useRef<HTMLDivElement>(null);
   
   // ========== 小说数据 ==========
   const [novels, setNovels] = useState<Novel[]>([]);
@@ -45,6 +47,7 @@ const NovelHome: React.FC = () => {
   const [currentChapter, setCurrentChapter] = useState<{ id: string; content: string; title: string; number: number } | null>(null);
   const [fontSize, setFontSize] = useState(18);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isReaderAuthorMode, setIsReaderAuthorMode] = useState(false);
   
   // ========== 作者申请 ==========
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -57,6 +60,12 @@ const NovelHome: React.FC = () => {
   
   // ========== 导航高亮 ==========
   const [activeNav, setActiveNav] = useState('home');
+
+  // ========== 禁用 AFK ==========
+  useEffect(() => {
+    setGlobalAFKDisabled(true);
+    return () => setGlobalAFKDisabled(false);
+  }, []);
 
   // ========== 辅助函数 ==========
   const formatWordCount = (count: number) => {
@@ -193,6 +202,22 @@ const NovelHome: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [loading, hasMore]);
 
+  // 点击外部关闭菜单和角色切换面板
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      // 关闭用户菜单
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+      // 关闭角色切换面板
+      if (personaPanelRef.current && !personaPanelRef.current.contains(e.target as Node)) {
+        setShowPersonaSwitch(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // ========== 退出登录 ==========
   const handleLogout = async () => {
     try {
@@ -212,24 +237,11 @@ const NovelHome: React.FC = () => {
       localStorage.setItem('lastUsedPersonaId', persona._id);
       await refreshPersona();
       setShowPersonaSwitch(false);
-      setShowUserMenu(false);
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
     } catch (error) {
       toast.error('切换角色失败');
     }
   };
-
-  // 点击外部关闭用户菜单
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setShowUserMenu(false);
-        setShowPersonaSwitch(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // ========== 打开小说详情 ==========
   const handleOpenNovel = async (novelId: string) => {
@@ -296,6 +308,14 @@ const NovelHome: React.FC = () => {
       toast.error('暂无章节');
       return;
     }
+    
+    // 判断是否是作者
+    const isAuthor = currentPersona && 
+      (typeof selectedNovel.authorPersonaId === 'string'
+        ? selectedNovel.authorPersonaId === currentPersona._id
+        : selectedNovel.authorPersonaId?._id === currentPersona._id);
+    
+    setIsReaderAuthorMode(isAuthor);
     setShowModal(false);
     await loadChapterContent(chapters[0]._id);
     setShowReader(true);
@@ -356,7 +376,7 @@ const NovelHome: React.FC = () => {
       return;
     }
     try {
-      const res = await novelApi.donate(selectedNovel._id, donateAmount, donateMessage);
+      await novelApi.donate(selectedNovel._id, donateAmount, donateMessage);
       toast.success(`赞赏成功！送出 ${donateAmount} 钻石`);
       setShowDonateModal(false);
       setDonateAmount(10);
@@ -373,7 +393,7 @@ const NovelHome: React.FC = () => {
       return;
     }
     try {
-      const res = await novelApi.applyAuthor(currentPersona._id);
+      await novelApi.applyAuthor(currentPersona._id);
       toast.success('申请已提交，等待管理员审核');
       setShowApplyModal(false);
       setApplicationStatus('pending');
@@ -399,6 +419,12 @@ const NovelHome: React.FC = () => {
     }
   }, [currentPersona]);
 
+  // ========== 复制书名 ==========
+  const handleCopyTitle = (title: string) => {
+    navigator.clipboard.writeText(title);
+    toast.success('书名已复制', { icon: '📋' });
+  };
+
   const currentChapterIndex = currentChapter ? chapters.findIndex(c => c._id === currentChapter.id) : -1;
   const progressPercent = chapters.length > 0 && currentChapterIndex >= 0 
     ? Math.round(((currentChapterIndex + 1) / chapters.length) * 100) 
@@ -410,7 +436,7 @@ const NovelHome: React.FC = () => {
       {/* 导航栏 */}
       <nav className="navbar">
         <div className="container">
-          <div className="logo">
+          <div className="logo" onClick={() => window.location.href = '/novel'}>
             <i className="fas fa-book-open"></i>
             <h1>墨香阁</h1>
           </div>
@@ -424,6 +450,14 @@ const NovelHome: React.FC = () => {
           
           {/* 右侧用户菜单 */}
           <div className="nav-right">
+            {/* 返回聊天按钮 */}
+            <button 
+              className="btn-chat-return" 
+              onClick={() => navigate('/chat')}
+            >
+              <i className="fas fa-comment-dots"></i> 聊天
+            </button>
+
             <DiamondBalance size="sm" />
             
             {/* 用户菜单下拉 */}
@@ -432,100 +466,98 @@ const NovelHome: React.FC = () => {
                 {currentPersona ? (
                   <>
                     <img src={currentPersona.avatar || '/default-avatar.png'} alt={currentPersona.displayName || currentPersona.name} />
-                    <span>{currentPersona.displayName || currentPersona.name}</span>
+                    <span className="persona-name">{currentPersona.displayName || currentPersona.name}</span>
                     <i className={`fas fa-chevron-${showUserMenu ? 'up' : 'down'}`}></i>
                   </>
                 ) : (
-                  <span>选择角色 <i className="fas fa-chevron-down"></i></span>
+                  <span className="persona-name">选择角色 <i className="fas fa-chevron-down"></i></span>
                 )}
               </div>
               
               {/* 用户下拉菜单 */}
               {showUserMenu && (
-                <div className="user-dropdown">
-                  {/* 角色切换区域 */}
-                  <div className="dropdown-section">
-                    <div className="dropdown-header">
-                      <span>当前角色</span>
-                      <button className="switch-persona-btn" onClick={() => setShowPersonaSwitch(!showPersonaSwitch)}>
+                <div className="user-dropdown" onClick={(e) => e.stopPropagation()}>
+                  {/* 当前角色区块 */}
+                  <div className="current-persona-section">
+                    <div className="current-persona-header">
+                      <span className="section-title">当前角色</span>
+                      {/* 🔧 修复：切换按钮添加正确的 onClick 和 stopPropagation */}
+                      <button 
+                        className="switch-persona-btn" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowPersonaSwitch(true);
+                          setShowUserMenu(false);
+                        }}
+                      >
                         <i className="fas fa-exchange-alt"></i> 切换
                       </button>
                     </div>
                     <div className="current-persona-info">
-                      <img src={currentPersona?.avatar || '/default-avatar.png'} alt="" />
+                      <img 
+                        src={currentPersona?.avatar || '/default-avatar.png'} 
+                        alt=""
+                        className="persona-avatar"
+                      />
                       <div className="persona-details">
-                        <span className="persona-name">{currentPersona?.displayName || currentPersona?.name || '未选择'}</span>
-                        <span className="persona-number">#{currentPersona?.sameNameNumber}</span>
+                        <div className="persona-name">{currentPersona?.displayName || currentPersona?.name || '未选择'}</div>
+                        <div className="persona-number">#{currentPersona?.sameNameNumber || '?'}</div>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* 角色切换面板（弹出式） */}
-                  {showPersonaSwitch && (
-                    <PersonaSwitchPanel
-                      personas={myPersonas}
-                      currentPersona={currentPersona}
-                      onSelect={switchPersona}
-                      onClose={() => setShowPersonaSwitch(false)}
-                      position="bottom"
-                      align="right"
-                    />
-                  )}
-                  
-                  <div className="dropdown-divider"></div>
-                  
-                  {/* 个人菜单项 */}
-                  <div className="dropdown-section">
-                    <div className="dropdown-header">
-                      <span>个人中心</span>
+
+                  {/* 个人中心 */}
+                  <div className="menu-section">
+                    <div className="menu-section-header">
+                      <i className="fas fa-user-circle"></i> 个人中心
                     </div>
-                    <button className="dropdown-item" onClick={() => navigate('/novel/favorites')}>
+                    <button className="menu-item" onClick={() => { navigate('/novel/favorites'); setShowUserMenu(false); }}>
                       <i className="fas fa-bookmark"></i>
                       <span>我的收藏</span>
                       {favoritesCount > 0 && <span className="badge">{favoritesCount}</span>}
                     </button>
-                    <button className="dropdown-item" onClick={() => navigate('/novel/follows')}>
+                    <button className="menu-item" onClick={() => { navigate('/novel/follows'); setShowUserMenu(false); }}>
                       <i className="fas fa-users"></i>
                       <span>我的关注</span>
                       {followsCount > 0 && <span className="badge">{followsCount}</span>}
                     </button>
                     {currentPersona && (
-                      <button className="dropdown-item" onClick={() => navigate(`/persona/${currentPersona._id}`)}>
+                      <button className="menu-item" onClick={() => { navigate(`/persona/${currentPersona._id}`); setShowUserMenu(false); }}>
                         <i className="fas fa-id-card"></i>
                         <span>我的主页</span>
                       </button>
                     )}
                   </div>
-                  
-                  {/* 作者区域（仅作者可见） */}
+
+                  {/* 作者中心（仅作者可见） */}
                   {currentPersona?.isAuthor && (
                     <>
-                      <div className="dropdown-divider"></div>
-                      <div className="dropdown-section">
-                        <div className="dropdown-header">
-                          <span><i className="fas fa-feather-alt"></i> 作者中心</span>
+                      <div className="menu-divider"></div>
+                      <div className="menu-section">
+                        <div className="menu-section-header">
+                          <i className="fas fa-feather-alt"></i> 作者中心
                         </div>
-                        <button className="dropdown-item" onClick={() => navigate('/author/dashboard')}>
+                        <button className="menu-item author-item" onClick={() => { navigate('/author/dashboard'); setShowUserMenu(false); }}>
                           <i className="fas fa-tachometer-alt"></i>
                           <span>作者控制台</span>
                         </button>
-                        <button className="dropdown-item" onClick={() => navigate('/novel/create')}>
+                        <button className="menu-item author-item" onClick={() => { navigate('/novel/create'); setShowUserMenu(false); }}>
                           <i className="fas fa-plus-circle"></i>
                           <span>创建新小说</span>
                         </button>
                       </div>
                     </>
                   )}
-                  
-                  {/* 管理员区域（admin/super_admin/owner可见） */}
+
+                  {/* 管理面板（管理员可见） */}
                   {(user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'owner') && (
                     <>
-                      <div className="dropdown-divider"></div>
-                      <div className="dropdown-section">
-                        <div className="dropdown-header">
-                          <span><i className="fas fa-shield-alt"></i> 管理面板</span>
+                      <div className="menu-divider"></div>
+                      <div className="menu-section">
+                        <div className="menu-section-header">
+                          <i className="fas fa-shield-alt"></i> 管理面板
                         </div>
-                        <button className="dropdown-item" onClick={() => navigate('/admin/applications')}>
+                        <button className="menu-item" onClick={() => { navigate('/admin/applications'); setShowUserMenu(false); }}>
                           <i className="fas fa-user-check"></i>
                           <span>作者申请审核</span>
                           {pendingApplicationsCount > 0 && <span className="badge warning">{pendingApplicationsCount}</span>}
@@ -533,11 +565,9 @@ const NovelHome: React.FC = () => {
                       </div>
                     </>
                   )}
-                  
-                  <div className="dropdown-divider"></div>
-                  
-                  {/* 底部 */}
-                  <div className="dropdown-footer">
+
+                  {/* 底部退出 */}
+                  <div className="menu-footer">
                     <button className="logout-btn" onClick={handleLogout}>
                       <i className="fas fa-sign-out-alt"></i> 退出登录
                     </button>
@@ -545,6 +575,20 @@ const NovelHome: React.FC = () => {
                 </div>
               )}
             </div>
+            
+            {/* 🔧 修复：角色切换面板 - 独立放置在用户菜单外部 */}
+            {showPersonaSwitch && (
+              <div className="persona-switch-wrapper" ref={personaPanelRef}>
+                <PersonaSwitchPanel
+                  personas={myPersonas}
+                  currentPersona={currentPersona}
+                  onSelect={switchPersona}
+                  onClose={() => setShowPersonaSwitch(false)}
+                  position="bottom"
+                  align="left"
+                />
+              </div>
+            )}
             
             {/* 搜索框 */}
             <div className="search-box">
@@ -716,7 +760,16 @@ const NovelHome: React.FC = () => {
                 </div>
               </div>
               <div className="modal-novel-info">
-                <h2>{selectedNovel.title}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                  <h2 style={{ margin: 0 }}>{selectedNovel.title}</h2>
+                  <button 
+                    className="btn-icon-small" 
+                    onClick={() => handleCopyTitle(selectedNovel.title)}
+                    title="复制书名"
+                  >
+                    <i className="fas fa-copy"></i>
+                  </button>
+                </div>
                 <div className="meta-info">
                   <span><i className="fas fa-user-pen"></i> 作者: {selectedNovel.authorName}</span>
                   <span><i className="fas fa-calendar-alt"></i> 更新: {new Date(selectedNovel.updatedAt).toLocaleDateString()}</span>
@@ -780,7 +833,11 @@ const NovelHome: React.FC = () => {
 
       {/* 阅读器模态框 */}
       {showReader && selectedNovel && currentChapter && (
-        <div className="modal reader-modal" style={{ display: 'flex' }} onClick={() => setShowReader(false)}>
+        <div 
+          className={`modal reader-modal ${isReaderAuthorMode ? 'author-mode' : ''}`}
+          style={{ display: 'flex' }}
+          onClick={() => setShowReader(false)}
+        >
           <div className="reader-content" onClick={(e) => e.stopPropagation()}>
             <div className="reader-header">
               <h2>{selectedNovel.title}</h2>
@@ -814,7 +871,22 @@ const NovelHome: React.FC = () => {
                     <span className="chapter-index">第{currentChapter.number}章 / 共{chapters.length}章</span>
                   </div>
                 </div>
-                <div className="chapter-text">
+                <div 
+                  className="chapter-text"
+                  onCopy={(e) => {
+                    if (!isReaderAuthorMode) {
+                      e.preventDefault();
+                      toast.error('📚 尊重原创，请勿复制', { icon: '📖' });
+                      return false;
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (!isReaderAuthorMode) {
+                      e.preventDefault();
+                      return false;
+                    }
+                  }}
+                >
                   {currentChapter.content.split('\n').map((para, idx) => <p key={idx}>{para}</p>)}
                 </div>
               </div>

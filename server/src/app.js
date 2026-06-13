@@ -1,5 +1,5 @@
-// ==================== RP Chat 后端服务 ====================
-console.log('🚀 [app] RP Chat 后端服务启动中...');
+// ==================== 万物阁 后端服务 ====================
+console.log('🚀 [app] 万物阁 后端服务启动中...');
 console.log(`🕐 [app] 启动时间: ${new Date().toISOString()}`);
 
 const express = require('express');
@@ -170,7 +170,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // ===== 健康检查 =====
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'RP Chat API 运行正常!', timestamp: new Date().toISOString() });
+  res.json({ message: '万物阁 API 运行正常!', timestamp: new Date().toISOString() });
 });
 
 // ===== 路由加载 =====

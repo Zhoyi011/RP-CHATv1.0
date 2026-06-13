@@ -52,7 +52,7 @@ export class AntiDebug {
     // 只在控制台打印，不弹窗不锁页面
     console.log('%c⚠️ 检测到开发者工具', 'color: #f59e0b; font-size: 14px;');
     console.log('%c安全提醒：请勿进行违规操作，所有行为将被记录', 'color: #6b7280; font-size: 12px;');
-    console.log('%cRP Chat 安全系统 - 正常使用不受影响', 'color: #3b82f6; font-size: 12px;');
+    console.log('%c万物阁 安全系统 - 正常使用不受影响', 'color: #3b82f6; font-size: 12px;');
     
     // 可选：发送温和通知到后端（不封号）
     this.sendGentleAlert();

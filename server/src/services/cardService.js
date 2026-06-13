@@ -81,7 +81,7 @@ async function generateWelcomeCard(username) {
   ctx.fillStyle = '#333';
   ctx.font = 'bold 24px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`欢迎加入 RP Chat！`, width / 2, 80);
+  ctx.fillText(`欢迎加入 万物阁！`, width / 2, 80);
 
   ctx.font = '18px sans-serif';
   ctx.fillText(username, width / 2, 120);

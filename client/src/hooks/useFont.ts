@@ -28,7 +28,7 @@ export const useFont = () => {
       // 预设字体
       const presetFonts: FontInfo[] = [
         { name: 'system', displayName: '系统默认', isLoaded: true },
-        { name: 'default', displayName: 'RP Chat 圆体', isLoaded: true },
+        { name: 'default', displayName: '万物阁 圆体', isLoaded: true },
       ];
       
       // 尝试加载 custom fonts 目录的字体

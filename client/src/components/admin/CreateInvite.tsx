@@ -145,7 +145,7 @@ const InviteCode = () => {
             
             <h2 className="text-3xl font-bold text-white mb-2">输入邀请码</h2>
             <p className="text-white/80">
-              RP Chat 采用邀请制<br />
+              万物阁 采用邀请制<br />
               需要有效邀请码才能继续
             </p>
           </div>

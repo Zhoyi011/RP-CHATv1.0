@@ -24,4 +24,4 @@ jobs:
           # 发送简单消息
           curl -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d "{\"content\": \"📦 RP Chat 更新: ${SHORT_MSG}\n👤 ${COMMIT_AUTHOR}\n🔗 ${COMMIT_URL}\"}"
+            -d "{\"content\": \"📦 万物阁 更新: ${SHORT_MSG}\n👤 ${COMMIT_AUTHOR}\n🔗 ${COMMIT_URL}\"}"

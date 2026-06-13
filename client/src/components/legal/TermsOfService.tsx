@@ -115,7 +115,7 @@ const TermsOfService = () => {
               </div>
               <div className="pl-4 border-l-4 border-blue-400">
                 <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  欢迎使用 RP Chat（以下简称"本平台"）。通过访问或使用本平台，您同意受这些服务条款（"条款"）的约束。如果您不同意这些条款的任何部分，请不要使用本平台。
+                  欢迎使用 万物阁（以下简称"本平台"）。通过访问或使用本平台，您同意受这些服务条款（"条款"）的约束。如果您不同意这些条款的任何部分，请不要使用本平台。
                 </p>
               </div>
             </section>
@@ -309,7 +309,7 @@ const TermsOfService = () => {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-lg">💬</span>
-                      <span className="text-gray-700 dark:text-gray-300">Discord: RP Chat 官方服务器</span>
+                      <span className="text-gray-700 dark:text-gray-300">Discord: 万物阁 官方服务器</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-lg">🌐</span>
@@ -322,7 +322,7 @@ const TermsOfService = () => {
 
             {/* 底部 */}
             <div className="border-t border-gray-200 dark:border-gray-700 pt-6 text-center text-sm text-gray-400">
-              <p>© 2026 RP Chat. 保留所有权利。</p>
+              <p>© 2026 万物阁. 保留所有权利。</p>
               <div className="flex justify-center gap-4 mt-2">
                 <button onClick={() => navigate('/privacy')} className="text-xs hover:text-blue-500 transition">隐私政策</button>
                 <span>•</span>

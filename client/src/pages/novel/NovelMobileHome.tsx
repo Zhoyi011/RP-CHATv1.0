@@ -7,6 +7,7 @@ import { usePersona } from '../../hooks/usePersona';
 import DiamondBalance from '../../components/diamond/DiamondBalance';
 import { auth } from '../../firebase/config';
 import toast from 'react-hot-toast';
+import { setGlobalAFKDisabled } from '../../contexts/AFKContext';
 import '../../styles/novel-mobile.css';
 
 const NovelMobileHome: React.FC = () => {
@@ -45,6 +46,7 @@ const NovelMobileHome: React.FC = () => {
   const [fontSize, setFontSize] = useState(18);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+  const [isReaderAuthorMode, setIsReaderAuthorMode] = useState(false);
   
   // ========== 作者申请 ==========
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -54,6 +56,12 @@ const NovelMobileHome: React.FC = () => {
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateAmount, setDonateAmount] = useState(10);
   const [donateMessage, setDonateMessage] = useState('');
+
+  // ========== 禁用 AFK ==========
+  useEffect(() => {
+    setGlobalAFKDisabled(true);
+    return () => setGlobalAFKDisabled(false);
+  }, []);
 
   // 获取作者ID
   const getAuthorId = (novel: Novel): string => {
@@ -215,12 +223,26 @@ const NovelMobileHome: React.FC = () => {
     }
   };
 
+  // 复制书名
+  const handleCopyTitle = (title: string) => {
+    navigator.clipboard.writeText(title);
+    toast.success('书名已复制', { icon: '📋' });
+  };
+
   // 开始阅读
   const handleStartReading = async () => {
     if (!selectedNovel || chapters.length === 0) {
       toast.error('暂无章节');
       return;
     }
+    
+    // 判断是否是作者
+    const isAuthor = currentPersona && 
+      (typeof selectedNovel.authorPersonaId === 'string'
+        ? selectedNovel.authorPersonaId === currentPersona._id
+        : selectedNovel.authorPersonaId?._id === currentPersona._id);
+    
+    setIsReaderAuthorMode(isAuthor);
     setShowDetail(false);
     setCurrentChapterIndex(0);
     await loadChapterContent(chapters[0]._id);
@@ -581,7 +603,16 @@ const NovelMobileHome: React.FC = () => {
         <div className="mobile-detail-overlay" onClick={() => setShowDetail(false)}>
           <div className="mobile-detail" onClick={(e) => e.stopPropagation()}>
             <div className="detail-header">
-              <h2>{selectedNovel.title}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                <h2 style={{ margin: 0, fontSize: '1.2rem', flex: 1 }}>{selectedNovel.title}</h2>
+                <button 
+                  className="btn-icon-small" 
+                  onClick={() => handleCopyTitle(selectedNovel.title)}
+                  style={{ width: '32px', height: '32px' }}
+                >
+                  <i className="fas fa-copy"></i>
+                </button>
+              </div>
               <button className="close-btn" onClick={() => setShowDetail(false)}>
                 <i className="fas fa-times"></i>
               </button>
@@ -596,7 +627,7 @@ const NovelMobileHome: React.FC = () => {
               <p className="description">{selectedNovel.description}</p>
               
               <div className="action-buttons">
-                <button className="btn-follow" onClick={handleToggleFollow}>
+                <button className={`btn-follow ${isFollowing ? 'following' : ''}`} onClick={handleToggleFollow}>
                   <i className={`fas ${isFollowing ? 'fa-user-check' : 'fa-user-plus'}`}></i>
                   {isFollowing ? '已关注' : '关注作者'}
                 </button>
@@ -616,7 +647,10 @@ const NovelMobileHome: React.FC = () => {
       {/* 阅读器 */}
       {showReader && selectedNovel && currentChapter && (
         <div className="mobile-reader-overlay" onClick={() => setShowReader(false)}>
-          <div className="mobile-reader" onClick={(e) => e.stopPropagation()}>
+          <div 
+            className={`mobile-reader ${isReaderAuthorMode ? 'author-mode' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="reader-header">
               <div className="reader-title">{selectedNovel.title}</div>
               <div className="reader-controls">
@@ -634,7 +668,22 @@ const NovelMobileHome: React.FC = () => {
             </div>
             <div className="reader-content" style={{ fontSize: `${fontSize}px` }}>
               <h3>{currentChapter.title}</h3>
-              <div className="chapter-text">
+              <div 
+                className="chapter-text"
+                onCopy={(e) => {
+                  if (!isReaderAuthorMode) {
+                    e.preventDefault();
+                    toast.error('📚 尊重原创，请勿复制', { icon: '📖' });
+                    return false;
+                  }
+                }}
+                onContextMenu={(e) => {
+                  if (!isReaderAuthorMode) {
+                    e.preventDefault();
+                    return false;
+                  }
+                }}
+              >
                 {currentChapter.content.split('\n').map((para, idx) => <p key={idx}>{para}</p>)}
               </div>
             </div>

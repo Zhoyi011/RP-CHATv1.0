@@ -1,9 +1,18 @@
+// client/src/contexts/AFKContext.tsx
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 
 // 配置
 export const AFK_CONFIG = {
   TIMEOUT_MS: 5 * 60 * 1000, // 5 分钟无操作进入 AFK
-  ...(import.meta.env.DEV && { TIMEOUT_MS: 30 * 1000 }), // 开发环境 30 秒
+  ...(import.meta.env.DEV && { TIMEOUT_MS: 3 * 60 * 1000 }), // 开发环境 3 分钟（从 30 秒改为 3 分钟）
+};
+
+// 全局禁用标志（用于墨香阁等不需要 AFK 的页面）
+let globalAFKDisabled = false;
+
+export const setGlobalAFKDisabled = (disabled: boolean) => {
+  globalAFKDisabled = disabled;
+  console.log(`🚫 [AFK] 全局禁用状态: ${disabled ? '已禁用' : '已启用'}`);
 };
 
 interface AFKContextType {
@@ -17,7 +26,7 @@ interface AFKContextType {
   afkPasswordEnabled: boolean;
   setAFKPasswordEnabled: (enabled: boolean) => void;
   unlockAFK: (password: string) => boolean;
-  enterAFKManually: () => void;  // 手动进入 AFK
+  enterAFKManually: () => void;
 }
 
 const AFKContext = createContext<AFKContextType | undefined>(undefined);
@@ -73,6 +82,11 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
 
   // 进入 AFK 的函数
   const enterAFK = useCallback(() => {
+    // 检查全局禁用标志
+    if (globalAFKDisabled) {
+      console.log('⏸️ [AFK] 全局禁用中，跳过自动进入');
+      return;
+    }
     if (isAFKRef.current) return;
     
     console.log('🔴 [AFK] 用户长时间无操作，进入 AFK');
@@ -88,6 +102,11 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
 
   // 手动进入 AFK
   const enterAFKManually = useCallback(() => {
+    // 检查全局禁用标志
+    if (globalAFKDisabled) {
+      console.log('⏸️ [AFK] 全局禁用中，无法手动进入');
+      return;
+    }
     if (isAFKRef.current) return;
     
     console.log('🔴 [AFK] 用户手动进入 AFK');
@@ -126,8 +145,9 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
 
   // 重置计时器（用户活动时调用）
   const resetTimer = useCallback(() => {
-    // 只有在非 AFK 状态下才重置计时器
+    // 如果在 AFK 模式或全局禁用，不重置计时器
     if (isAFKRef.current) return;
+    if (globalAFKDisabled) return;
     
     // 清除旧计时器
     if (timerRef.current) {

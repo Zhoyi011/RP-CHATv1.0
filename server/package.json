@@ -1,7 +1,7 @@
 {
   "name": "rp-chat-server",
   "version": "1.0.0",
-  "description": "RP Chat Server",
+  "description": "万物阁 OmniGe 服务器",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",

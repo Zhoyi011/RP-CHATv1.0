@@ -19,7 +19,7 @@ import PrivateChat from '../chat/PrivateChat';
 import { 
   Users, UserPlus, Mail, Menu, Home, MessageCircle, Newspaper, 
   Lock, Search, LogOut, Settings, User as UserIcon, ShoppingBag, Wallet,
-  ChevronRight
+  ChevronRight, BookOpen, Sparkles
 } from 'lucide-react';
 
 interface Props {
@@ -84,11 +84,6 @@ const badgeVariants: Variants = {
   animate: { scale: 1, transition: { type: "spring", stiffness: 500, damping: 30 } }
 };
 
-const headerIconVariants: Variants = {
-  hover: { scale: 1.1, transition: { duration: 0.2 } },
-  tap: { scale: 0.9 }
-};
-
 // ========== 主组件 ==========
 const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [activeTab, setActiveTab] = useState('chat');
@@ -114,7 +109,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string; number?: number } | null>(null);
 
-  // 获取用户所有角色
+  // 获取用户所有角色（用于申请添加好友时选择自己的角色）
   useEffect(() => {
     const fetchMyPersonas = async () => {
       const token = localStorage.getItem('token');
@@ -134,6 +129,27 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     fetchMyPersonas();
   }, []);
 
+  // 获取所有已批准角色（用于角色切换面板）
+  useEffect(() => {
+    const fetchPersonas = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const response = await fetch('https://rp-chatv1-0.onrender.com/api/persona/my', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPersonasList(data.filter((p: Persona) => p.status === 'approved'));
+        }
+      } catch (error) {
+        console.error('获取角色列表失败:', error);
+      }
+    };
+    fetchPersonas();
+  }, []);
+
+  // 底部 Tab 配置（新增小说 Tab）
   const tabs: TabItem[] = [
     {
       name: '聊天',
@@ -153,8 +169,15 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       icon: <Home className="w-5 h-5" />,
       activeIcon: <Home className="w-5 h-5 fill-current" />,
     },
+    {
+      name: '小说',
+      path: '/novel',
+      icon: <BookOpen className="w-5 h-5" />,
+      activeIcon: <BookOpen className="w-5 h-5 fill-current" />,
+    },
   ];
 
+  // 加载用户数据
   useEffect(() => {
     const loadUserData = async () => {
       if (!user) return;
@@ -168,6 +191,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     loadUserData();
   }, [user]);
 
+  // 刷新当前角色
   const refreshCurrentPersona = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -200,25 +224,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     return () => window.removeEventListener('personaChanged', handlePersonaChanged);
   }, [refreshCurrentPersona]);
 
-  useEffect(() => {
-    const fetchPersonas = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const response = await fetch('https://rp-chatv1-0.onrender.com/api/persona/my', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setPersonasList(data.filter((p: Persona) => p.status === 'approved'));
-        }
-      } catch (error) {
-        console.error('获取角色列表失败:', error);
-      }
-    };
-    fetchPersonas();
-  }, []);
-
+  // 切换角色
   const handleSwitchPersona = async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
@@ -227,11 +233,13 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       toast.success(`已切换至 ${persona.displayName || persona.name}`);
       window.dispatchEvent(new CustomEvent('personaChanged', { detail: persona }));
       refreshCurrentPersona();
+      setShowSwitchPanel(false);
     } catch (error) {
       toast.error('切换失败');
     }
   };
 
+  // 点击外部关闭面板
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (switchPanelRef.current && !switchPanelRef.current.contains(e.target as Node)) {
@@ -245,6 +253,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 获取未读消息总数
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!user) return;
@@ -267,13 +276,17 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     return () => clearInterval(interval);
   }, [user]);
 
+  // 根据路径同步活跃 Tab
   useEffect(() => {
-    if (location.pathname === '/chat' || location.pathname.startsWith('/chat?')) {
+    const path = location.pathname;
+    if (path === '/chat' || path.startsWith('/chat?')) {
       setActiveTab('chat');
-    } else if (location.pathname === '/feed') {
+    } else if (path === '/feed') {
       setActiveTab('feed');
-    } else if (location.pathname === '/home') {
+    } else if (path === '/home') {
       setActiveTab('home');
+    } else if (path === '/novel' || path.startsWith('/novel/')) {
+      setActiveTab('novel');
     }
   }, [location.pathname]);
 
@@ -296,7 +309,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
   const displayName = currentPersona?.displayName || currentPersona?.name || '未选择角色';
 
-  // 菜单项列表
+  // 侧边菜单项
   const menuItems = [
     { icon: <Users className="w-4 h-4" />, label: '好友列表', action: 'friends', color: 'from-green-500 to-emerald-500' },
     { icon: <UserPlus className="w-4 h-4" />, label: '添加好友', action: 'addFriend', color: 'from-purple-500 to-pink-500' },
@@ -338,19 +351,24 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     }
   };
 
+  // iOS/Android 安全区域适配样式（已在全局 CSS 中定义 safe-top/safe-bottom，这里使用动态 padding）
+  // 兼容性：使用 CSS 变量或直接 padding
+
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
       className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* 顶部导航栏 */}
       <motion.div
         variants={headerVariants}
         initial="hidden"
         animate="visible"
-        className="fixed top-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 z-20 safe-top"
+        className="fixed top-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 z-20"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center justify-between px-3 py-2">
           {/* Logo */}
@@ -363,11 +381,9 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               src="/favicon.svg" 
               alt="Logo" 
               className="w-6 h-6"
-              variants={headerIconVariants}
-              whileHover="hover"
             />
             <h1 className="text-sm font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-              RP Chat
+              万物阁
             </h1>
           </motion.div>
 
@@ -375,9 +391,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
           <div className="flex items-center gap-1">
             {/* 隐私保护锁 */}
             <motion.button
-              variants={headerIconVariants}
-              whileHover="hover"
-              whileTap="tap"
+              whileTap={{ scale: 0.95 }}
               onClick={enterAFKManually}
               className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               title="隐私模式"
@@ -392,9 +406,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
             {/* 菜单按钮 */}
             <motion.button
-              variants={headerIconVariants}
-              whileHover="hover"
-              whileTap="tap"
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowSideMenu(true)}
               className="menu-trigger p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 relative"
               title="菜单"
@@ -413,7 +425,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
             {/* 角色切换按钮 */}
             <div className="relative ml-0.5" ref={switchPanelRef}>
               <motion.button
-                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setShowSwitchPanel(!showSwitchPanel)}
                 className="relative focus:outline-none"
@@ -433,14 +444,16 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
               <AnimatePresence>
                 {showSwitchPanel && (
-                  <PersonaSwitchPanel
-                    personas={personasList}
-                    currentPersona={currentPersona}
-                    onSelect={handleSwitchPersona}
-                    onClose={() => setShowSwitchPanel(false)}
-                    position="bottom"
-                    align="right"
-                  />
+                  <div className="absolute top-full right-0 mt-2 z-[9999]">
+                    <PersonaSwitchPanel
+                      personas={personasList}
+                      currentPersona={currentPersona}
+                      onSelect={handleSwitchPersona}
+                      onClose={() => setShowSwitchPanel(false)}
+                      position="bottom"
+                      align="right"
+                    />
+                  </div>
                 )}
               </AnimatePresence>
             </div>
@@ -464,10 +477,8 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
         variants={tabBarVariants}
         initial="hidden"
         animate="visible"
-        className={`fixed left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-20 transition-all duration-300 safe-bottom ${
-          isKeyboardOpen ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
-        }`}
-        style={{ bottom: 0, height: '56px' }}
+        className={`fixed left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-20 transition-all duration-300`}
+        style={{ bottom: 'env(safe-area-inset-bottom, 0px)', height: '56px' }}
       >
         <div className="flex justify-around items-center h-full">
           {tabs.map((tab) => {
@@ -479,7 +490,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 whileTap="tap"
                 whileHover="hover"
                 onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
-                className={`flex flex-col items-center justify-center relative py-1 px-3 rounded-full transition-all duration-200 ${
+                className={`flex flex-col items-center justify-center relative py-1 px-2 rounded-full transition-all duration-200 ${
                   isActiveTab ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
               >
@@ -529,8 +540,9 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               animate="visible"
               exit="exit"
               className="fixed left-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-900 shadow-2xl z-40 flex flex-col"
+              style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
             >
-              {/* 菜单头部 - 只显示角色信息 */}
+              {/* 菜单头部 - 角色信息 */}
               <motion.div 
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -599,9 +611,9 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
                 className="p-4 border-t border-gray-100 dark:border-gray-800"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
               >
                 <motion.button
-                  whileHover={{ scale: 1.02, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleLogout}
                   className="w-full py-2.5 flex items-center justify-center gap-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all duration-200"
@@ -610,7 +622,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                   <span>退出登录</span>
                 </motion.button>
                 <p className="text-[10px] text-gray-400 text-center mt-3">
-                  v1.0.0 | RP Chat
+                  v1.0.0 | 万物阁
                 </p>
               </motion.div>
             </motion.div>
@@ -618,7 +630,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
         )}
       </AnimatePresence>
 
-      {/* 弹窗 */}
+      {/* 弹窗组件 */}
       <AddFriendModal 
         isOpen={showAddFriendModal}
         onClose={() => setShowAddFriendModal(false)}

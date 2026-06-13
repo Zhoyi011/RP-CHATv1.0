@@ -125,7 +125,7 @@ const OnboardingProfile: React.FC<OnboardingProfileProps> = ({ onComplete }) => 
           {/* 头部 */}
           <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4">
             <h1 className="text-xl font-bold text-white text-center">
-              ✨ 欢迎来到 RP Chat ✨
+              ✨ 欢迎来到 万物阁 ✨
             </h1>
             <p className="text-white/80 text-sm text-center mt-1">
               让我们先认识一下你

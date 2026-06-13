@@ -67,7 +67,7 @@ const OnboardingPersona: React.FC<OnboardingPersonaProps> = ({ onComplete, onSki
               🎭 创建你的第一个角色
             </h1>
             <p className="text-white/80 text-sm text-center mt-1">
-              角色是你在 RP Chat 中的身份
+              角色是你在 万物阁 中的身份
             </p>
           </div>
           

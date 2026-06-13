@@ -111,7 +111,7 @@ const InviteCode = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
         <div className="text-center animate-in fade-in duration-500">
-          <img src="/favicon.svg" alt="RP Chat" className="w-20 h-20 mx-auto mb-4 animate-pulse" />
+          <img src="/favicon.svg" alt="万物阁" className="w-20 h-20 mx-auto mb-4 animate-pulse" />
           <p className="text-white/60 text-lg">检查权限中...</p>
         </div>
       </div>
@@ -170,7 +170,7 @@ const InviteCode = () => {
               输入邀请码
             </h2>
             <p className="text-white/80 animate-in slide-in-from-bottom-4 fade-in duration-500 delay-100">
-              RP Chat 采用邀请制<br />
+              万物阁 采用邀请制<br />
               需要有效邀请码才能继续
             </p>
           </div>

@@ -30,7 +30,7 @@ async function sendSecurityAlert(message, type = 'warning') {
     color: colors[type],
     timestamp: new Date().toISOString(),
     footer: {
-      text: `RP Chat 安全系统 | ${process.env.NODE_ENV || 'production'}`
+      text: `万物阁 安全系统 | ${process.env.NODE_ENV || 'production'}`
     }
   };
 
@@ -39,7 +39,7 @@ async function sendSecurityAlert(message, type = 'warning') {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: 'RP Chat 安全机器人',
+        username: '万物阁 安全机器人',
         avatar_url: 'https://rp-chat-v1-0.vercel.app/favicon.svg',
         embeds: [embed]
       })
@@ -67,7 +67,7 @@ async function sendSecurityAlert(message, level = 'warning') {
     color: color,
     timestamp: new Date().toISOString(),  // Discord 会自动显示时间
     footer: {
-      text: 'RP Chat 安全系统 | ' + process.env.NODE_ENV
+      text: '万物阁 安全系统 | ' + process.env.NODE_ENV
     }
   };
   
@@ -106,7 +106,7 @@ async function sendUpdateAnnouncement(title, description, version, commits = [])
     color: 0x5865f2,
     timestamp: new Date().toISOString(),
     footer: {
-      text: `版本 ${version} | RP Chat 更新公告`
+      text: `版本 ${version} | 万物阁 更新公告`
     }
   };
 
@@ -115,7 +115,7 @@ async function sendUpdateAnnouncement(title, description, version, commits = [])
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: 'RP Chat 更新机器人',
+        username: '万物阁 更新机器人',
         avatar_url: 'https://rp-chat-v1-0.vercel.app/favicon.svg',
         embeds: [embed]
       })
@@ -159,7 +159,7 @@ async function sendDeploymentNotification(status, details = {}) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: 'RP Chat 部署机器人',
+        username: '万物阁 部署机器人',
         avatar_url: 'https://rp-chat-v1-0.vercel.app/favicon.svg',
         embeds: [embed]
       })

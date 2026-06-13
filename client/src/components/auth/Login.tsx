@@ -167,7 +167,7 @@ const handleGoogleLogin = async () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
         <div className="text-center">
-          <img src="/favicon.svg" alt="RP Chat" className="w-20 h-20 mx-auto mb-4 animate-pulse" />
+          <img src="/favicon.svg" alt="万物阁" className="w-20 h-20 mx-auto mb-4 animate-pulse" />
           <p className="text-white/60 text-lg">加载中...</p>
         </div>
       </div>
@@ -206,9 +206,9 @@ const handleGoogleLogin = async () => {
           {/* Logo 和标题 */}
           <div className="text-center mb-8">
             <div className="inline-block p-4 bg-white/20 rounded-2xl backdrop-blur-sm mb-4 border border-white/30 hover:scale-105 transition duration-300">
-              <img src="/favicon.svg" alt="RP Chat" className="w-16 h-16 drop-shadow-lg" />
+              <img src="/favicon.svg" alt="万物阁" className="w-16 h-16 drop-shadow-lg" />
             </div>
-            <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">RP Chat</h1>
+            <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">万物阁</h1>
             <p className="text-white/80 text-sm">角色扮演聊天室 · 开启你的第二人生</p>
           </div>
 

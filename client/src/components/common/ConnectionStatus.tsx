@@ -1,3 +1,4 @@
+//client/src/components/common/ConnectionStatus.tsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAFK } from '../../contexts/AFKContext';

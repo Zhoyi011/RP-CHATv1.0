@@ -351,7 +351,7 @@ const SafetyConfirmModal: React.FC<{
 
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-6">
               <p className="text-xs text-red-600 leading-relaxed">
-                <strong>⚠️ 免责声明：</strong>如果你执意要继续访问该网页，请自行承担所有后果与责任。RP Chat 不对该网站的内容、安全性或隐私政策负责。
+                <strong>⚠️ 免责声明：</strong>如果你执意要继续访问该网页，请自行承担所有后果与责任。万物阁 不对该网站的内容、安全性或隐私政策负责。
               </p>
             </div>
 
@@ -387,7 +387,7 @@ const SafetyConfirmModal: React.FC<{
             <span className="text-5xl">🔗</span>
           </div>
           <h3 className="text-2xl font-bold text-white mb-1">即将跳转</h3>
-          <p className="text-green-100 text-sm">你即将离开 RP Chat</p>
+          <p className="text-green-100 text-sm">你即将离开 万物阁</p>
         </div>
 
         <div className="p-6">

@@ -132,7 +132,7 @@ const MobileHome: React.FC = () => {
 
       {/* 关于 */}
       <div className="text-center py-6">
-        <p className="text-xs text-gray-400">RP Chat - 角色扮演聊天室</p>
+        <p className="text-xs text-gray-400">万物阁 - 角色扮演聊天室</p>
         <p className="text-xs text-gray-400 mt-1">版本 1.0.0</p>
       </div>
     </div>

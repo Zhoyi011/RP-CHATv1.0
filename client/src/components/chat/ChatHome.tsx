@@ -32,6 +32,7 @@ import { GiftMessage } from '../gift/GiftMessage';
 import { RedPacketMessage } from '../redpacket/RedPacketMessage';
 import { RedPacketDetail } from '../redpacket/RedPacketDetail';
 import { RedPacketModal } from '../redpacket/RedPacketModal';
+import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
 
 console.log('🔧 [ChatHome] 组件模块加载');
 
@@ -1757,7 +1758,19 @@ const handleShareMusic = useCallback((music: any) => {
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md">{selectedRoom?.name?.charAt(0) || '?'}</div>
               {selectedRoom?.onlineCount ? <div className="absolute -bottom-1 -right-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full border-2 border-white">{selectedRoom.onlineCount}</div> : <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gray-400 rounded-full border-2 border-white"></div>}
             </div>
-            <div className="min-w-0 flex-1"><h2 className="font-medium text-gray-800 dark:text-gray-200 truncate">{selectedRoom?.name || '请选择聊天室'}</h2><p className="text-xs text-gray-500 dark:text-gray-400 truncate">{selectedPersona ? `发言: ${selectedPersona.displayName || selectedPersona.name}` : '请先选择角色'}</p></div>
+            <div className="min-w-0 flex-1"><h2 className="font-medium text-gray-800 dark:text-gray-200 truncate">{selectedRoom?.name || '请选择聊天室'}</h2><button 
+  onClick={() => setShowPersonaQuickSwitch(true)}
+  className="text-xs text-gray-500 dark:text-gray-400 truncate hover:text-blue-500 transition flex items-center gap-1"
+>
+  {selectedPersona ? (
+    <>
+      发言: {selectedPersona.displayName || selectedPersona.name}
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    </>
+  ) : '请先选择角色'}
+</button></div>
           </div>
           <div className="flex items-center gap-1">
             {selectedRoom && (isRoomAdmin || isRoomOwner) && (
@@ -1887,6 +1900,48 @@ const handleShareMusic = useCallback((music: any) => {
             }}
           />
         )}
+
+        {/* 角色切换面板 */}
+<AnimatePresence>
+  {showPersonaQuickSwitch && (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[10000] bg-black/50 backdrop-blur-sm"
+      onClick={() => {
+        setShowPersonaQuickSwitch(false);
+        setPersonaSearchTerm('');
+      }}
+    >
+      <div 
+        ref={personaSwitchPanelRef}
+        className="absolute"
+        style={{
+          top: isMobile ? 'auto' : 'calc(4rem + 8px)',
+          bottom: isMobile ? 'auto' : 'auto',
+          left: isMobile ? '50%' : '1rem',
+          right: isMobile ? 'auto' : 'auto',
+          transform: isMobile ? 'translateX(-50%)' : 'none',
+          marginTop: isMobile ? '4rem' : '0'
+        }}
+      >
+        <PersonaSwitchPanel
+          personas={availablePersonas}
+          currentPersona={selectedPersona}
+          onSelect={handleQuickSwitchPersona}
+          onClose={() => {
+            setShowPersonaQuickSwitch(false);
+            setPersonaSearchTerm('');
+          }}
+          position={isMobile ? 'bottom' : 'top'}
+          align="left"
+        />
+      </div>
+    </motion.div>
+  )}
+</AnimatePresence>
+
       </div>
     );
   };

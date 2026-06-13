@@ -108,10 +108,10 @@ const Register = () => {
 
           <div className="text-center mb-8">
             <div className="inline-block p-4 bg-white/20 rounded-2xl backdrop-blur-sm mb-4 border border-white/30 hover:scale-105 transition duration-300">
-              <img src="/favicon.svg" alt="RP Chat" className="w-14 h-14 drop-shadow-lg" />
+              <img src="/favicon.svg" alt="万物阁" className="w-14 h-14 drop-shadow-lg" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">创建账号</h1>
-            <p className="text-white/70 text-sm">加入 RP Chat 社区</p>
+            <p className="text-white/70 text-sm">加入 万物阁 社区</p>
           </div>
 
           {error && (

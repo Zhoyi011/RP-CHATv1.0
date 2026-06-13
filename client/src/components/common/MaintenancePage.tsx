@@ -20,7 +20,7 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({ message, endTime }) =
   
   // ========== 请勿随意修改 Discord 链接 ==========
   const DISCORD_INVITE_URL = 'https://discord.gg/zfr4hNQdtN';
-  const DISCORD_SERVER_NAME = 'RP Chat 官方社群';
+  const DISCORD_SERVER_NAME = '万物阁 官方社群';
   // =============================================
 
   // ========== 固定动画元素位置（页面加载时生成一次，不会变化）==========

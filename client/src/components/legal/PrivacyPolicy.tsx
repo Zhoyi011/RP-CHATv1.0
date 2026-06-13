@@ -117,7 +117,7 @@ const PrivacyPolicy = () => {
               </div>
               <div className="pl-4 border-l-4 border-blue-400">
                 <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  RP Chat（以下简称"我们"、"本平台"）重视您的隐私。本隐私政策解释了我们如何收集、使用、披露和保护您的个人信息。使用本平台即表示您同意本隐私政策的条款。请仔细阅读。
+                  万物阁（以下简称"我们"、"本平台"）重视您的隐私。本隐私政策解释了我们如何收集、使用、披露和保护您的个人信息。使用本平台即表示您同意本隐私政策的条款。请仔细阅读。
                 </p>
               </div>
             </section>
@@ -329,11 +329,11 @@ const PrivacyPolicy = () => {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-lg">👤</span>
-                      <span className="text-gray-700 dark:text-gray-300">RP Chat 所有者 · 俊毅</span>
+                      <span className="text-gray-700 dark:text-gray-300">万物阁 所有者 · 俊毅</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-lg">💬</span>
-                      <span className="text-gray-700 dark:text-gray-300">Discord: RP Chat 官方服务器</span>
+                      <span className="text-gray-700 dark:text-gray-300">Discord: 万物阁 官方服务器</span>
                     </div>
                   </div>
                 </div>
@@ -342,8 +342,8 @@ const PrivacyPolicy = () => {
 
             {/* 底部 */}
             <div className="border-t border-gray-200 dark:border-gray-700 pt-6 text-center text-sm text-gray-400">
-              <p>© 2026 RP Chat. 保留所有权利。</p>
-              <p className="mt-2 text-xs">本隐私政策适用于 RP Chat 所有服务</p>
+              <p>© 2026 万物阁. 保留所有权利。</p>
+              <p className="mt-2 text-xs">本隐私政策适用于 万物阁 所有服务</p>
             </div>
           </div>
         </div>
