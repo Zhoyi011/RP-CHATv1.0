@@ -9,7 +9,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| 名称 | 万物阁（RP Chat） |
+| 名称 | 万物阁（OmniGe） |
 | 类型 | 角色扮演聊天室 + 墨香阁小说平台 + AI 对戏 |
 | 前端 | React 18 + TypeScript + TailwindCSS + Vite + Framer Motion |
 | 后端 | Node.js + Express + MongoDB + Socket.IO |
