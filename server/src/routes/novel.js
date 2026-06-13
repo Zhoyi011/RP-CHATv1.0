@@ -615,15 +615,28 @@ router.delete('/author/novel/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(id);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
+    // 如果已经删除过了，直接返回成功
+    if (novel.isActive === false) {
+      return res.json({ success: true, message: '小说已删除' });
+    }
+    
     const persona = await Persona.findOne({ _id: novel.authorPersonaId, userId: req.userId });
     if (!persona) return res.status(403).json({ error: '无权限删除' });
     
     novel.isActive = false;
     await novel.save();
     
+    // ✅ 确保不会减到负数
     await Persona.findByIdAndUpdate(novel.authorPersonaId, {
       $inc: { createdNovelCount: -1 }
     });
+    
+    // ✅ 二次检查：如果还是负数，强制设为 0
+    if (persona.createdNovelCount - 1 < 0) {
+      await Persona.findByIdAndUpdate(novel.authorPersonaId, {
+        $set: { createdNovelCount: 0 }
+      });
+    }
     
     res.json({ success: true, message: '小说已删除' });
   } catch (error) {
