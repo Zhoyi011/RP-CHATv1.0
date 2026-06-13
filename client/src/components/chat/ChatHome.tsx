@@ -1119,40 +1119,42 @@ const ChatHome = () => {
   }, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   // ========== 🎵 分享音乐 ==========
-  const handleShareMusic = useCallback((music: any) => {
-    if (!selectedRoom || !user) {
-      toast.error('请先选择聊天室');
-      return;
-    }
-    if (!selectedPersona) {
-      toast.error('请选择发言角色');
-      return;
-    }
-    
-    const musicData = {
-      type: 'music',
-      title: music.title,
-      artist: music.artist,
-      channelName: music.channelName || music.artist,
-      publishDate: music.publishDate || null,
-      coverUrl: music.coverUrl,
-      videoUrl: music.videoUrl,
-      platform: music.platform || 'youtube',
-      duration: music.duration,
-    };
-    
-    socketService.emit('send-message', {
-      roomId: selectedRoom._id,
-      userId: user.uid,
-      personaId: selectedPersona._id,
-      content: JSON.stringify(musicData),
-      isAction: false,
-      replyToId: replyToMessage?._id,
-    });
-    
-    toast.success(`🎵 分享歌曲: ${music.title}`);
-    setShowMusicSearch(false);
-  }, [selectedRoom, selectedPersona, user, replyToMessage]);
+const handleShareMusic = useCallback((music: any) => {
+  if (!selectedRoom || !user) {
+    toast.error('请先选择聊天室');
+    return;
+  }
+  if (!selectedPersona) {
+    toast.error('请选择发言角色');
+    return;
+  }
+  
+  const musicData = {
+    type: 'music',
+    title: music.title,
+    artist: music.artist,
+    channelName: music.channelName || music.artist,
+    publishDate: music.publishDate || null,
+    coverUrl: music.coverUrl,
+    videoUrl: music.videoUrl,
+    platform: music.platform || 'youtube',
+    duration: music.duration,
+    durationSeconds: music.durationSeconds,
+    cleanTitle: music.cleanTitle,  // 🔥 确保传递纯净歌名
+  };
+  
+  socketService.emit('send-message', {
+    roomId: selectedRoom._id,
+    userId: user.uid,
+    personaId: selectedPersona._id,
+    content: JSON.stringify(musicData),
+    isAction: false,
+    replyToId: replyToMessage?._id,
+  });
+  
+  toast.success(`🎵 分享歌曲: ${music.title}`);
+  setShowMusicSearch(false);
+}, [selectedRoom, selectedPersona, user, replyToMessage]);
 
   // ========== 🧧 打开红包 ==========
   const handleOpenRedPacket = useCallback((redPacketId: string) => {

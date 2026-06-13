@@ -201,6 +201,7 @@ const giftRoutes = require('./routes/gift');
 const redpacketRoutes = require('./routes/redpacket');
 const guardianRoutes = require('./routes/guardian');
 const novelRoutes = require('./routes/novel');
+const lyricsRoutes = require('./routes/lyrics');
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -333,6 +334,7 @@ app.use('/api/gift', standardLimit, giftRoutes);
 app.use('/api/redpacket', standardLimit, redpacketRoutes);
 app.use('/api/guardian', standardLimit, guardianRoutes);
 app.use('/api/novel', novelRoutes);
+app.use('/api/lyrics', lyricsRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 

@@ -10,7 +10,8 @@ interface MusicResult {
   coverUrl: string;
   videoUrl: string;
   platform: 'youtube' | 'bilibili';
-  duration?: string;
+  duration?: string;          // 格式化 "4:30"
+  durationSeconds?: number;   // 原始秒数
   channelName?: string;
   publishDate?: string;
   playCount?: number;
@@ -32,7 +33,6 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activePlatform, setActivePlatform] = useState<'youtube' | 'bilibili'>('youtube');
 
-  // 搜索音乐
   const searchMusic = async () => {
     if (!searchQuery.trim()) {
       toast.error('请输入搜索内容');
@@ -43,13 +43,10 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
     try {
       const response = await fetch(`${API_BASE}/music/search?q=${encodeURIComponent(searchQuery)}&platform=${activePlatform}`);
       const data = await response.json();
-      
       if (!response.ok) throw new Error(data.error || '搜索失败');
       
-      // 过滤出当前平台的结果
       const filteredResults = (data.items || []).filter((item: MusicResult) => item.platform === activePlatform);
       setResults(filteredResults);
-      
       if (filteredResults.length === 0) {
         toast.error(`未找到相关音乐 (${activePlatform === 'youtube' ? 'YouTube' : 'Bilibili'})`);
       }
@@ -61,28 +58,34 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  // 获取视频详细信息
   const handleSelect = async (music: MusicResult) => {
     setSelectedId(music.id);
     
     try {
-      let videoInfo = null;
-      
+      // 获取详细信息（时长、频道等）
       if (music.platform === 'youtube') {
         const infoRes = await fetch(`${API_BASE}/youtube/info?videoId=${music.id}`);
         if (infoRes.ok) {
-          videoInfo = await infoRes.json();
+          const videoInfo = await infoRes.json();
           music.channelName = videoInfo.channelName;
           music.publishDate = videoInfo.publishDate;
-          music.duration = videoInfo.duration ? `${Math.floor(videoInfo.duration / 60)}:${String(videoInfo.duration % 60).padStart(2, '0')}` : music.duration;
+          const durationSec = videoInfo.duration || 0;
+          music.durationSeconds = durationSec;
+          const mins = Math.floor(durationSec / 60);
+          const secs = durationSec % 60;
+          music.duration = `${mins}:${secs.toString().padStart(2, '0')}`;
         }
       } else if (music.platform === 'bilibili') {
         const infoRes = await fetch(`${API_BASE}/music/bilibili/info?videoId=${music.id}`);
         if (infoRes.ok) {
-          videoInfo = await infoRes.json();
+          const videoInfo = await infoRes.json();
           music.channelName = videoInfo.channelName;
           music.publishDate = videoInfo.publishDate;
-          music.duration = videoInfo.duration ? `${Math.floor(videoInfo.duration / 60)}:${String(videoInfo.duration % 60).padStart(2, '0')}` : music.duration;
+          const durationSec = videoInfo.duration || 0;
+          music.durationSeconds = durationSec;
+          const mins = Math.floor(durationSec / 60);
+          const secs = durationSec % 60;
+          music.duration = `${mins}:${secs.toString().padStart(2, '0')}`;
           music.playCount = videoInfo.playCount;
           music.danmakuCount = videoInfo.danmakuCount;
         }
@@ -101,9 +104,7 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      searchMusic();
-    }
+    if (e.key === 'Enter') searchMusic();
   };
 
   return (
@@ -125,32 +126,19 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
           >
             {/* 头部 */}
             <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                🎵 分享音乐
-              </h3>
-              <button
-                onClick={onClose}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition"
-              >
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">🎵 分享音乐</h3>
+              <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* 平台切换按钮 */}
+            {/* 平台切换 */}
             <div className="flex border-b border-gray-100 dark:border-gray-700">
               <button
-                onClick={() => {
-                  setActivePlatform('youtube');
-                  setResults([]);
-                  setSearchQuery('');
-                }}
-                className={`flex-1 py-3 text-sm font-medium transition-all relative ${
-                  activePlatform === 'youtube'
-                    ? 'text-red-600'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                }`}
+                onClick={() => { setActivePlatform('youtube'); setResults([]); setSearchQuery(''); }}
+                className={`flex-1 py-3 text-sm font-medium transition-all relative ${activePlatform === 'youtube' ? 'text-red-600' : 'text-gray-500'}`}
               >
                 <span className="flex items-center justify-center gap-1">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -159,22 +147,11 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
                   </svg>
                   YouTube
                 </span>
-                {activePlatform === 'youtube' && (
-                  <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-red-500 rounded-full" />
-                )}
+                {activePlatform === 'youtube' && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-red-500 rounded-full" />}
               </button>
-              
               <button
-                onClick={() => {
-                  setActivePlatform('bilibili');
-                  setResults([]);
-                  setSearchQuery('');
-                }}
-                className={`flex-1 py-3 text-sm font-medium transition-all relative ${
-                  activePlatform === 'bilibili'
-                    ? 'text-blue-500'
-                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                }`}
+                onClick={() => { setActivePlatform('bilibili'); setResults([]); setSearchQuery(''); }}
+                className={`flex-1 py-3 text-sm font-medium transition-all relative ${activePlatform === 'bilibili' ? 'text-blue-500' : 'text-gray-500'}`}
               >
                 <span className="flex items-center justify-center gap-1">
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -182,9 +159,7 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
                   </svg>
                   Bilibili
                 </span>
-                {activePlatform === 'bilibili' && (
-                  <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-blue-500 rounded-full" />
-                )}
+                {activePlatform === 'bilibili' && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-blue-500 rounded-full" />}
               </button>
             </div>
 
@@ -203,11 +178,7 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
                 <button
                   onClick={searchMusic}
                   disabled={isLoading}
-                  className={`px-4 py-2 rounded-xl text-white font-medium hover:shadow-lg transition disabled:opacity-50 ${
-                    activePlatform === 'youtube'
-                      ? 'bg-gradient-to-r from-red-500 to-red-600'
-                      : 'bg-gradient-to-r from-blue-500 to-blue-600'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-white font-medium hover:shadow-lg transition disabled:opacity-50 ${activePlatform === 'youtube' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'}`}
                 >
                   {isLoading ? '搜索中...' : '搜索'}
                 </button>
@@ -221,55 +192,25 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
-              
               {!isLoading && results.length === 0 && searchQuery && (
-                <div className="text-center py-8 text-gray-400">
-                  没有找到相关音乐
-                </div>
+                <div className="text-center py-8 text-gray-400">没有找到相关音乐</div>
               )}
-
               {results.map((music) => (
                 <motion.div
                   key={music.id}
                   whileHover={{ scale: 1.02 }}
-                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${
-                    selectedId === music.id
-                      ? activePlatform === 'youtube'
-                        ? 'bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500'
-                        : 'bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedId === music.id ? (activePlatform === 'youtube' ? 'bg-red-50 dark:bg-red-900/30 ring-2 ring-red-500' : 'bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500') : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                   onClick={() => handleSelect(music)}
                 >
-                  <img
-                    src={music.coverUrl}
-                    alt={music.title}
-                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                  />
+                  <img src={music.coverUrl} alt={music.title} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-800 dark:text-white truncate">
-                      {music.title}
-                    </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {music.artist}
-                    </p>
-                    {music.playCount && (
-                      <p className="text-xs text-gray-400">
-                        📺 {formatNumber(music.playCount)} 播放
-                      </p>
-                    )}
+                    <h4 className="font-medium text-gray-800 dark:text-white truncate">{music.title}</h4>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{music.artist}</p>
+                    {music.playCount && <p className="text-xs text-gray-400">📺 {formatNumber(music.playCount)} 播放</p>}
                   </div>
-                  {music.duration && (
-                    <span className="text-xs text-gray-400 flex-shrink-0">{music.duration}</span>
-                  )}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    activePlatform === 'youtube'
-                      ? 'bg-red-500/10'
-                      : 'bg-blue-500/10'
-                  }`}>
-                    <svg className={`w-4 h-4 ${
-                      activePlatform === 'youtube' ? 'text-red-500' : 'text-blue-500'
-                    }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {music.duration && <span className="text-xs text-gray-400 flex-shrink-0">{music.duration}</span>}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${activePlatform === 'youtube' ? 'bg-red-500/10' : 'bg-blue-500/10'}`}>
+                    <svg className={`w-4 h-4 ${activePlatform === 'youtube' ? 'text-red-500' : 'text-blue-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
@@ -277,7 +218,6 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
               ))}
             </div>
 
-            {/* 提示 */}
             <div className="p-3 border-t border-gray-100 dark:border-gray-700 text-center text-xs text-gray-400">
               {activePlatform === 'youtube' ? '🎵 音乐来自 YouTube' : '📺 视频来自 Bilibili'}，点击即分享到聊天
             </div>
@@ -288,11 +228,8 @@ const MusicSearchModal: React.FC<MusicSearchModalProps> = ({ isOpen, onClose, on
   );
 };
 
-// 辅助函数：格式化数字
 function formatNumber(num: number): string {
-  if (num >= 10000) {
-    return (num / 10000).toFixed(1) + '万';
-  }
+  if (num >= 10000) return (num / 10000).toFixed(1) + '万';
   return num.toString();
 }
 
