@@ -588,4 +588,42 @@ router.put('/admin/users/:userId/role', authMiddleware, superAdminMiddleware, as
   }
 });
 
+// ========== Token 刷新接口 ==========
+router.post('/refresh', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(401).json({ error: '用户不存在' });
+    }
+    
+    // 检查用户是否还有访问权限
+    if (!user.hasAccess) {
+      return res.status(403).json({ error: '账号已被禁用，请联系管理员' });
+    }
+    
+    const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+    const newToken = jwt.sign(
+      { 
+        userId: user._id, 
+        email: user.email, 
+        username: user.username,
+        role: user.role,
+        hasAccess: user.hasAccess || false 
+      },
+      secret,
+      { expiresIn: '7d' }
+    );
+    
+    console.log(`✅ Token 刷新成功: ${user.username}`);
+    res.json({ 
+      success: true, 
+      token: newToken,
+      user: user.toSafeObject()
+    });
+  } catch (error) {
+    console.error('刷新 token 失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 module.exports = router;

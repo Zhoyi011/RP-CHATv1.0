@@ -8,13 +8,16 @@ const API_BASE = isDev ? 'https://rp-chatv1-0.onrender.com/api' : '/api';
 
 console.log('🔧 [API] 环境:', isDev ? '开发环境' : '生产环境', 'API_BASE:', API_BASE);
 
+// ========== 全局变量 ==========
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (value: string) => void; reject: (reason?: any) => void }> = [];
+let isRedirecting = false;
+let redirectTimer: ReturnType<typeof setTimeout> | null = null;
+
+// ========== 辅助函数 ==========
 const getToken = (): string | null => {
   return localStorage.getItem('token');
 };
-
-// 全局跳转标志，防止重复跳转
-let isRedirecting = false;
-let redirectTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 判断是否在登录页或注册页
 const isAuthPage = (): boolean => {
@@ -23,11 +26,51 @@ const isAuthPage = (): boolean => {
   return path === '/' || path === '/login' || path === '/register' || path === '/invite';
 };
 
+// 处理队列中的请求
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// 刷新 token 的函数
+const refreshToken = async (): Promise<string> => {
+  const oldToken = localStorage.getItem('token');
+  if (!oldToken) {
+    throw new Error('No token to refresh');
+  }
+  
+  const response = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${oldToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error('Token refresh failed');
+  }
+  
+  const data = await response.json();
+  const newToken = data.token;
+  localStorage.setItem('token', newToken);
+  return newToken;
+};
+
+// ========== 核心请求函数 ==========
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0
 ): Promise<T> {
   const token = getToken();
+  const maxRetries = 2;
   
   // 为 GET 请求添加时间戳参数，彻底防止缓存
   const method = options.method || 'GET';
@@ -46,8 +89,7 @@ async function request<T>(
   };
 
   const fullUrl = `${API_BASE}${finalEndpoint}`;
-  console.log('🔧 [API] 请求:', fullUrl);
-
+  
   try {
     const response = await fetch(fullUrl, {
       ...options,
@@ -57,38 +99,91 @@ async function request<T>(
 
     // 处理 401 未授权错误
     if (response.status === 401) {
-      console.warn('⚠️ token 无效或已过期');
+      console.warn('⚠️ token 无效或已过期', endpoint);
       
-      // 清除本地存储
-      localStorage.removeItem('token');
-      localStorage.removeItem('lastUsedPersonaId');
-      localStorage.removeItem('userId');
+      // 如果是刷新 token 接口本身失败，不再重试
+      const isRefreshRequest = endpoint.includes('/auth/refresh');
       
-      // 如果已经在登录页，不再跳转，避免无限循环
-      if (isAuthPage()) {
-        console.log('📍 已在登录页，不重复跳转');
+      if (!isRefreshRequest && !isRefreshing && retryCount < maxRetries) {
+        isRefreshing = true;
+        
+        try {
+          const newToken = await refreshToken();
+          processQueue(null, newToken);
+          
+          // 用新 token 重试原请求
+          const newHeaders = {
+            ...headers,
+            'Authorization': `Bearer ${newToken}`
+          };
+          
+          const retryResponse = await fetch(fullUrl, {
+            ...options,
+            headers: newHeaders,
+          });
+          
+          if (!retryResponse.ok) {
+            throw new Error(`Request failed with status ${retryResponse.status}`);
+          }
+          
+          const retryData = await retryResponse.json();
+          isRefreshing = false;
+          return retryData as T;
+        } catch (refreshError) {
+          processQueue(refreshError as Error, null);
+          isRefreshing = false;
+          
+          // 刷新失败，清除本地存储并跳转
+          localStorage.removeItem('token');
+          localStorage.removeItem('lastUsedPersonaId');
+          
+          if (!isAuthPage() && !isRedirecting) {
+            isRedirecting = true;
+            toast.error('登录已过期，请重新登录');
+            if (redirectTimer) clearTimeout(redirectTimer);
+            redirectTimer = setTimeout(() => {
+              window.location.href = '/';
+              isRedirecting = false;
+              redirectTimer = null;
+            }, 1500);
+          }
+          
+          throw new Error('登录已过期，请重新登录');
+        }
+      } else if (isRefreshing) {
+        // 正在刷新中，等待队列
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(async (newToken) => {
+          const newHeaders = {
+            ...headers,
+            'Authorization': `Bearer ${newToken}`
+          };
+          const retryResponse = await fetch(fullUrl, {
+            ...options,
+            headers: newHeaders,
+          });
+          const retryData = await retryResponse.json();
+          return retryData as T;
+        });
+      } else {
+        // 刷新失败或已达重试上限
+        localStorage.removeItem('token');
+        localStorage.removeItem('lastUsedPersonaId');
+        
+        if (!isAuthPage() && !isRedirecting) {
+          isRedirecting = true;
+          toast.error('登录已过期，请重新登录');
+          if (redirectTimer) clearTimeout(redirectTimer);
+          redirectTimer = setTimeout(() => {
+            window.location.href = '/';
+            isRedirecting = false;
+            redirectTimer = null;
+          }, 1500);
+        }
+        
         throw new Error('登录已过期，请重新登录');
       }
-      
-      // 防止重复跳转
-      if (!isRedirecting && typeof window !== 'undefined') {
-        isRedirecting = true;
-        
-        // 清除之前的定时器
-        if (redirectTimer) clearTimeout(redirectTimer);
-        
-        // 显示提示
-        toast.error('登录已过期，请重新登录');
-        
-        // 延迟跳转，避免立即循环
-        redirectTimer = setTimeout(() => {
-          window.location.href = '/';
-          isRedirecting = false;
-          redirectTimer = null;
-        }, 1500);
-      }
-      
-      throw new Error('登录已过期，请重新登录');
     }
 
     const data = await response.json();
@@ -482,6 +577,11 @@ export const authApi = {
     request<{ message: string; user: User }>('/auth/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
+    }),
+    
+  refreshToken: () =>
+    request<{ success: boolean; token: string; user: User }>('/auth/refresh', {
+      method: 'POST',
     }),
 };
 

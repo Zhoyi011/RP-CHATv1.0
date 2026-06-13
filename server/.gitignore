@@ -24,6 +24,5 @@ Thumbs.db
 dist/
 build/
 
-# 脚本
-src/scripts
+src/scripts/
 scripts/

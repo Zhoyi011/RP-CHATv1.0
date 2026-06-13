@@ -114,14 +114,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const location = useLocation();
 
   useEffect(() => {
+    let isMounted = true;
+    
     const checkAuth = async () => {
       try {
         const token = localStorage.getItem('token');
         
         if (!token) {
-          setIsAuthenticated(false);
-          setHasAccess(false);
-          setLoading(false);
+          if (isMounted) {
+            setIsAuthenticated(false);
+            setHasAccess(false);
+            setLoading(false);
+          }
           return;
         }
 
@@ -130,11 +134,46 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         });
 
         if (!response.ok) {
+          // token 无效，尝试刷新
+          console.log('🔄 Token 无效，尝试刷新...');
+          try {
+            const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              localStorage.setItem('token', refreshData.token);
+              console.log('✅ Token 刷新成功');
+              
+              // 刷新后重新验证用户
+              const retryRes = await fetch(`${API_BASE}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${refreshData.token}` }
+              });
+              
+              if (retryRes.ok) {
+                const userData = await retryRes.json();
+                if (userData.hasAccess && isMounted) {
+                  setIsAuthenticated(true);
+                  setHasAccess(true);
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+          } catch (refreshError) {
+            console.error('Token 刷新失败:', refreshError);
+          }
+          
+          // 刷新失败，清除本地存储
           localStorage.removeItem('token');
           localStorage.removeItem('lastUsedPersonaId');
-          setIsAuthenticated(false);
-          setHasAccess(false);
-          setLoading(false);
+          if (isMounted) {
+            setIsAuthenticated(false);
+            setHasAccess(false);
+            setLoading(false);
+          }
           return;
         }
 
@@ -144,26 +183,37 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           console.warn('⚠️ 用户没有访问权限（无邀请码）');
           localStorage.removeItem('token');
           localStorage.removeItem('lastUsedPersonaId');
-          setIsAuthenticated(false);
-          setHasAccess(false);
-          setLoading(false);
+          if (isMounted) {
+            setIsAuthenticated(false);
+            setHasAccess(false);
+            setLoading(false);
+          }
           return;
         }
 
-        setIsAuthenticated(true);
-        setHasAccess(true);
+        if (isMounted) {
+          setIsAuthenticated(true);
+          setHasAccess(true);
+        }
       } catch (error) {
         console.error('认证检查失败:', error);
-        localStorage.removeItem('token');
-        setIsAuthenticated(false);
-        setHasAccess(false);
+        if (isMounted) {
+          setIsAuthenticated(false);
+          setHasAccess(false);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     checkAuth();
-  }, [location.pathname]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []); // ✅ 空依赖数组，只在挂载时执行一次
 
   if (loading) {
     return (
