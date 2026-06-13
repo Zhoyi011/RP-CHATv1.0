@@ -295,18 +295,35 @@
 }
 
 /* 用户下拉菜单 */
+/* 用户下拉菜单 */
 .user-dropdown {
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
   width: 320px;
+  max-height: calc(100vh - 100px);  /* 限制最大高度 */
   background: var(--card-bg);
   border-radius: 20px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(139, 69, 19, 0.1);
   z-index: 1000;
-  overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease;
+  overflow-y: auto;                 /* 允许滚动 */
+  overflow-x: hidden;
   backdrop-filter: blur(4px);
+}
+
+/* 让菜单内容可滚动 */
+.user-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.user-dropdown::-webkit-scrollbar-track {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.user-dropdown::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
 }
 
 @keyframes dropdownFadeIn {
@@ -498,9 +515,8 @@
 /* 角色切换面板容器 */
 .persona-switch-wrapper {
   position: absolute;
-  top: 0;
-  right: 100%;
-  margin-right: 8px;
+  top: 100%;           /* 按钮下方 */
+  right: 0;            /* 右对齐 */
   z-index: 1001;
 }
 

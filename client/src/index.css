@@ -1462,3 +1462,165 @@ body {
     margin-bottom: 10px;
     color: var(--text-color);
 }
+
+/* ========== PersonaSwitchPanel 样式 ========== */
+.persona-switch-panel {
+  position: absolute;
+  background: var(--card-bg, #fff);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  min-width: 260px;
+  max-width: 320px;
+  z-index: 10000;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.persona-switch-panel.bottom {
+  top: 100%;
+  margin-top: 8px;
+}
+
+.persona-switch-panel.top {
+  bottom: 100%;
+  margin-bottom: 8px;
+}
+
+.persona-switch-panel.left-align {
+  left: 0;
+  right: auto;
+}
+
+.persona-switch-panel.right-align {
+  right: 0;
+  left: auto;
+}
+
+/* 头部 */
+.persona-switch-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: var(--bg-color, #f9fafb);
+}
+
+.persona-switch-panel .shortcut-badge {
+  font-size: 0.7rem;
+  background: rgba(139, 69, 19, 0.1);
+  padding: 2px 8px;
+  border-radius: 20px;
+  color: var(--primary-color, #8B4513);
+}
+
+/* 搜索框 */
+.persona-switch-panel .panel-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.persona-switch-panel .panel-search input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 30px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-color, #f9fafb);
+  color: var(--text-color, #333);
+  outline: none;
+  font-size: 0.85rem;
+}
+
+.persona-switch-panel .panel-search input:focus {
+  border-color: var(--primary-color, #8B4513);
+}
+
+/* 角色列表 */
+.persona-switch-panel .panel-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.persona-switch-panel .panel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-align: left;
+}
+
+.persona-switch-panel .panel-item:hover {
+  background: rgba(139, 69, 19, 0.08);
+}
+
+.persona-switch-panel .panel-item.active {
+  background: rgba(139, 69, 19, 0.12);
+}
+
+.persona-switch-panel .panel-item-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.persona-switch-panel .panel-item-info {
+  flex: 1;
+}
+
+.persona-switch-panel .panel-item-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--text-color, #333);
+}
+
+.persona-switch-panel .panel-item-number {
+  font-size: 0.7rem;
+  color: var(--light-text, #888);
+}
+
+.persona-switch-panel .panel-item-check {
+  color: var(--primary-color, #8B4513);
+}
+
+/* 底部 */
+.persona-switch-panel .panel-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  font-size: 0.7rem;
+  color: var(--light-text, #888);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 暗色模式适配 */
+html.dark .persona-switch-panel {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+html.dark .persona-switch-panel .panel-header {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+html.dark .persona-switch-panel .panel-search input {
+  background: #334155;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+html.dark .persona-switch-panel .panel-item:hover {
+  background: rgba(212, 167, 106, 0.15);
+}
+
+html.dark .persona-switch-panel .panel-item-name {
+  color: #e2e8f0;
+}

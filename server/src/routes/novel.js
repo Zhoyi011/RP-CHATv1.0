@@ -506,7 +506,11 @@ router.get('/author/my-novels', authMiddleware, async (req, res) => {
     if (!persona) return res.status(404).json({ error: '角色不存在' });
     if (!persona.isAuthor) return res.status(403).json({ error: '该角色不是作者' });
     
-    const novels = await Novel.find({ authorPersonaId: personaId })
+    // ✅ 添加 isActive: true 过滤
+    const novels = await Novel.find({ 
+      authorPersonaId: personaId,
+      isActive: true
+    })
       .sort({ createdAt: -1 })
       .select('_id title cover category status wordCount totalChapters views likes createdAt updatedAt');
     

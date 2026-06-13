@@ -57,6 +57,70 @@ const PersonaSwitchPanel: React.FC<Props> = ({
     return aIndex - bIndex;
   });
 
+  // 🔧 Tab 快捷键：按 Tab 切换到下一个角色
+  useEffect(() => {
+    if (personas.length === 0) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 只处理 Tab 键，且不与其他修饰键组合
+      if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        
+        const currentIndex = personas.findIndex(p => p._id === currentPersona?._id);
+        if (currentIndex === -1) {
+          // 如果没有当前角色，选择第一个
+          if (personas[0]) {
+            saveRecent(personas[0]._id);
+            onSelect(personas[0]);
+          }
+          return;
+        }
+        
+        const nextIndex = (currentIndex + 1) % personas.length;
+        const nextPersona = personas[nextIndex];
+        if (nextPersona) {
+          saveRecent(nextPersona._id);
+          onSelect(nextPersona);
+        }
+      }
+      
+      // Shift + Tab 切换到上一个角色
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        
+        const currentIndex = personas.findIndex(p => p._id === currentPersona?._id);
+        if (currentIndex === -1) {
+          if (personas[0]) {
+            saveRecent(personas[0]._id);
+            onSelect(personas[0]);
+          }
+          return;
+        }
+        
+        const prevIndex = (currentIndex - 1 + personas.length) % personas.length;
+        const prevPersona = personas[prevIndex];
+        if (prevPersona) {
+          saveRecent(prevPersona._id);
+          onSelect(prevPersona);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [personas, currentPersona, onSelect, saveRecent]);
+
+  // 点击 ESC 关闭面板
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
   const positionClass = `persona-switch-panel ${position} ${align === 'right' ? 'right-align' : 'left-align'}`;
 
   return (
@@ -64,12 +128,15 @@ const PersonaSwitchPanel: React.FC<Props> = ({
       initial={{ opacity: 0, y: -10, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.95 }}
+      transition={{ duration: 0.15 }}
       className={positionClass}
     >
       {/* 头部 */}
       <div className="panel-header">
         <span>切换角色 ({personas.length})</span>
-        <span className="shortcut-badge">Tab 快捷键</span>
+        <span className="shortcut-badge">
+          <i className="fas fa-keyboard"></i> Tab 切换
+        </span>
       </div>
 
       {/* 搜索框 */}
@@ -114,7 +181,7 @@ const PersonaSwitchPanel: React.FC<Props> = ({
                 </div>
                 {isCurrent && (
                   <div className="panel-item-check">
-                    <i className="fas fa-check"></i>
+                    <i className="fas fa-check-circle"></i>
                   </div>
                 )}
               </button>
@@ -125,7 +192,8 @@ const PersonaSwitchPanel: React.FC<Props> = ({
 
       {/* 底部提示 */}
       <div className="panel-footer">
-        <i className="fas fa-lightbulb"></i> 点击切换角色，按 Tab 键快速切换
+        <i className="fas fa-lightbulb"></i> 
+        按 <kbd>Tab</kbd> 切换角色，<kbd>Shift+Tab</kbd> 上一个，<kbd>ESC</kbd> 关闭
       </div>
     </motion.div>
   );

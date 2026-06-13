@@ -585,7 +585,7 @@ const NovelHome: React.FC = () => {
                   onSelect={switchPersona}
                   onClose={() => setShowPersonaSwitch(false)}
                   position="bottom"
-                  align="left"
+                  align="right"
                 />
               </div>
             )}
