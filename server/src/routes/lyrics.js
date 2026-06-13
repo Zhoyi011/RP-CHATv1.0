@@ -4,9 +4,11 @@ const router = express.Router();
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+// 初始化 Gemini（使用轻量级模型）
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';  // 🔥 使用轻量模型，15 RPM
 
-// 智能清洗歌曲信息 (使用 Gemini)
+// 智能清洗歌曲信息（使用 Gemini 3.1 Flash Lite）
 async function cleanSongInfoWithGemini(originalTitle, originalArtist) {
     if (!process.env.GEMINI_API_KEY) {
         console.warn("⚠️ GEMINI_API_KEY not set, skipping smart cleaning.");
@@ -31,7 +33,7 @@ async function cleanSongInfoWithGemini(originalTitle, originalArtist) {
 `;
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -44,9 +46,37 @@ async function cleanSongInfoWithGemini(originalTitle, originalArtist) {
         }
     } catch (error) {
         console.error("❌ Gemini 清洗失败:", error.message);
-        const fallbackTitle = originalTitle.replace(/^.*?[-–—]\s*/, '').trim();
+        // 降级：本地正则清洗
+        const fallbackTitle = originalTitle
+            .replace(/^.*?[-–—]\s*/, '')
+            .replace(/\([^)]*\)/g, '')
+            .replace(/\[[^\]]*\]/g, '')
+            .replace(/\s+(official|live|cover|remix|instrumental|HD|4K).*$/i, '')
+            .trim();
         return { title: fallbackTitle || originalTitle, artist: originalArtist };
     }
+}
+
+// 本地清洗函数（备选，不依赖 Gemini）
+function cleanSongInfoLocally(originalTitle, originalArtist) {
+    let cleaned = originalTitle;
+    
+    cleaned = cleaned.replace(/^.*?[-–—]\s*/, '');
+    cleaned = cleaned.replace(/\([^)]*\)/g, '');
+    cleaned = cleaned.replace(/\[[^\]]*\]/g, '');
+    cleaned = cleaned.replace(/【[^】]*】/g, '');
+    cleaned = cleaned.replace(/（[^）]*）/g, '');
+    cleaned = cleaned.replace(/\s+(official|live|cover|remix|instrumental|acoustic|sped\s+up|slowed\s+down|HD|4K)/i, '');
+    cleaned = cleaned.replace(/\s+(feat\.|ft\.|featuring|with)\s+\S+$/i, '');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    if (!cleaned || cleaned.length === 0) {
+        const chineseMatch = originalTitle.match(/[\u4e00-\u9fff]+/g);
+        if (chineseMatch) cleaned = chineseMatch.join('');
+    }
+    
+    console.log(`🔧 [Local] 本地清洗: "${originalTitle}" -> "${cleaned || originalTitle}"`);
+    return { title: cleaned || originalTitle, artist: originalArtist };
 }
 
 // 核心歌词查询接口
@@ -81,7 +111,7 @@ router.post('/', async (req, res) => {
         return res.json({ success: true, synced: lyricsData.syncedLyrics, plain: lyricsData.plainLyrics });
     }
 
-    // 2. 用 Gemini 清洗后再试
+    // 2. 用 Gemini 智能清洗后再试
     console.log(`🤖 [Gemini] 原始信息未找到，启动智能清洗...`);
     const cleaned = await cleanSongInfoWithGemini(title, artist);
     if (cleaned.title !== title || cleaned.artist !== artist) {
@@ -91,7 +121,16 @@ router.post('/', async (req, res) => {
         }
     }
 
-    // 3. 都找不到，返回失败
+    // 3. 再用本地激进清洗（移除非中文/英文）
+    const aggressiveTitle = title.replace(/[^\w\u4e00-\u9fff]/g, '').substring(0, 30);
+    if (aggressiveTitle && aggressiveTitle !== cleaned.title) {
+        lyricsData = await fetchFromLRCLIB(aggressiveTitle, cleaned.artist);
+        if (lyricsData) {
+            return res.json({ success: true, synced: lyricsData.syncedLyrics, plain: lyricsData.plainLyrics });
+        }
+    }
+
+    // 4. 都找不到，返回失败
     console.log(`❌ [Lyrics] 最终未找到歌词: ${title} - ${artist}`);
     res.json({ success: false, error: 'Lyrics not found' });
 });
