@@ -613,6 +613,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               ref={videoASrc}
               muted
               playsInline
+              autoPlay
               webkit-playsinline="true"
               loop={false}
               className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
@@ -623,6 +624,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               ref={videoBSrc}
               muted
               playsInline
+              autoPlay
               webkit-playsinline="true"
               loop={false}
               className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
