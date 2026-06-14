@@ -16,20 +16,27 @@ const Z_INDEX = {
   AFK_UI: 9010,
 };
 
-// 壁纸配置
-const GITHUB_BASE = 'https://github.com/Zhoyi011/RP-CHATv1.0/releases/download/v1.0.0';
+// 🆕 Cloudinary 视频配置（带优化参数）
+const CLOUDINARY_BASE = 'https://res.cloudinary.com/dz8luzlsg/video/upload';
+
+// 优化参数：自动质量、自动格式、降低分辨率节省流量
+const OPTIMIZE_PARAMS = 'q_auto,f_auto,w_auto,dpr_auto';
+
+// 桌面壁纸 URL（使用 Cloudinary）
 const DESKTOP_WALLPAPERS = [
-  `${GITHUB_BASE}/desktop_1.mp4`,
-  `${GITHUB_BASE}/desktop_2.mp4`,
-  `${GITHUB_BASE}/desktop_3.mp4`,
-  `${GITHUB_BASE}/desktop_4.mp4`,
-  `${GITHUB_BASE}/desktop_5.mp4`,
-  `${GITHUB_BASE}/desktop_6.mp4`,
-  `${GITHUB_BASE}/desktop_7.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415378/desktop_1_to41sm.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415410/desktop_2_m6o4oh.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415326/desktop_3_bxtphi.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415369/desktop_4_wd0gyq.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415375/desktop_5_mihbb6.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415336/desktop_6_fp0rrb.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415428/desktop_7_yoojnp.mp4`,
 ];
+
+// 手机壁纸 URL
 const MOBILE_WALLPAPERS = [
-  `${GITHUB_BASE}/mobile_1.mp4`,
-  `${GITHUB_BASE}/mobile_2.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415486/mobile_1_iddpmq.mp4`,
+  `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415485/mobile_2_r9blq3.mp4`,
 ];
 
 // 动画变体
@@ -192,6 +199,18 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       retryCountRef.current = 0;
       setVideoLoadError(false);
       isInitializedRef.current = false;
+      
+      // 🆕 退出 AFK 时释放视频资源
+      if (videoASrc.current) {
+        videoASrc.current.pause();
+        videoASrc.current.src = '';
+        videoASrc.current.load();
+      }
+      if (videoBSrc.current) {
+        videoBSrc.current.pause();
+        videoBSrc.current.src = '';
+        videoBSrc.current.load();
+      }
     }
   }, [isAFK]);
 
@@ -218,7 +237,8 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
             setVideoLoadError(false);
             videoStartTimeRef.current = Date.now();
           })
-          .catch(() => {
+          .catch((err) => {
+            console.log('视频播放失败:', err);
             if (retry < 3) {
               setTimeout(() => {
                 video.load();
@@ -560,10 +580,12 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
             className="fixed inset-0"
             style={{ zIndex: Z_INDEX.WALLPAPER }}
           >
+            {/* 🆕 iPhone 兼容：添加 playsInline 和 webkit-playsinline */}
             <video
               ref={videoASrc}
               muted
               playsInline
+              webkit-playsinline="true"
               loop={false}
               className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
               style={{ opacity: 0 }}
@@ -573,6 +595,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
               ref={videoBSrc}
               muted
               playsInline
+              webkit-playsinline="true"
               loop={false}
               className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
               style={{ opacity: 0 }}

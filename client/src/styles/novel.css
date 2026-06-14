@@ -321,6 +321,7 @@
   border-radius: 4px;
 }
 
+
 .user-dropdown::-webkit-scrollbar-thumb {
   background: var(--primary-color);
   border-radius: 4px;
