@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 // 配置
 export const AFK_CONFIG = {
   TIMEOUT_MS: 5 * 60 * 1000, // 5 分钟无操作进入 AFK
-  ...(import.meta.env.DEV && { TIMEOUT_MS: 3 * 60 * 1000 }), // 开发环境 3 分钟（从 30 秒改为 3 分钟）
+  ...(import.meta.env.DEV && { TIMEOUT_MS: 3 * 60 * 1000 }), // 开发环境 3 分钟
 };
 
 // 全局禁用标志（用于墨香阁等不需要 AFK 的页面）
@@ -27,6 +27,10 @@ interface AFKContextType {
   setAFKPasswordEnabled: (enabled: boolean) => void;
   unlockAFK: (password: string) => boolean;
   enterAFKManually: () => void;
+  // 🆕 iOS 播放相关
+  requestIOSPlayback: () => void;
+  showIOSPlayButton: boolean;
+  setShowIOSPlayButton: (show: boolean) => void;
 }
 
 const AFKContext = createContext<AFKContextType | undefined>(undefined);
@@ -52,6 +56,9 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
   const [customTimeout, setCustomTimeout] = useState(timeoutMs);
   const [afkPassword, setAfkPassword] = useState('1234');
   const [afkPasswordEnabled, setAfkPasswordEnabled] = useState(false);
+  
+  // 🆕 iOS 播放按钮状态
+  const [showIOSPlayButton, setShowIOSPlayButton] = useState(false);
   
   // 使用 ref 存储最新值，避免闭包问题
   const isAFKRef = useRef(isAFK);
@@ -120,6 +127,14 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
     }
   }, []);
 
+  // 🆕 请求 iOS 播放（由外部调用，如手动进入后或点击按钮）
+  const requestIOSPlayback = useCallback(() => {
+    console.log('📱 [AFK] 请求 iOS 播放视频');
+    setShowIOSPlayButton(false);
+    // 触发自定义事件，让 AFKScreen 响应
+    window.dispatchEvent(new CustomEvent('requestIOSVideoPlay'));
+  }, []);
+
   // 退出 AFK 的函数
   const exitAFK = useCallback(() => {
     if (!isAFKRef.current) return;
@@ -128,6 +143,7 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
     setIsAFK(false);
     afkStartTimeRef.current = null;
     setAfkDuration(0);
+    setShowIOSPlayButton(false); // 🆕 退出时隐藏播放按钮
   }, []);
 
   // 解锁 AFK（需要密码验证）
@@ -206,6 +222,29 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
     }
   }, [isAFK]);
 
+  // 🆕 进入 AFK 后检查是否需要显示 iOS 播放按钮
+  useEffect(() => {
+    if (isAFK) {
+      // 延迟一点检查视频是否真的在播放
+      const checkTimer = setTimeout(() => {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+          // 检查是否有视频在播放
+          const videos = document.querySelectorAll('video');
+          const anyPlaying = Array.from(videos).some(v => !v.paused && v.currentTime > 0);
+          if (!anyPlaying) {
+            console.log('📱 [AFK] iOS 视频未自动播放，显示播放按钮');
+            setShowIOSPlayButton(true);
+          }
+        }
+      }, 1500);
+      
+      return () => clearTimeout(checkTimer);
+    } else {
+      setShowIOSPlayButton(false);
+    }
+  }, [isAFK]);
+
   // 设置自定义超时时间
   const setCustomTimeoutHandler = useCallback((seconds: number) => {
     const newTimeout = seconds * 1000;
@@ -239,6 +278,10 @@ export const AFKProvider: React.FC<AFKProviderProps> = ({ children, timeoutMs = 
       setAFKPasswordEnabled: setAFKPasswordEnabledHandler,
       unlockAFK,
       enterAFKManually,
+      // 🆕 iOS 播放相关
+      requestIOSPlayback,
+      showIOSPlayButton,
+      setShowIOSPlayButton,
     }}>
       {children}
     </AFKContext.Provider>

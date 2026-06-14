@@ -16,13 +16,13 @@ const Z_INDEX = {
   AFK_UI: 9010,
 };
 
-// 🆕 Cloudinary 视频配置（带优化参数）
+// Cloudinary 视频配置（带优化参数）
 const CLOUDINARY_BASE = 'https://res.cloudinary.com/dz8luzlsg/video/upload';
 
-// 优化参数：自动质量、自动格式、降低分辨率节省流量
-const OPTIMIZE_PARAMS = 'q_auto,f_auto,w_auto,dpr_auto';
+// 优化参数：自动质量、自动格式
+const OPTIMIZE_PARAMS = 'q_auto,f_auto';
 
-// 桌面壁纸 URL（使用 Cloudinary）
+// 桌面壁纸 URL
 const DESKTOP_WALLPAPERS = [
   `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415378/desktop_1_to41sm.mp4`,
   `${CLOUDINARY_BASE}/${OPTIMIZE_PARAMS}/v1781415410/desktop_2_m6o4oh.mp4`,
@@ -93,8 +93,14 @@ const pulseRingVariants: Variants = {
   }
 };
 
+const iosPlayButtonVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { delay: 0.2, duration: 0.3 } },
+  exit: { opacity: 0, y: 20, transition: { duration: 0.2 } }
+};
+
 export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
-  const { isAFK, afkDuration, unlockAFK, afkPasswordEnabled } = useAFK();
+  const { isAFK, afkDuration, unlockAFK, afkPasswordEnabled, showIOSPlayButton, requestIOSPlayback } = useAFK();
   const { isMobile, isTablet } = useResponsive();
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
@@ -128,6 +134,8 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
   const lastCurrentTimeRef = useRef<number>(0);
   const videoStartTimeRef = useRef<number>(0);
 
+  // ========== 工具函数（必须在 useEffect 之前定义） ==========
+  
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -135,9 +143,33 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
     return `${secs} 秒`;
   };
 
+  const getVideoByLayer = useCallback((layer: 'A' | 'B') => {
+    return layer === 'A' ? videoASrc.current : videoBSrc.current;
+  }, []);
+
+  // ========== useEffect ==========
+
   useEffect(() => {
     isVideoPausedRef.current = isVideoPaused;
   }, [isVideoPaused]);
+
+  // 监听 iOS 播放请求事件
+  useEffect(() => {
+    const handleRequestPlay = () => {
+      console.log('📱 [AFK] 收到 iOS 播放请求');
+      const currentVideo = getVideoByLayer(activeLayerRef.current);
+      if (currentVideo && currentVideo.paused) {
+        currentVideo.play().catch(e => console.log('iOS 播放失败:', e));
+      }
+      const backupVideo = getVideoByLayer(activeLayerRef.current === 'A' ? 'B' : 'A');
+      if (backupVideo && backupVideo.paused && backupVideo.src) {
+        backupVideo.play().catch(e => console.log('备用层播放失败:', e));
+      }
+    };
+    
+    window.addEventListener('requestIOSVideoPlay', handleRequestPlay);
+    return () => window.removeEventListener('requestIOSVideoPlay', handleRequestPlay);
+  }, [getVideoByLayer]);
 
   useEffect(() => {
     const handleShowUI = () => {
@@ -200,7 +232,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       setVideoLoadError(false);
       isInitializedRef.current = false;
       
-      // 🆕 退出 AFK 时释放视频资源
+      // 退出 AFK 时释放视频资源
       if (videoASrc.current) {
         videoASrc.current.pause();
         videoASrc.current.src = '';
@@ -213,10 +245,6 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
       }
     }
   }, [isAFK]);
-
-  const getVideoByLayer = useCallback((layer: 'A' | 'B') => {
-    return layer === 'A' ? videoASrc.current : videoBSrc.current;
-  }, []);
 
   const forcePlayVideo = useCallback((video: HTMLVideoElement, retry = 0) => {
     if (!video) return;
@@ -580,7 +608,7 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
             className="fixed inset-0"
             style={{ zIndex: Z_INDEX.WALLPAPER }}
           >
-            {/* 🆕 iPhone 兼容：添加 playsInline 和 webkit-playsinline */}
+            {/* 视频元素 - 添加 playsInline 和 webkit-playsinline 确保 iPhone 兼容 */}
             <video
               ref={videoASrc}
               muted
@@ -640,6 +668,31 @@ export const AFKScreen: React.FC<AFKScreenProps> = ({ children }) => {
                     <motion.div variants={durationVariants} initial="hidden" animate="visible" className="bg-black/40 backdrop-blur-md rounded-2xl p-4 mb-8 inline-block mx-auto border border-white/20">
                       <p className="text-white/90 text-sm">已离开 <span className="text-orange-400 font-bold text-2xl mx-1">{formatDuration(afkDuration)}</span></p>
                     </motion.div>
+                    
+                    {/* 🆕 iOS 播放按钮 - 当视频未自动播放时显示 */}
+                    <AnimatePresence>
+                      {showIOSPlayButton && (
+                        <motion.div
+                          variants={iosPlayButtonVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          className="mb-6"
+                        >
+                          <button
+                            onClick={requestIOSPlayback}
+                            className="px-6 py-3 bg-white/20 backdrop-blur-md rounded-full text-white font-medium border border-white/30 hover:bg-white/30 transition-all duration-200 flex items-center gap-2 mx-auto"
+                          >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                            点击播放动态壁纸
+                          </button>
+                          <p className="text-white/40 text-xs mt-2">iOS 设备需要手动点击播放</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    
                     <AnimatePresence mode="wait">
                       {afkPasswordEnabled && showPasswordField && (
                         <motion.div key="password-input" variants={inputVariants} initial="hidden" animate="visible" exit="exit" className="space-y-3 mb-4">

@@ -100,7 +100,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const user = auth.currentUser;
   const { isKeyboardOpen } = useKeyboardHeight();
-  const { enterAFKManually } = useAFK();
+  const { enterAFKManually, requestIOSPlayback } = useAFK();
   const { unreadCount: friendUnreadCount } = useFriend();
 
   // 好友相关状态
@@ -108,6 +108,17 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [showFriendList, setShowFriendList] = useState(false);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string; number?: number } | null>(null);
+
+  // 🆕 手动进入 AFK 并处理 iOS 播放
+  const handleEnterAFK = useCallback(() => {
+    enterAFKManually();
+    // iOS 设备：进入后延迟请求播放
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+      setTimeout(() => {
+        requestIOSPlayback?.();
+      }, 500);
+    }
+  }, [enterAFKManually, requestIOSPlayback]);
 
   // 获取用户所有角色（用于申请添加好友时选择自己的角色）
   useEffect(() => {
@@ -351,9 +362,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     }
   };
 
-  // iOS/Android 安全区域适配样式（已在全局 CSS 中定义 safe-top/safe-bottom，这里使用动态 padding）
-  // 兼容性：使用 CSS 变量或直接 padding
-
   return (
     <motion.div
       variants={containerVariants}
@@ -389,10 +397,10 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-1">
-            {/* 隐私保护锁 */}
+            {/* 🆕 隐私保护锁 - 使用 handleEnterAFK 替代 enterAFKManually */}
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={enterAFKManually}
+              onClick={handleEnterAFK}
               className="p-1.5 text-gray-500 hover:text-blue-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               title="隐私模式"
             >
