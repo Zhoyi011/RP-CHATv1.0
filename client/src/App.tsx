@@ -32,7 +32,7 @@ import OnboardingWizard from './components/onboarding/OnboardingWizard';
 import { EmojiManager } from './components/emoji/EmojiManager';
 import { useResponsive } from './hooks/useResponsive';
 import NovelMobileHome from './pages/novel/NovelMobileHome';
-
+import TianyiGe from './pages/tianyige/TianyiGe';
 // 墨香阁小说页面导入
 import NovelHome from './pages/novel/NovelHome';
 import AuthorDashboard from './pages/novel/AuthorDashboard';
@@ -481,6 +481,12 @@ function AppContent() {
         <Route path="/room/:roomId/pending" element={
           <ProtectedRoute>
             <PendingRequests />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/tianyige" element={
+          <ProtectedRoute>
+            <TianyiGe />
           </ProtectedRoute>
         } />
 
