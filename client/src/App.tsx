@@ -1,14 +1,26 @@
 // client/src/App.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+
+import React, { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AFKProvider } from './contexts/AFKContext';
 import { FriendProvider } from './contexts/FriendContext';
 import { AFKScreen } from './components/common/AFKScreen';
 import toast, { Toaster } from 'react-hot-toast';
+
+// ============================================================
+// ✅ 公开页面（直接导入）
+// ============================================================
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import InviteCode from './components/auth/InviteCode';
+import PrivacyPolicy from './components/legal/PrivacyPolicy';
+import TermsOfService from './components/legal/TermsOfService';
+import MaintenancePage from './components/common/MaintenancePage';
+
+// ============================================================
+// ✅ 核心功能（直接导入）
+// ============================================================
 import ChatHome from './components/chat/ChatHome';
 import PersonaManager from './components/persona/PersonaManager';
 import PersonaDetail from './components/persona/PersonaDetail';
@@ -16,25 +28,24 @@ import PersonaCreate from './components/persona/PersonaCreate';
 import Settings from './components/settings/Settings';
 import SearchPage from './components/common/SearchPage';
 import Changelog from './components/common/Changelog';
-import PrivacyPolicy from './components/legal/PrivacyPolicy';
-import TermsOfService from './components/legal/TermsOfService';
 import MobileFeed from './components/feed/MobileFeed';
 import MobileHome from './components/home/MobileHome';
 import Shop from './components/shop/Shop';
 import Inventory from './components/inventory/Inventory';
+import Wallet from './components/wallet/Wallet';
+import OnboardingWizard from './components/onboarding/OnboardingWizard';
+import { EmojiManager } from './components/emoji/EmojiManager';
 import GroupDetail from './components/chat/GroupDetail';
 import GroupSettings from './components/chat/GroupSettings';
 import RoomMembers from './components/chat/RoomMembers';
 import PendingRequests from './components/chat/PendingRequests';
-import MaintenancePage from './components/common/MaintenancePage';
-import Wallet from './components/wallet/Wallet';
-import OnboardingWizard from './components/onboarding/OnboardingWizard';
-import { EmojiManager } from './components/emoji/EmojiManager';
 import { useResponsive } from './hooks/useResponsive';
-import NovelMobileHome from './pages/novel/NovelMobileHome';
-import TianyiGe from './pages/tianyige/TianyiGe';
-// 墨香阁小说页面导入
+
+// ============================================================
+// ✅ 墨香阁小说（直接导入）
+// ============================================================
 import NovelHome from './pages/novel/NovelHome';
+import NovelMobileHome from './pages/novel/NovelMobileHome';
 import AuthorDashboard from './pages/novel/AuthorDashboard';
 import NovelCreate from './pages/novel/NovelCreate';
 import NovelEdit from './pages/novel/NovelEdit';
@@ -45,10 +56,32 @@ import MyFollows from './pages/novel/MyFollows';
 import UserProfile from './pages/novel/UserProfile';
 import AdminApplications from './pages/admin/AdminApplications';
 
+// ============================================================
+// ✅ 天仪阁 - 懒加载（首屏不加载）
+// ============================================================
+const TianyiGe = lazy(() => import('./pages/tianyige/TianyiGe'));
+
+// ============================================================
+// ✅ 懒加载加载中占位组件
+// ============================================================
+const LazyLoadingFallback: React.FC = () => (
+  <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+    <div className="text-center">
+      <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+      <p className="text-white/60 text-lg animate-pulse">宇宙加载中...</p>
+    </div>
+  </div>
+);
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
 
-// 维护模式检测 Hook（带轮询）
+// ============================================================
+// ✅ 维护模式检测 Hook（天仪阁跳过）
+// ============================================================
 const useMaintenanceCheck = () => {
+  const location = useLocation();
+  const isTianyiGe = location.pathname === '/tianyige';
+  
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
   const [maintenanceEndTime, setMaintenanceEndTime] = useState<string | null>(null);
@@ -56,13 +89,19 @@ const useMaintenanceCheck = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   const checkMaintenance = useCallback(async () => {
+    // ✅ 天仪阁跳过维护检查
+    if (isTianyiGe) {
+      setChecking(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/admin/maintenance/status`);
       const data = await res.json();
       
       const token = localStorage.getItem('token');
       let role = null;
-      if (token) {
+      if (token && !isTianyiGe) {
         try {
           const userRes = await fetch(`${API_BASE}/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -90,24 +129,31 @@ const useMaintenanceCheck = () => {
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [isTianyiGe]);
 
   useEffect(() => {
     checkMaintenance();
-    const interval = setInterval(checkMaintenance, 10000);
+    if (isTianyiGe) return; // ✅ 天仪阁不轮询
+    
+    const interval = setInterval(checkMaintenance, 30000); // ✅ 从 10s 改为 30s
     const handleMaintenanceToggle = () => checkMaintenance();
     window.addEventListener('maintenanceToggled', handleMaintenanceToggle);
     return () => {
       clearInterval(interval);
       window.removeEventListener('maintenanceToggled', handleMaintenanceToggle);
     };
-  }, [checkMaintenance]);
+  }, [checkMaintenance, isTianyiGe]);
 
   return { isMaintenance, maintenanceMessage, maintenanceEndTime, checking, userRole };
 };
 
-// 受保护路由组件
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// ============================================================
+// ✅ 受保护路由组件（天仪阁跳过额外请求）
+// ============================================================
+const ProtectedRoute: React.FC<{ 
+  children: React.ReactNode;
+  skipExtra?: boolean;  // ✅ 新增：跳过额外请求
+}> = ({ children, skipExtra = false }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,12 +175,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           return;
         }
 
+        // ✅ 最少认证请求（不加载额外数据）
         const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (!response.ok) {
-          // token 无效，尝试刷新
           console.log('🔄 Token 无效，尝试刷新...');
           try {
             const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
@@ -147,7 +193,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
               localStorage.setItem('token', refreshData.token);
               console.log('✅ Token 刷新成功');
               
-              // 刷新后重新验证用户
               const retryRes = await fetch(`${API_BASE}/auth/me`, {
                 headers: { 'Authorization': `Bearer ${refreshData.token}` }
               });
@@ -166,7 +211,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
             console.error('Token 刷新失败:', refreshError);
           }
           
-          // 刷新失败，清除本地存储
           localStorage.removeItem('token');
           localStorage.removeItem('lastUsedPersonaId');
           if (isMounted) {
@@ -180,7 +224,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
         const userData = await response.json();
         
         if (!userData.hasAccess) {
-          console.warn('⚠️ 用户没有访问权限（无邀请码）');
+          console.warn('⚠️ 用户没有访问权限');
           localStorage.removeItem('token');
           localStorage.removeItem('lastUsedPersonaId');
           if (isMounted) {
@@ -213,7 +257,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return () => {
       isMounted = false;
     };
-  }, []); // ✅ 空依赖数组，只在挂载时执行一次
+  }, []);
 
   if (loading) {
     return (
@@ -232,7 +276,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// ============================================================
+// AppContent
+// ============================================================
 function AppContent() {
+  const location = useLocation();
+  const isTianyiGe = location.pathname === '/tianyige';
+  
   const { isMaintenance, maintenanceMessage, maintenanceEndTime, checking } = useMaintenanceCheck();
   const { isMobile } = useResponsive();
   const [theme, setTheme] = React.useState(() => {
@@ -258,7 +308,8 @@ function AppContent() {
     return () => window.removeEventListener('showToast', handleShowToast as EventListener);
   }, []);
 
-  if (checking) {
+  // ✅ 天仪阁跳过维护检查等待
+  if (!isTianyiGe && checking) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
         <div className="text-white/60 text-lg animate-pulse">加载中...</div>
@@ -266,7 +317,8 @@ function AppContent() {
     );
   }
 
-  if (isMaintenance) {
+  // ✅ 天仪阁跳过维护模式
+  if (!isTianyiGe && isMaintenance) {
     return <MaintenancePage message={maintenanceMessage} endTime={maintenanceEndTime} />;
   }
 
@@ -301,7 +353,9 @@ function AppContent() {
       />
       
       <Routes>
-        {/* 公开页面 */}
+        {/* ==========================================================
+        公开页面
+        ========================================================== */}
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -309,10 +363,14 @@ function AppContent() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         
-        {/* 墨香阁小说页面 - 公开 */}
+        {/* ==========================================================
+        墨香阁小说 - 公开首页
+        ========================================================== */}
         <Route path="/novel" element={isMobile ? <NovelMobileHome /> : <NovelHome />} />
         
-        {/* 墨香阁 - 需要登录的页面 */}
+        {/* ==========================================================
+        墨香阁 - 需要登录的页面
+        ========================================================== */}
         <Route path="/author/dashboard" element={
           <ProtectedRoute>
             <AuthorDashboard />
@@ -361,21 +419,21 @@ function AppContent() {
           </ProtectedRoute>
         } />
         
-        {/* 用户/作者资料页面 */}
         <Route path="/persona/:personaId" element={
           <ProtectedRoute>
             <UserProfile />
           </ProtectedRoute>
         } />
         
-        {/* 管理员页面 */}
         <Route path="/admin/applications" element={
           <ProtectedRoute>
             <AdminApplications />
           </ProtectedRoute>
         } />
 
-        {/* 万物阁 核心功能 - 需要登录 */}
+        {/* ==========================================================
+        万物阁核心功能 - 需要登录
+        ========================================================== */}
         <Route path="/chat" element={
           <ProtectedRoute>
             <ChatHome />
@@ -484,9 +542,14 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
+        {/* ==========================================================
+        ✅ 天仪阁 - 懒加载 + 跳过额外请求
+        ========================================================== */}
         <Route path="/tianyige" element={
-          <ProtectedRoute>
-            <TianyiGe />
+          <ProtectedRoute skipExtra={true}>
+            <Suspense fallback={<LazyLoadingFallback />}>
+              <TianyiGe />
+            </Suspense>
           </ProtectedRoute>
         } />
 
@@ -497,6 +560,9 @@ function AppContent() {
   );
 }
 
+// ============================================================
+// App
+// ============================================================
 function App() {
   return (
     <ThemeProvider>

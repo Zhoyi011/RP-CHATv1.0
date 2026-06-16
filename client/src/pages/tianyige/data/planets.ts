@@ -1,4 +1,5 @@
 // client/src/pages/tianyige/data/planets.ts
+
 import type { PlanetData } from "../types";
 
 export const planets: PlanetData[] = [
@@ -11,11 +12,11 @@ export const planets: PlanetData[] = [
     distance: 0,
     speed: 0,
     emissive: true,
-    description: "太阳是太阳系的中心天体，占太阳系总体质量的99.86%。它是一颗黄矮星，通过内部的热核聚变产生巨大的能量并向太空辐射，为地球等行星提供光和热，是生命繁衍的源泉。",
+    description: "太阳是太阳系的中心天体...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781527668/sun_u7fcsk.jpg",
     mass: "1.989 × 10³⁰ kg",
-    temp: "约 5500 °C (表面) / 1500万 °C (核心)",
-    orbitalPeriod: "无 (银河系公转约2.25亿年)",
+    temp: "约 5500 °C",
+    orbitalPeriod: "无",
     rotationPeriod: "约 25-35 天"
   },
   {
@@ -26,7 +27,7 @@ export const planets: PlanetData[] = [
     size: 0.6,
     distance: 7.0,
     speed: 2.2,
-    description: "水星是太阳系八大行星中最靠近太阳、体积最小的一颗。由于没有大气层保护，水星昼夜温差极大，表面布满了类似月球的陨石坑，地质活动早已停止。",
+    description: "水星是太阳系八大行星中最靠近太阳...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526970/mercury_umr2nu.jpg",
     mass: "3.301 × 10²³ kg",
     temp: "-180 °C 至 430 °C",
@@ -41,7 +42,7 @@ export const planets: PlanetData[] = [
     size: 1.1,
     distance: 10.5,
     speed: 1.6,
-    description: "金星是一颗有着极度温室效应的行星，其厚重的大气层主要由二氧化碳组成，并有硫酸云。这使得金星表面压力极大、温度极高，甚至超过了水星，是太阳系中最热的行星。",
+    description: "金星是一颗有着极度温室效应的行星...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526975/venus_wrkhj5.jpg",
     atmosphereUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526974/venus_atmo_v3wgom.jpg",
     mass: "4.867 × 10²⁴ kg",
@@ -57,13 +58,29 @@ export const planets: PlanetData[] = [
     size: 1.25,
     distance: 14.5,
     speed: 1.2,
-    description: "地球是我们的家园，是目前已知宇宙中唯一拥有生命、液态水和活跃绝佳大气的星球。它拥有完美的磁场和厚度适中的臭氧层，使得万物得以在繁茂的生态系统中繁衍息。",
+    description: "地球是我们的家园...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526969/earth_w8bjj7.jpg",
     nightTextureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526968/earth_night_nlgvrs.jpg",
     mass: "5.972 × 10²⁴ kg",
     temp: "-89 °C 至 58 °C",
     orbitalPeriod: "365.25 天",
     rotationPeriod: "23小时56分"
+  },
+  {
+    id: "moon",
+    name: "月球",
+    englishName: "Moon",
+    color: "#cccccc",
+    size: 0.3,
+    distance: 2.0,
+    speed: 2.8,
+    orbits: "earth",
+    description: "月球是地球唯一的天然卫星...",
+    textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781606797/moon_girarp.jpg",
+    mass: "7.342 × 10²² kg",
+    temp: "-233 °C 至 123 °C",
+    orbitalPeriod: "27.32 天",
+    rotationPeriod: "27.32 天"
   },
   {
     id: "mars",
@@ -73,7 +90,7 @@ export const planets: PlanetData[] = [
     size: 0.8,
     distance: 19.0,
     speed: 0.9,
-    description: "火星是一颗红色的类地行星，表面富含氧化铁，呈现橘红色荒漠景象。火星拥有太阳系最高的山脉奥林匹斯山和巨大的大峡谷，科学家在火星上发现过液态水的痕迹，是未来人类探索太空的首要目标。",
+    description: "火星是一颗红色的类地行星...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526970/mars_ckmrfr.jpg",
     mass: "6.390 × 10²³ kg",
     temp: "-143 °C 至 35 °C",
@@ -88,7 +105,7 @@ export const planets: PlanetData[] = [
     size: 2.4,
     distance: 25.5,
     speed: 0.6,
-    description: "木星是太阳系中体积和质量最大的气态巨行星。它的质量是其他所有行星总和的2.5倍。木星表面有着标志性的大红斑，这是一个已经存在了数百年的超级气旋。它拥有数十颗卫星和微弱的光环。",
+    description: "木星是太阳系中体积和质量最大的气态巨行星...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526969/jupiter_bpioqq.jpg",
     mass: "1.898 × 10²⁷ kg",
     temp: "约 -108 °C",
@@ -103,7 +120,7 @@ export const planets: PlanetData[] = [
     size: 2.0,
     distance: 33.0,
     speed: 0.4,
-    description: "土星是太阳系中第二大行星，以其极为壮观和宽阔的冰质光环系统闻名于世。土星是一个密度极低的气态巨行星，其平均密度比水还要小。它拥有壮丽的大气条纹和美丽的极光现象。",
+    description: "土星是太阳系中第二大行星...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526970/saturn_vtixf0.jpg",
     ringTextureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526970/saturn_ring_alpha_igyxhb.png",
     hasRing: true,
@@ -120,7 +137,7 @@ export const planets: PlanetData[] = [
     size: 1.5,
     distance: 40.5,
     speed: 0.25,
-    description: "天王星是一颗冰巨星，呈现淡蓝绿色，这是因为它的大气层中含有甲烷。最独特的是天王星的自转轴几乎面躺在公转轨道面上，如同一个在轨道上横滚的雪球，因此四季交替极度漫长而奇特。",
+    description: "天王星是一颗冰巨星...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526970/uranus_lwbrjq.jpg",
     mass: "8.681 × 10²⁵ kg",
     temp: "约 -197 °C",
@@ -135,11 +152,26 @@ export const planets: PlanetData[] = [
     size: 1.45,
     distance: 47.5,
     speed: 0.15,
-    description: "海王星是距离太阳最远的冰巨星，呈现深蓝色。海王星上有太阳系中最强烈的风暴，风速可达每小时2100公里，并存在“大黑斑”风暴系统。海王星外侧即为神秘的柯伊伯带。",
+    description: "海王星是距离太阳最远的冰巨星...",
     textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781526969/neptune_b0klqg.jpg",
     mass: "1.024 × 10²⁶ kg",
     temp: "约 -201 °C",
     orbitalPeriod: "164.8 年",
     rotationPeriod: "16小时6分"
+  },
+  {
+    id: "pluto",
+    name: "冥王星",
+    englishName: "Pluto",
+    color: "#b7a99a",
+    size: 0.35,
+    distance: 55.0,
+    speed: 0.08,
+    description: "冥王星是太阳系著名的矮行星...",
+    textureUrl: "https://res.cloudinary.com/dz8luzlsg/image/upload/q_auto/f_auto/v1781611061/pluto_u4vpcq.jpg",
+    mass: "1.303 × 10²² kg",
+    temp: "约 -230 °C",
+    orbitalPeriod: "248 年",
+    rotationPeriod: "6.39 天"
   }
 ];

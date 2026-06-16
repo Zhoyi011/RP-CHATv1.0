@@ -1,4 +1,5 @@
 // client/src/pages/tianyige/components/SettingsPanel.tsx
+
 import React from "react";
 import { Monitor, Eye, EyeOff, Play, Pause, RefreshCw, Layers } from "lucide-react";
 
@@ -28,7 +29,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         <span className="settings-title">控制面板</span>
       </div>
 
-      {/* 画质设置 */}
       <div className="settings-section">
         <label className="settings-label">
           <Monitor className="label-icon" />
@@ -47,7 +47,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </div>
       </div>
 
-      {/* 轨道显示 */}
       <div className="settings-row">
         <span className="settings-label">星体公转轨道</span>
         <button
@@ -68,7 +67,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </button>
       </div>
 
-      {/* 运动暂停 */}
       <div className="settings-row">
         <span className="settings-label">公转/自转</span>
         <button
@@ -89,7 +87,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </button>
       </div>
 
-      {/* 重置视角 */}
       <button onClick={onResetView} className="reset-btn">
         <RefreshCw className="btn-icon" />
         <span>还原宇宙视角</span>
