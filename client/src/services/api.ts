@@ -269,6 +269,24 @@ export const uploadApi = {
     });
   },
 
+  uploadNovelCover: (personaId: string, file: File): Promise<{ success: boolean; cover: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('cover', file);
+    const token = getToken();
+    
+    return fetch(`${API_BASE}/upload/novel-cover/${personaId}`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '上传失败');
+      return data;
+    });
+  },
+
   uploadAudio: async (audioBlob: Blob): Promise<{ success: boolean; url: string; message: string }> => {
     const formData = new FormData();
     const fileName = `voice_${Date.now()}.mp3`;

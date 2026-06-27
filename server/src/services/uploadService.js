@@ -32,13 +32,13 @@ const upload = multer({
   }
 });
 
-const uploadToCloudinary = (fileBuffer, folder, publicId) => {
+const uploadToCloudinary = (fileBuffer, folder, publicId, transformation = [{ width: 300, height: 300, crop: 'limit' }]) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: folder,
         public_id: publicId,
-        transformation: [{ width: 300, height: 300, crop: 'limit' }]
+        transformation: transformation
       },
       (error, result) => {
         if (error) reject(error);

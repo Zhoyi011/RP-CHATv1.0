@@ -316,4 +316,41 @@ router.post('/emoji', authMiddleware, upload.single('image'), async (req, res) =
   }
 });
 
+// ========== 📚 小说封面上传 ==========
+
+router.post('/novel-cover/:personaId', authMiddleware, upload.single('cover'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择封面图片' });
+    }
+    
+    const { personaId } = req.params;
+    const persona = await Persona.findOne({ _id: personaId, userId: req.userId });
+    
+    if (!persona) {
+      return res.status(404).json({ error: '角色不存在或无权限' });
+    }
+    
+    // 小说封面不需要删除旧的，因为每本小说有自己的封面
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const publicId = `novel-cover-${personaId}-${uniqueSuffix}`;
+    
+    // 小说封面建议尺寸：300x400，保持比例，质量优化
+    const novelCoverTransformation = [
+      { width: 300, height: 400, crop: 'limit' },
+      { quality: 'auto:good' }
+    ];
+    const result = await uploadToCloudinary(req.file.buffer, 'rp-chat/novel-covers', publicId, novelCoverTransformation);
+    
+    res.json({ 
+      success: true, 
+      cover: result.secure_url,
+      message: '小说封面上传成功'
+    });
+  } catch (error) {
+    console.error('上传小说封面失败:', error);
+    res.status(500).json({ error: error.message || '上传失败' });
+  }
+});
+
 module.exports = router;

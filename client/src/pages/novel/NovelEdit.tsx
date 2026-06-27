@@ -87,9 +87,10 @@ const NovelEdit: React.FC = () => {
     
     setUploading(true);
     try {
-      const res = await uploadApi.uploadPersonaAvatar(currentPersona!._id, file);
+      // 使用小说封面上传API
+      const res = await uploadApi.uploadNovelCover(currentPersona!._id, file);
       if (res.success) {
-        setCover(res.avatar);
+        setCover(res.cover);
         toast.success('封面上传成功');
       }
     } catch (error) {
