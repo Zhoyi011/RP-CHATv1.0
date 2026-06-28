@@ -148,6 +148,25 @@ router.post('/daily', authMiddleware, async (req, res) => {
       balanceAfter: user.getTotalDiamonds()
     });
     await record.save();
+
+    // 🔥 Phase 1: 每日签到获得经验
+    try {
+      const ActivePersona = require('../models/ActivePersona');
+      const experienceService = require('../services/experienceService');
+      
+      const active = await ActivePersona.findOne({ userId: req.userId });
+      if (active && active.personaId) {
+        await experienceService.addExp(
+          active.personaId,
+          req.userId,
+          'DAILY_SIGN_IN',
+          null,
+          { isPublicSquare: false }
+        );
+      }
+    } catch (expError) {
+      console.error('添加经验值失败（每日签到）:', expError);
+    }
     
     res.json({ 
       claimed: true,

@@ -1,5 +1,6 @@
 // client/src/types/novel.ts
 import type { Persona as ApiPersona } from '../services/api';
+
 // ========== 基础类型 ==========
 
 export interface NovelAuthor {
@@ -10,6 +11,9 @@ export interface NovelAuthor {
   isAuthor: boolean;
   followersCount?: number;
   totalDonationIncome?: number;
+  // 🆕 等级/头衔
+  level?: number;
+  title?: string;
 }
 
 export interface Novel {
@@ -29,6 +33,9 @@ export interface Novel {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // 🆕 作者等级/头衔（当 authorPersonaId 是 string 时使用）
+  authorLevel?: number;
+  authorTitle?: string;
 }
 
 export interface Chapter {
@@ -54,6 +61,9 @@ export interface Comment {
     name: string;
     displayName: string;
     avatar: string;
+    // 🆕 等级/头衔
+    level?: number;
+    title?: string;
   };
   personaName: string;
   content: string;
@@ -70,8 +80,6 @@ export interface Favorite {
   createdAt: string;
 }
 
-// client/src/types/novel.ts
-
 // 关注作者类型 - 扩展 authorPersonaId 包含更多字段
 export interface FollowAuthor {
   _id: string;
@@ -82,9 +90,12 @@ export interface FollowAuthor {
     avatar: string;
     isAuthor: boolean;
     followersCount: number;
-    createdNovelCount?: number;  // 添加这个字段
+    createdNovelCount?: number;
     novelSlots?: number;
     totalDonationIncome?: number;
+    // 🆕 等级/头衔
+    level?: number;
+    title?: string;
   };
   createdAt: string;
 }
@@ -96,6 +107,9 @@ export interface AuthorApplication {
     name: string;
     displayName: string;
     avatar: string;
+    // 🆕 等级/头衔
+    level?: number;
+    title?: string;
   };
   applicantUserId: {
     _id: string;
@@ -241,10 +255,6 @@ export interface DonateResponse {
   success: boolean;
   message: string;
   newBalance: number;
-}
-
-export interface PendingApplicationsResponse {
-  applications: AuthorApplication[];
 }
 
 export interface ReviewApplicationResponse {

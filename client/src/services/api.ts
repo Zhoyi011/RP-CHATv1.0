@@ -438,6 +438,9 @@ export interface Message {
     equipped?: {
       avatarFrame?: string | null;
     };
+    // 🆕 等级/头衔
+    level?: number;
+    title?: string;
   };
   userId: {
     _id: string;
@@ -496,6 +499,10 @@ export interface Persona {
     avatarFrameId?: string;
   };
   avatarFrame?: string | null;
+  // 🆕 等级/经验/头衔
+  level?: number;
+  exp?: number;
+  title?: string;
   // 🆕 作者相关字段
   isAuthor?: boolean;
   authorApprovedAt?: string;

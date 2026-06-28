@@ -66,7 +66,7 @@ router.get('/', async (req, res) => {
     }
     
     const [novels, total] = await Promise.all([
-      Novel.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount'),
+      Novel.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount level title'),
       Novel.countDocuments(query)
     ]);
     
@@ -130,7 +130,7 @@ router.get('/:novelId/comments', async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('personaId', 'name displayName avatar');
+      .populate('personaId', 'name displayName avatar level title');
     
     const total = await Comment.countDocuments({ novelId: req.params.novelId, isDeleted: false, parentCommentId: null });
     
@@ -191,7 +191,7 @@ router.get('/my/follows', authMiddleware, async (req, res) => {
     if (!personaId) return res.status(400).json({ error: '请选择角色' });
     
     const follows = await FollowAuthor.find({ userId: req.userId, personaId })
-      .populate('authorPersonaId', 'name displayName avatar isAuthor followersCount createdNovelCount');
+      .populate('authorPersonaId', 'name displayName avatar isAuthor followersCount createdNovelCount level title');
     
     res.json({ follows });
   } catch (error) {
@@ -203,7 +203,7 @@ router.get('/my/follows', authMiddleware, async (req, res) => {
 // 获取小说详情（通配符 - 必须放在所有具体路径之后）
 router.get('/:id', async (req, res) => {
   try {
-    const novel = await Novel.findById(req.params.id).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount totalDonationIncome');
+    const novel = await Novel.findById(req.params.id).populate('authorPersonaId', 'name displayName avatar isAuthor followersCount totalDonationIncome level title');
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
     await Novel.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } });
@@ -482,6 +482,20 @@ router.post('/donate/:novelId', authMiddleware, async (req, res) => {
       balanceAfter: user.diamonds,
       description: `赞赏小说《${novel.title}》`
     });
+
+    // 🔥 Phase 1: 赞赏获得经验（每1钻石 = 5经验）
+    try {
+      const experienceService = require('../services/experienceService');
+      await experienceService.addExp(
+        activePersona._id,
+        req.userId,
+        'GOT_DONATION_PER_DIAMOND',
+        diamondAmount * 5,
+        { isPublicSquare: false }
+      );
+    } catch (expError) {
+      console.error('添加经验值失败（赞赏）:', expError);
+    }
     
     res.json({ 
       success: true, 
@@ -506,7 +520,6 @@ router.get('/author/my-novels', authMiddleware, async (req, res) => {
     if (!persona) return res.status(404).json({ error: '角色不存在' });
     if (!persona.isAuthor) return res.status(403).json({ error: '该角色不是作者' });
     
-    // ✅ 添加 isActive: true 过滤
     const novels = await Novel.find({ 
       authorPersonaId: personaId,
       isActive: true
@@ -615,7 +628,6 @@ router.delete('/author/novel/:id', authMiddleware, async (req, res) => {
     const novel = await Novel.findById(id);
     if (!novel) return res.status(404).json({ error: '小说不存在' });
     
-    // 如果已经删除过了，直接返回成功
     if (novel.isActive === false) {
       return res.json({ success: true, message: '小说已删除' });
     }
@@ -626,12 +638,10 @@ router.delete('/author/novel/:id', authMiddleware, async (req, res) => {
     novel.isActive = false;
     await novel.save();
     
-    // ✅ 确保不会减到负数
     await Persona.findByIdAndUpdate(novel.authorPersonaId, {
       $inc: { createdNovelCount: -1 }
     });
     
-    // ✅ 二次检查：如果还是负数，强制设为 0
     if (persona.createdNovelCount - 1 < 0) {
       await Persona.findByIdAndUpdate(novel.authorPersonaId, {
         $set: { createdNovelCount: 0 }
@@ -780,6 +790,22 @@ router.post('/author/novel/:novelId/chapter', authMiddleware, async (req, res) =
     novel.totalChapters = totalChapters;
     novel.wordCount = totalWordCount[0]?.total || 0;
     await novel.save();
+
+    // 🔥 Phase 1: 发布章节获得经验（仅当发布时）
+    if (isPublished !== false) {
+      try {
+        const experienceService = require('../services/experienceService');
+        await experienceService.addExp(
+          persona._id,
+          req.userId,
+          'PUBLISH_CHAPTER',
+          null,
+          { isPublicSquare: false }
+        );
+      } catch (expError) {
+        console.error('添加经验值失败（发布章节）:', expError);
+      }
+    }
     
     res.json({ 
       success: true, 
@@ -826,6 +852,22 @@ router.put('/author/chapter/:id', authMiddleware, async (req, res) => {
     ]);
     novel.wordCount = totalWordCount[0]?.total || 0;
     await novel.save();
+
+    // 🔥 Phase 1: 如果章节从草稿变为发布，获得经验
+    if (isPublished === true && chapter.isPublished === true) {
+      try {
+        const experienceService = require('../services/experienceService');
+        await experienceService.addExp(
+          persona._id,
+          req.userId,
+          'PUBLISH_CHAPTER',
+          null,
+          { isPublicSquare: false }
+        );
+      } catch (expError) {
+        console.error('添加经验值失败（发布章节）:', expError);
+      }
+    }
     
     res.json({ success: true, message: '章节已更新', chapter });
   } catch (error) {
@@ -907,7 +949,7 @@ router.get('/admin/applications', authMiddleware, async (req, res) => {
     }
     
     const applications = await AuthorApplication.find({ status: 'pending' })
-      .populate('applicantPersonaId', 'name displayName avatar')
+      .populate('applicantPersonaId', 'name displayName avatar level title')
       .populate('applicantUserId', 'username email')
       .sort({ appliedAt: -1 });
     

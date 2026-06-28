@@ -320,6 +320,14 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
   const displayName = currentPersona?.displayName || currentPersona?.name || '未选择角色';
 
+  // 🆕 计算经验条百分比
+  const getExpPercentage = useCallback((): number => {
+    const exp = currentPersona?.exp || 0;
+    const level = currentPersona?.level || 1;
+    const expNeeded = 50 + (level - 1) * 25;
+    return Math.min((exp / expNeeded) * 100, 100);
+  }, [currentPersona?.exp, currentPersona?.level]);
+
   // 侧边菜单项
   const menuItems = [
     { icon: <Users className="w-4 h-4" />, label: '好友列表', action: 'friends', color: 'from-green-500 to-emerald-500' },
@@ -397,7 +405,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-1">
-            {/* 🆕 隐私保护锁 - 使用 handleEnterAFK 替代 enterAFKManually */}
+            {/* 🆕 隐私保护锁 */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleEnterAFK}
@@ -467,12 +475,49 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
             </div>
           </div>
         </div>
+
+        {/* 🆕 顶部栏角色信息（紧凑显示） - 仅在非键盘弹出时显示 */}
+        {!isKeyboardOpen && currentPersona && (
+          <div className="flex items-center justify-between px-3 pb-1.5 border-t border-gray-100/50 dark:border-gray-800/50 pt-1">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {/* 角色名称 */}
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-300 truncate max-w-[120px]">
+                {displayName}
+              </span>
+              {/* 🆕 等级徽章 */}
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
+                Lv.{currentPersona?.level || 1}
+              </span>
+              {/* 🆕 头衔（仅当有空间时显示） */}
+              <span className="text-[9px] text-gray-400 dark:text-gray-500 truncate hidden xs:inline max-w-[80px]">
+                {currentPersona?.title || '🌱 初入万物'}
+              </span>
+            </div>
+            {/* 🆕 经验条（紧凑版） */}
+            <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+              <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <motion.div 
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${getExpPercentage()}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+              <span className="text-[8px] text-gray-400 dark:text-gray-500 font-mono">
+                {currentPersona?.exp || 0}/{50 + ((currentPersona?.level || 1) - 1) * 25}
+              </span>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* 主内容区 */}
       <motion.div 
         className="absolute inset-x-0 overflow-y-auto overscroll-y-contain"
-        style={{ top: '52px', bottom: '56px' }}
+        style={{ 
+          top: currentPersona && !isKeyboardOpen ? '72px' : '52px', 
+          bottom: '56px' 
+        }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
@@ -550,7 +595,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               className="fixed left-0 top-0 bottom-0 w-72 bg-white dark:bg-gray-900 shadow-2xl z-40 flex flex-col"
               style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
             >
-              {/* 菜单头部 - 角色信息 */}
+              {/* 菜单头部 - 角色信息（完整显示） */}
               <motion.div 
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -566,12 +611,39 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                     frameName={frameName}
                     size="md"
                   />
-                  <div>
-                    <p className="font-semibold text-gray-800 dark:text-gray-200 text-lg">
-                      {displayName}
+                  <div className="flex-1 min-w-0">
+                    {/* 名称 + 等级徽章 */}
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-gray-800 dark:text-gray-200 text-lg truncate">
+                        {displayName}
+                      </p>
+                      {/* 🆕 等级徽章 */}
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
+                        Lv.{currentPersona?.level || 1}
+                      </span>
+                    </div>
+                    {/* 🆕 头衔 */}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {currentPersona?.title || '🌱 初入万物'}
                     </p>
+                    {/* 🆕 经验条 */}
+                    <div className="mt-1.5 w-full">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${getExpPercentage()}%` }}
+                            transition={{ duration: 0.5 }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono flex-shrink-0">
+                          {currentPersona?.exp || 0}/{50 + ((currentPersona?.level || 1) - 1) * 25}
+                        </span>
+                      </div>
+                    </div>
                     {currentPersona?.sameNameNumber && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-[10px] text-gray-400 mt-0.5">
                         #{currentPersona.sameNameNumber}
                       </p>
                     )}

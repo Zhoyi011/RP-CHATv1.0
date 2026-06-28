@@ -202,6 +202,7 @@ const redpacketRoutes = require('./routes/redpacket');
 const guardianRoutes = require('./routes/guardian');
 const novelRoutes = require('./routes/novel');
 const lyricsRoutes = require('./routes/lyrics');
+const statsRoutes = require('./routes/stats');
 console.log('  ✅ 主要路由加载完成');
 
 let voiceRoutes, linkPreviewRoutes;
@@ -335,6 +336,7 @@ app.use('/api/redpacket', standardLimit, redpacketRoutes);
 app.use('/api/guardian', standardLimit, guardianRoutes);
 app.use('/api/novel', novelRoutes);
 app.use('/api/lyrics', lyricsRoutes);
+app.use('/api/stats', statsRoutes);
 if (voiceRoutes) app.use('/api/voice', standardLimit, voiceRoutes);
 if (linkPreviewRoutes) app.use('/api/link-preview', standardLimit, linkPreviewRoutes);
 
@@ -574,7 +576,23 @@ io.on('connection', (socket) => {
           };
         }
       }
-      
+      // 🔥 Phase 1: 添加经验值（发送消息）
+try {
+  const experienceService = require('./services/experienceService');
+  // 检查是否为公频（如果 roomId === 'public_square'）
+  const isPublicSquare = roomId === 'public_square';
+  await experienceService.addExp(
+    personaId,
+    user._id,
+    'SEND_MESSAGE',
+    null,
+    { isPublicSquare }
+  );
+} catch (expError) {
+  console.error('添加经验值失败:', expError);
+}
+
+
       io.in(roomId).emit('new-message', {
   _id: message._id,
   content: message.content,
@@ -598,7 +616,9 @@ io.on('connection', (socket) => {
     avatar: persona.avatar,
     sameNameNumber: persona.sameNameNumber,
     avatarFrame: avatarFrameUrl,
-    equipped: { avatarFrame: avatarFrameUrl }
+    equipped: { avatarFrame: avatarFrameUrl },
+    level: persona.level || 1,
+    title: persona.title || '🌱 初入万物',
   },
   userId: { _id: user._id, username: user.username, firebaseUid: user.firebaseUid }
 });

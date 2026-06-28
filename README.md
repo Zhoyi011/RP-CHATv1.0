@@ -1,3 +1,6 @@
+好的，我来根据最新的 `tree.txt` 更新完整合并版 `PROJECT_CONTEXT.md`。
+
+```markdown
 # 万物阁 - 项目上下文文档
 
 > 🤖 **AI 维护提示**：本文档记录项目的完整架构、文件职责和当前状态。  
@@ -53,10 +56,22 @@
 | `frames/purple.png` | 紫色头像框 |
 | `frames/star.png` | 星星头像框 |
 | `frames/star1.png` | 星星头像框变体 |
-| `wallpapers/desktop/desktop_1~7.mp4` | 电脑端 AFK 壁纸（已废弃，改用 GitHub Releases） |
+| `textures/planets/` | 天仪阁行星纹理（本地备选，已迁移 Cloudinary） |
+| `textures/planets/earth.jpg` | 地球日间纹理 |
+| `textures/planets/earth_night.jpg` | 地球夜间纹理 |
+| `textures/planets/jupiter.jpg` | 木星纹理 |
+| `textures/planets/mars.jpg` | 火星纹理 |
+| `textures/planets/mercury.jpg` | 水星纹理 |
+| `textures/planets/neptune.jpg` | 海王星纹理 |
+| `textures/planets/saturn.jpg` | 土星纹理 |
+| `textures/planets/saturn_ring_alpha.png` | 土星环纹理 |
+| `textures/planets/uranus.jpg` | 天王星纹理 |
+| `textures/planets/venus.jpg` | 金星表面纹理 |
+| `textures/planets/venus_atmo.jpg` | 金星大气纹理 |
+| `wallpapers/desktop/desktop_1~7.mp4` | 电脑端 AFK 壁纸（已废弃） |
 | `wallpapers/mobile/mobile_1~2.mp4` | 手机端 AFK 壁纸（已废弃） |
 
-> **注意**：由于 Vercel 部署限制，视频壁纸现已通过 GitHub Releases + jsDelivr CDN 托管。天仪阁纹理已迁移至 Cloudinary CDN。
+> **注意**：天仪阁纹理已迁移至 Cloudinary CDN，本地 `textures/planets/` 仅作备选。
 
 #### `src/` - 源代码
 
@@ -310,6 +325,14 @@
 |------|------|
 | `Shop.tsx` | 商城页面（含赠送按钮） |
 
+**`components/tianyige/` - 天仪阁组件 🆕**
+
+| 文件 | 职责 |
+|------|------|
+| `PlanetLOD.tsx` | 行星 LOD（Level of Detail）组件 |
+| `PlanetLODWithTime.tsx` | 带时间控制的 LOD 行星组件 |
+| `TimeControls.tsx` | 时间控制组件（加速/暂停/重置） |
+
 **`components/user/` - 用户相关**
 
 | 文件 | 职责 |
@@ -329,6 +352,12 @@
 
 ##### `src/pages/` - 页面组件
 
+**`pages/admin/` - 管理员页面**
+
+| 文件 | 职责 |
+|------|------|
+| **`AdminApplications.tsx`** | **管理员审核作者申请** |
+
 **`pages/novel/` - 墨香阁小说模块 🆕**
 
 | 文件 | 职责 |
@@ -344,24 +373,21 @@
 | **`MyFollows.tsx`** | **我的关注** |
 | **`UserProfile.tsx`** | **用户/作者资料页** |
 
-**`pages/admin/` - 管理员页面 🆕**
-
-| 文件 | 职责 |
-|------|------|
-| **`AdminApplications.tsx`** | **管理员审核作者申请** |
-
 **`pages/tianyige/` - 天仪阁 3D 宇宙 🆕**
 
 | 文件 | 职责 |
 |------|------|
 | **`TianyiGe.tsx`** | **主场景组件（入口）** |
 | **`TianyiGe.css`** | **天仪阁全局样式** |
-| **`components/Planet.tsx`** | **行星组件（含地球日夜 Shader）** |
 | **`components/CameraController.tsx`** | **相机控制器（跟踪/重置）** |
+| **`components/Planet.tsx`** | **行星组件（含地球日夜 Shader）** |
 | **`components/SearchBar.tsx`** | **搜索栏组件** |
 | **`components/SettingsPanel.tsx`** | **画质/设置面板** |
+| **`data/galaxies.ts`** | **银河系/星系数据** |
 | **`data/planets.ts`** | **行星数据（含纹理 URL）** |
+| **`hooks/`** | **天仪阁自定义 Hooks** |
 | **`types/index.ts`** | **TypeScript 类型定义** |
+| **`utils/`** | **天仪阁工具函数** |
 
 ---
 
@@ -388,7 +414,9 @@
 | **`usePersona.ts`** | **获取当前角色、角色列表、刷新角色状态** |
 | `useQuickSwitchPersona.ts` | Tab 键切换角色 |
 | `useResponsive.ts` | 响应式断点 |
+| **`useTimeEngine.ts`** | **时间引擎 Hook（天仪阁）** |
 | `useUnreadCount.ts` | 未读消息计数 |
+| **`useWebGLContext.ts`** | **WebGL 上下文检测（天仪阁）** |
 
 ##### `src/services/`
 
@@ -404,6 +432,7 @@
 | `guardianApi.ts` | 守护榜 API |
 | `linkPreviewApi.ts` | 链接预览 API |
 | `Notification.ts` | 浏览器通知 |
+| **`performanceMonitor.ts`** | **性能监控（天仪阁）** |
 | `redpacketApi.ts` | 红包 API |
 | `socket.ts` | Socket.IO 连接管理 |
 | `transactionApi.ts` | 交易 API |
@@ -438,12 +467,6 @@
 | 文件 | 职责 |
 |------|------|
 | `config.ts` | Firebase 配置 |
-
-##### `src/animations/`
-
-| 文件 | 职责 |
-|------|------|
-| `variants.ts` | Framer Motion 动画变体 |
 
 ---
 
@@ -586,12 +609,15 @@
 |------|------|
 | `backup.js` | 数据库备份 |
 | `clean-db.js` | 清理数据库 |
+| `clean-soft-deleted-novels.js` | 清理软删除的小说 |
 | `clear-diamonds.js` | 清空钻石 |
 | `createAdmin.js` | 创建管理员 |
+| `fix-all.js` | 综合修复脚本 |
 | `fix-global-numbers.js` | 修复全局编号 |
 | `fix-issues.js` | 修复问题 |
+| `fix-novel-counts.js` | 修复小说计数 |
 | `fix-paid-diamonds.js` | 修复付费钻石 |
-| `fix-persona-data-raw.js` | 修复角色数据 |
+| `fix-persona-data-raw.js` | 修复角色数据（原始） |
 | `fix-persona-data.js` | 修复角色数据 |
 | `fix-room-owner.js` | 修复房间群主 |
 | `fix-room.js` | 修复房间 |
@@ -624,7 +650,7 @@
 ### 2. 语音消息流程
 长按录音 → 上传 Cloudinary → Socket 发送（含 audioUrl）→ 广播 → 音频播放器
 
-### 3. 音乐分享流程（🆕 重构）
+### 3. 音乐分享流程
 点击音乐按钮 → 搜索（YouTube/Bilibili）→ 选择歌曲 → 传递原始标题/歌手/时长 → 后端 lyrics API 智能清洗 → Socket 发送 musicData → 广播 → MusicCard 渲染，歌词卡片下方展开，支持高亮和点击跳转
 
 #### 歌词查询详细流程
@@ -655,10 +681,10 @@
 ### 9. 角色系统流程
 用户申请创建角色 → 管理员审核 → 通过后归属于申请人 → 计算同名编号
 
-### 10. 🆕 墨香阁小说流程
+### 10. 墨香阁小说流程
 **作者申请**：角色申请成为作者（消耗 10 钻石）→ 管理员审核 → 通过后获得作者权限（基础 5 个创作名额）。**创建小说**：作者创建小说（封面、标题、分类、简介）→ 管理章节（Markdown 编辑器）→ 发布。**读者功能**：收藏小说、关注作者、评论、赞赏（仅付费钻石）。**作者控制台**：统计作品数、创作名额（可扩展）、粉丝数、赞赏收入。
 
-### 11. 🆕 天仪阁 3D 宇宙流程
+### 11. 天仪阁 3D 宇宙流程
 用户进入 `/tianyige` → 加载 Three.js 场景 → 显示太阳 + 八大行星 → 行星公转/自转动画 → 鼠标拖拽旋转 / 滚轮缩放 → 点击行星锁定追踪 → 搜索定位行星 → 画质设置（低/中/高）→ 暂停/恢复动画 → 显示/隐藏轨道
 
 ---
@@ -781,6 +807,8 @@ HCAPTCHA_SECRET_KEY=your_hcaptcha_secret
 - [x] **玻璃拟态信息面板**
 - [x] **移动端自适应（自动降级到中画质）**
 - [x] **所有纹理托管于 Cloudinary CDN**
+- [x] **LOD（Level of Detail）性能优化**
+- [x] **时间控制（加速/暂停）**
 
 ### 👤 角色系统
 - [x] 角色创建/编辑/删除
@@ -920,11 +948,13 @@ Room (房间)
 | 星星数量 | 4000 | 10000 | 20000 |
 | 阴影 | 关闭 | 开启 | 开启（高分辨率）|
 
+---
+
 ## 📅 最后更新记录
 
 | 日期 | 更新内容 |
 |------|----------|
-| **2026-06-13** | **天仪阁 3D 宇宙观测**：Three.js 太阳系、八大行星、公转/自转、地球日夜 Shader、三档画质、Cloudinary 纹理托管；**墨香阁小说模块完整上线**；**音乐卡片歌词重构**；**AI 对话切换至 Gemini**；**前端新增 4 个天仪阁组件、1 个数据文件、1 个类型文件** |
+| **2026-06-13** | **天仪阁 3D 宇宙观测**：Three.js 太阳系、八大行星、公转/自转、地球日夜 Shader、三档画质、Cloudinary 纹理托管、LOD 性能优化、时间控制；**墨香阁小说模块完整上线**；**音乐卡片歌词重构**；**AI 对话切换至 Gemini**；**新增 3 个天仪阁组件、2 个数据文件、1 个性能监控服务** |
 | 2026-06-12 | 音乐卡片歌词从弹窗改为下方展开 + 点击跳转 |
 | 2026-06-11 | 墨香阁电脑/手机双端适配 + 作者申请 + Markdown 编辑器 |
 | 2026-06-10 | 红包/礼物/守护系统 + 表情包 |
@@ -984,6 +1014,8 @@ Room (房间)
 > | **🆕 AI 对话** | `aiService.js` + `GEMINI_API_KEY` |
 > | **🆕 天仪阁行星数据** | `data/planets.ts`（纹理 URL） |
 > | **🆕 天仪阁画质设置** | `components/SettingsPanel.tsx` |
+> | **🆕 天仪阁 LOD** | `components/PlanetLOD.tsx` |
+> | **🆕 天仪阁时间控制** | `components/TimeControls.tsx` + `useTimeEngine.ts` |
 > 
 > ### 手机端路由：
 > 
@@ -1000,7 +1032,7 @@ Room (房间)
 > 1. **纹理托管**：所有纹理已迁移至 Cloudinary CDN，无需本地存储
 > 2. **移动端适配**：移动端自动降级到中画质
 > 3. **地球 Shader**：使用自定义 Shader 实现日夜混合，不要移除
-> 4. **性能优化**：三档画质动态调整，低画质关闭阴影
+> 4. **性能优化**：三档画质动态调整，低画质关闭阴影；LOD 自动优化
 > 5. **后续扩展**：可添加卫星系统、银河系场景、小行星带
 > 
 > ### 🆕 墨香阁部署注意事项：
@@ -1013,13 +1045,3 @@ Room (房间)
 ---
 
 *本文档由 AI 维护，每次重要更新后请同步更新*
-```
-
-以上是合并后的完整项目文档，已包含：
-
-- ✅ **所有文件的完整位置和职责**（前端 + 后端，含天仪阁）
-- ✅ **万物阁如何运作**（核心数据流）
-- ✅ **天仪阁 3D 宇宙**（功能、画质参数、纹理资源）
-- ✅ **最后更新记录（你的里程碑）**
-- ✅ **AI 注意事项**（含天仪阁开发注意事项）
-- ✅ **AI 对话已切换至 Gemini**（DeepSeek 已移除）

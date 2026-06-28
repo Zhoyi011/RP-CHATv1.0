@@ -146,7 +146,7 @@ router.get('/my-rooms', authMiddleware, async (req, res) => {
     const roomsWithStats = await Promise.all(uniqueRooms.map(async (room) => {
       const lastMessage = await Message.findOne({ roomId: room._id })
         .sort({ createdAt: -1 })
-        .populate('personaId', 'name displayName avatar sameNameNumber')
+        .populate('personaId', 'name displayName avatar sameNameNumber level title')
         .lean();
       
       const messageCount = await Message.countDocuments({ roomId: room._id });
@@ -233,7 +233,10 @@ if (lastMessage) {
     senderName: lastMessage.personaId?.displayName || lastMessage.personaId?.name || '未知',
     createdAt: lastMessage.createdAt,
     isAction: lastMessage.isAction || false,
-    isRecalled: lastMessage.isRecalled || false
+    isRecalled: lastMessage.isRecalled || false,
+    // 🆕 添加发送者等级和头衔
+    senderLevel: lastMessage.personaId?.level || 1,
+    senderTitle: lastMessage.personaId?.title || '🌱 初入万物',
   };
 }
       
@@ -266,7 +269,9 @@ if (lastMessage) {
         _id: activePersona._id,
         name: activePersona.name,
         displayName: activePersona.displayName,
-        avatar: activePersona.avatar
+        avatar: activePersona.avatar,
+        level: activePersona.level || 1,
+        title: activePersona.title || '🌱 初入万物',
       } : null
     });
   } catch (error) {
@@ -312,7 +317,9 @@ router.get('/active-persona', authMiddleware, async (req, res) => {
         _id: active._id,
         name: active.name,
         displayName: active.displayName,
-        avatar: active.avatar
+        avatar: active.avatar,
+        level: active.level || 1,
+        title: active.title || '🌱 初入万物',
       } : null 
     });
   } catch (error) {
@@ -431,7 +438,7 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
         avatarFrameUrl = persona.equipped.avatarFrame.image;
       }
       
-      // 🔥 关键：返回所有字段，包括表情和音频
+      // 🔥 关键：返回所有字段，包括表情和音频，以及等级和头衔
       return {
         _id: msg._id,
         content: msg.isRecalled ? `${senderName} 撤回了一条消息` : msg.content,
@@ -459,7 +466,10 @@ router.get('/:roomId/messages', authMiddleware, async (req, res) => {
           avatarFrame: avatarFrameUrl,
           equipped: persona.equipped ? {
             avatarFrame: avatarFrameUrl
-          } : null
+          } : null,
+          // 🆕 等级和头衔
+          level: persona.level || 1,
+          title: persona.title || '🌱 初入万物',
         } : null,
         userId: { _id: req.userId }
       };
@@ -578,7 +588,10 @@ router.post('/:roomId/messages', authMiddleware, async (req, res) => {
           avatar: persona.avatar,
           sameNameNumber: persona.sameNameNumber,
           avatarFrame: avatarFrameUrl,
-          equipped: { avatarFrame: avatarFrameUrl }
+          equipped: { avatarFrame: avatarFrameUrl },
+          // 🆕 等级和头衔
+          level: persona.level || 1,
+          title: persona.title || '🌱 初入万物',
         },
         userId: { _id: req.userId }
       });
@@ -677,6 +690,9 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
             displayName: persona.displayName || persona.name,
             avatar: persona.avatar,
             sameNameNumber: persona.sameNameNumber,
+            // 🆕 等级和头衔
+            level: persona.level || 1,
+            title: persona.title || '🌱 初入万物',
           },
           role: pr.role,
           title: pr.title || '',
@@ -695,7 +711,7 @@ router.get('/:roomId/members', authMiddleware, async (req, res) => {
 router.get('/:roomId/pending', authMiddleware, async (req, res) => {
   try {
     const room = await Room.findById(req.params.roomId)
-      .populate('pendingMembers.personaId', 'name displayName avatar sameNameNumber');
+      .populate('pendingMembers.personaId', 'name displayName avatar sameNameNumber level title');
     
     if (!room) return res.status(404).json({ error: '聊天室不存在' });
     
@@ -908,7 +924,10 @@ router.get('/:roomId/my-personas', authMiddleware, async (req, res) => {
       displayName: p.displayName,
       avatar: p.avatar,
       sameNameNumber: p.sameNameNumber,
-      status: p.status
+      status: p.status,
+      // 🆕 等级和头衔
+      level: p.level || 1,
+      title: p.title || '🌱 初入万物',
     })));
   } catch (error) {
     console.error('获取群内角色失败:', error);
@@ -1161,7 +1180,7 @@ router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
     }
     
     const personaRooms = await PersonaRoom.find({ roomId })
-      .populate('personaId', 'name displayName avatar');
+      .populate('personaId', 'name displayName avatar level title');
     
     const members = personaRooms
       .filter(pr => pr.personaId && pr.personaId._id.toString() !== currentPersona._id.toString())
@@ -1170,7 +1189,9 @@ router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
         displayName: pr.personaId.displayName || pr.personaId.name,
         avatar: pr.personaId.avatar,
         title: pr.title || null,
-        role: pr.role
+        role: pr.role,
+        // 🆕 等级
+        level: pr.personaId.level || 1,
       }));
     
     members.unshift({
@@ -1178,7 +1199,8 @@ router.get('/:roomId/mentionable', authMiddleware, async (req, res) => {
       displayName: '所有人',
       avatar: null,
       title: null,
-      role: 'all'
+      role: 'all',
+      level: null
     });
     
     res.json(members);

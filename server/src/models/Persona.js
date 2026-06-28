@@ -152,7 +152,25 @@ const personaSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+    // ========== 🆕 等级/经验/头衔缓存 ==========
+  level: {
+    type: Number,
+    default: 1,
+  },
+  exp: {
+    type: Number,
+    default: 0,
+  },
+  title: {
+    type: String,
+    default: '🌱 初入万物',
+  },
+  
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
 });
 
 // 更新 updatedAt
@@ -250,7 +268,10 @@ personaSchema.methods.toSafeObject = function() {
     novelSlots: this.novelSlots,
     createdNovelCount: this.createdNovelCount,
     followersCount: this.followersCount,
-    totalDonationIncome: this.totalDonationIncome
+    totalDonationIncome: this.totalDonationIncome,
+    level: this.level || 1,
+    exp: this.exp || 0,
+    title: this.title || '🌱 初入万物',
   };
 };
 

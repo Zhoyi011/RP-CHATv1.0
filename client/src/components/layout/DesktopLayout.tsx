@@ -333,6 +333,15 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
 
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
 
+  // 计算经验条百分比
+  const getExpPercentage = (): number => {
+    const exp = currentPersona?.exp || 0;
+    const level = currentPersona?.level || 1;
+    // 公式: 50 + (level - 1) * 25
+    const expNeeded = 50 + (level - 1) * 25;
+    return Math.min((exp / expNeeded) * 100, 100);
+  };
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* 侧边栏 */}
@@ -567,10 +576,33 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
               </div>
               {!collapsed && (
                 <div className="flex-1 text-left min-w-0">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
-                    {currentPersona?.displayName || currentPersona?.name || '选择角色'}
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                      {currentPersona?.displayName || currentPersona?.name || '选择角色'}
+                    </p>
+                    {/* 🆕 等级徽章 */}
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
+                      Lv.{currentPersona?.level || 1}
+                    </span>
+                  </div>
+                  {/* 🆕 头衔 */}
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
+                    {currentPersona?.title || '🌱 初入万物'}
                   </p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">点击切换角色</p>
+                  {/* 🆕 经验条 */}
+                  <div className="mt-1">
+                    <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <motion.div 
+                        className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${getExpPercentage()}%` }}
+                        transition={{ duration: 0.5 }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[8px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    {currentPersona?.exp || 0} / {50 + ((currentPersona?.level || 1) - 1) * 25} 经验
+                  </p>
                 </div>
               )}
               {!collapsed && (
@@ -788,8 +820,18 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
                   size="sm"
                 />
                 <div className="hidden lg:block text-left">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {currentPersona?.displayName || currentPersona?.name || '选择角色'}
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {currentPersona?.displayName || currentPersona?.name || '选择角色'}
+                    </p>
+                    {/* 🆕 顶部栏等级徽章 */}
+                    <span className="text-[8px] px-1 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold">
+                      Lv.{currentPersona?.level || 1}
+                    </span>
+                  </div>
+                  {/* 🆕 顶部栏头衔 */}
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                    {currentPersona?.title || '🌱 初入万物'}
                   </p>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPersonaMenu ? 'rotate-180' : ''}`} />

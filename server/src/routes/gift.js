@@ -81,6 +81,20 @@ router.post('/send', authMiddleware, async (req, res) => {
     // 增加接收者的守护值
     await toPersona.addGuardianValue(item.guardValue || item.price);
 
+    // 🔥 Phase 1: 赠送礼物获得经验
+    try {
+      const experienceService = require('../services/experienceService');
+      await experienceService.addExp(
+        fromPersona._id,
+        fromUserId,
+        'GIFT_SENT',
+        null,
+        { isPublicSquare: false }
+      );
+    } catch (expError) {
+      console.error('添加经验值失败（赠送礼物）:', expError);
+    }
+
     // 发送 Socket 通知给接收者
     emitToUser(toPersona.userId.toString(), 'gift-received', {
       giftId: giftRecord._id,
@@ -121,7 +135,7 @@ router.get('/received', authMiddleware, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('fromPersonaId', 'name displayName avatar')
+      .populate('fromPersonaId', 'name displayName avatar level title')
       .populate('itemId', 'name image');
 
     const total = await GiftRecord.countDocuments({ toUserId: userId });
@@ -153,7 +167,7 @@ router.get('/sent', authMiddleware, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('toPersonaId', 'name displayName avatar')
+      .populate('toPersonaId', 'name displayName avatar level title')
       .populate('itemId', 'name image');
 
     const total = await GiftRecord.countDocuments({ fromUserId: userId });

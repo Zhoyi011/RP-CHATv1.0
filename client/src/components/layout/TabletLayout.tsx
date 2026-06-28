@@ -70,6 +70,14 @@ const menuItemVariants: Variants = {
   tap: { scale: 0.97 }
 };
 
+// 🆕 计算经验条百分比
+const getExpPercentage = (persona: Persona | null): number => {
+  const exp = persona?.exp || 0;
+  const level = persona?.level || 1;
+  const expNeeded = 50 + (level - 1) * 25;
+  return Math.min((exp / expNeeded) * 100, 100);
+};
+
 const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userData, setUserData] = useState<User | null>(null);
@@ -421,7 +429,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <Search className="w-5 h-5" />
           </motion.button>
 
-          {/* 角色切换区域（顶部栏右侧） */}
+          {/* 🆕 角色切换区域（顶部栏右侧）- 添加等级显示 */}
           <div className="relative" ref={personaMenuRef}>
             <motion.button
               whileTap={{ scale: 0.95 }}
@@ -433,9 +441,21 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 frameName={frameName}
                 size="sm"
               />
-              <span className="text-sm text-gray-700 dark:text-gray-300 hidden lg:inline">
-                {displayName}
-              </span>
+              <div className="hidden lg:block text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    {displayName}
+                  </span>
+                  {/* 🆕 等级徽章 */}
+                  <span className="text-[8px] px-1 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold">
+                    Lv.{currentPersona?.level || 1}
+                  </span>
+                </div>
+                {/* 🆕 头衔 */}
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                  {currentPersona?.title || '🌱 初入万物'}
+                </p>
+              </div>
               <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${showPersonaMenu ? 'rotate-180' : ''}`} />
             </motion.button>
 
@@ -488,7 +508,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 </div>
               </div>
 
-              {/* 当前角色信息 */}
+              {/* 🆕 当前角色信息 - 添加等级/头衔/经验条 */}
               <div className="p-4 mx-4 mt-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-xl">
                 <div className="flex items-center gap-3">
                   <AvatarFrame
@@ -497,11 +517,38 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                     size="md"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">
-                      {displayName}
+                    {/* 名称 + 等级徽章 */}
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">
+                        {displayName}
+                      </p>
+                      {/* 🆕 等级徽章 */}
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
+                        Lv.{currentPersona?.level || 1}
+                      </span>
+                    </div>
+                    {/* 🆕 头衔 */}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {currentPersona?.title || '🌱 初入万物'}
                     </p>
+                    {/* 🆕 经验条 */}
+                    <div className="mt-1.5 w-full">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${getExpPercentage(currentPersona)}%` }}
+                            transition={{ duration: 0.5 }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono flex-shrink-0">
+                          {currentPersona?.exp || 0}/{50 + ((currentPersona?.level || 1) - 1) * 25}
+                        </span>
+                      </div>
+                    </div>
                     {currentPersona?.sameNameNumber && (
-                      <p className="text-xs text-gray-500">#{currentPersona.sameNameNumber}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">#{currentPersona.sameNameNumber}</p>
                     )}
                   </div>
                 </div>
