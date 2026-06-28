@@ -673,7 +673,7 @@
   color: #e2e8f0;
 }
 
-.loading-spinner {
+.loading-overlay-spinner {
   color: #06b6d4;
   animation: spin 1.2s ease-in-out infinite;
   margin-bottom: 20px;
@@ -686,7 +686,7 @@
   margin-bottom: 6px;
 }
 
-.loading-sub {
+.loading-overlay-sub {
   font-size: 0.7rem;
   color: #475569;
   letter-spacing: 3px;
@@ -695,4 +695,229 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ========== 性能监控面板 ========== */
+.performance-panel-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 25;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.performance-panel-toggle:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: #06b6d4;
+  color: #22d3ee;
+}
+
+.performance-panel {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  z-index: 25;
+  width: 280px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 14px;
+  color: #e2e8f0;
+  font-size: 0.7rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.performance-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.performance-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #f1f5f9;
+}
+
+.performance-panel-close {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: color 0.2s;
+}
+
+.performance-panel-close:hover {
+  color: #ef4444;
+}
+
+.performance-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.performance-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-label {
+  font-size: 0.6rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.metric-value.warning {
+  color: #f59e0b;
+}
+
+.metric-value.critical {
+  color: #ef4444;
+}
+
+.performance-alerts {
+  margin-bottom: 14px;
+  padding: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.alerts-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  color: #ef4444;
+  margin-bottom: 8px;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alert-item {
+  font-size: 0.65rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.alert-item.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.alert-item.critical {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.alert-item.recovery {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.performance-recommendations {
+  padding: 10px;
+  background: rgba(6, 182, 212, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+}
+
+.recommendations-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  color: #06b6d4;
+  margin-bottom: 8px;
+}
+
+.recommendations-list {
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  padding-left: 16px;
+  margin: 0;
+}
+
+.recommendations-list li {
+  margin-bottom: 4px;
+}
+
+.context-lost-warning {
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  font-size: 0.65rem;
+  text-align: center;
+  animation: pulse 2s infinite;
+}
+
+.device-warning {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 12px;
+  color: #f59e0b;
+  font-size: 0.55rem;
+  width: fit-content;
+}
+
+/* ========== 移动端适配 ========== */
+@media (max-width: 768px) {
+  .performance-panel-toggle {
+    top: 12px;
+    right: 12px;
+    padding: 4px 8px;
+    font-size: 0.6rem;
+  }
+  
+  .performance-panel {
+    top: 50px;
+    right: 12px;
+    width: calc(100% - 24px);
+    max-width: 300px;
+  }
+  
+  .device-warning {
+    font-size: 0.5rem;
+    padding: 2px 6px;
+  }
 }
