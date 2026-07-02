@@ -1,8 +1,9 @@
 // client/src/pages/novel/AuthorDashboard.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { novelApi, roomApi } from '../../services/api';
+import { novelApi } from '../../services/api';
 import { usePersona } from '../../hooks/usePersona';
+import { useAppData } from '../../contexts/AppDataContext';
 import type { Novel } from '../../types/novel';
 import toast from 'react-hot-toast';
 import '../../styles/novel.css';
@@ -10,7 +11,10 @@ import '../../styles/novel.css';
 const AuthorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { currentPersona, refresh: refreshPersona } = usePersona();
-  const [novels, setNovels] = useState<Novel[]>([]);
+  
+  // 🔥 从全局获取我的小说数据（自动轮询）
+  const { myNovels, refreshNovels } = useAppData();
+  
   const [loading, setLoading] = useState(true);
   const [novelSlots, setNovelSlots] = useState(5);
   const [createdCount, setCreatedCount] = useState(0);
@@ -24,15 +28,16 @@ const AuthorDashboard: React.FC = () => {
     }
   }, [currentPersona, navigate]);
 
-  // 加载我的小说
+  // 🔥 加载我的小说（使用全局数据）
   useEffect(() => {
     const loadMyNovels = async () => {
       if (!currentPersona) return;
       try {
         const res = await novelApi.getMyNovels(currentPersona._id);
-        setNovels(res.novels);
         setNovelSlots(res.novelSlots);
         setCreatedCount(res.createdNovelCount);
+        // 🔥 刷新全局数据
+        await refreshNovels();
       } catch (error) {
         console.error('加载小说失败:', error);
         toast.error('加载失败');
@@ -41,7 +46,7 @@ const AuthorDashboard: React.FC = () => {
       }
     };
     loadMyNovels();
-  }, [currentPersona]);
+  }, [currentPersona, refreshNovels]);
 
   // 扩展创作名额
   const handleExpandSlot = async () => {
@@ -51,6 +56,8 @@ const AuthorDashboard: React.FC = () => {
       setNovelSlots(res.novelSlots);
       setCreatedCount(res.createdNovelCount);
       setShowExpandModal(false);
+      // 🔥 刷新全局数据
+      await refreshNovels();
       toast.success('扩展成功！新增1个创作名额');
     } catch (error: any) {
       toast.error(error.message || '扩展失败');
@@ -62,8 +69,9 @@ const AuthorDashboard: React.FC = () => {
     if (!confirm('确定要删除这部小说吗？所有章节也会被删除。')) return;
     try {
       await novelApi.deleteNovel(novelId);
-      setNovels(prev => prev.filter(n => n._id !== novelId));
       setCreatedCount(prev => prev - 1);
+      // 🔥 刷新全局数据
+      await refreshNovels();
       toast.success('小说已删除');
     } catch (error) {
       toast.error('删除失败');
@@ -79,7 +87,6 @@ const AuthorDashboard: React.FC = () => {
 
   return (
     <div className="rp-novel-app author-dashboard">
-      {/* 复用相同的导航栏（简化版） */}
       <nav className="navbar">
         <div className="container">
           <div className="logo">
@@ -93,7 +100,6 @@ const AuthorDashboard: React.FC = () => {
       </nav>
 
       <main className="container">
-        {/* 作者信息卡片 */}
         <div className="author-info-card">
           <div className="author-avatar">
             <img src={currentPersona?.avatar || '/default-avatar.png'} alt={currentPersona?.displayName} />
@@ -104,7 +110,6 @@ const AuthorDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 创作统计 */}
         <div className="stats-cards">
           <div className="stat-card">
             <i className="fas fa-book"></i>
@@ -141,26 +146,24 @@ const AuthorDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 操作按钮 */}
         <div className="dashboard-actions">
           <button className="btn" onClick={() => navigate('/novel/create')}>
             <i className="fas fa-plus"></i> 创建新小说
           </button>
         </div>
 
-        {/* 小说列表 */}
         <div className="my-novels">
           <h3><i className="fas fa-book"></i> 我的作品</h3>
           {loading ? (
             <div className="loading-placeholder">加载中...</div>
-          ) : novels.length === 0 ? (
+          ) : myNovels.length === 0 ? (
             <div className="no-results">
               <i className="fas fa-pen-fancy"></i>
               <p>还没有作品，点击上方按钮创建第一部小说吧！</p>
             </div>
           ) : (
             <div className="novel-manage-list">
-              {novels.map(novel => (
+              {myNovels.map(novel => (
                 <div key={novel._id} className="novel-manage-item">
                   <div className="novel-manage-info">
                     <h4>{novel.title}</h4>
@@ -191,7 +194,6 @@ const AuthorDashboard: React.FC = () => {
         </div>
       </main>
 
-      {/* 扩展名额模态框 */}
       {showExpandModal && (
         <div className="modal" style={{ display: 'flex' }} onClick={() => setShowExpandModal(false)}>
           <div className="modal-content" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>

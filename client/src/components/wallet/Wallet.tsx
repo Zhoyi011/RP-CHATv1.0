@@ -1,82 +1,67 @@
 // client/src/components/wallet/Wallet.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { redeemApi, type RedemptionRecord } from '../../services/api';
+import { useAppData } from '../../contexts/AppDataContext';
 import RedeemModal from './RedeemModal';
 import RedemptionHistory from './RedemptionHistory';
-import { TransactionHistory } from './TransactionHistory';
+import TransactionHistory from './TransactionHistory';
 import { useTheme } from '../../contexts/ThemeContext';
-
-interface UserInfo {
-  _id: string;
-  username: string;
-  diamonds: number;
-  paidDiamonds: number;
-  freeDiamonds: number;
-  email: string;
-}
 
 const Wallet: React.FC = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   
-  const [user, setUser] = useState<UserInfo | null>(null);
+  // 🔥 从全局获取数据（自动轮询）
+  const { 
+    diamonds, 
+    paidDiamonds, 
+    freeDiamonds, 
+    transactions, 
+    redeemHistory, 
+    refreshWallet 
+  } = useAppData();
+  
   const [loading, setLoading] = useState(true);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
-  const [historyRecords, setHistoryRecords] = useState<RedemptionRecord[]>([]);
   const [totalReceived, setTotalReceived] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState<'diamonds' | 'transactions'>('diamonds');
 
-  // 获取用户信息
-  const fetchUserInfo = async () => {
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE || 'https://rp-chatv1-0.onrender.com/api';
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data);
-      }
-    } catch (error) {
-      console.error('获取用户信息失败:', error);
+  // 🔥 计算累计充值获得
+  const calculateTotalReceived = useCallback(() => {
+    let total = 0;
+    if (redeemHistory && Array.isArray(redeemHistory)) {
+      total = redeemHistory.reduce((sum: number, r: any) => sum + (r.diamondAmount || 0), 0);
     }
-  };
-
-  // 获取充值历史
-  const fetchHistory = async () => {
-    try {
-      const res = await redeemApi.getHistory(50);
-      if (res.success) {
-        setHistoryRecords(res.data.records);
-        setTotalReceived(res.data.totalDiamondsReceived);
-      }
-    } catch (error) {
-      console.error('获取充值记录失败:', error);
-    }
-  };
+    setTotalReceived(total);
+  }, [redeemHistory]);
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([fetchUserInfo(), fetchHistory()]);
+    // 🔥 加载状态 - 如果全局数据已初始化，则直接显示
+    const timer = setTimeout(() => {
       setLoading(false);
-    };
-    loadData();
-  }, [refreshTrigger]);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const handleRedeemSuccess = () => {
+  // 🔥 当 redeemHistory 变化时重新计算总额
+  useEffect(() => {
+    calculateTotalReceived();
+  }, [calculateTotalReceived, refreshTrigger]);
+
+  const handleRedeemSuccess = useCallback(() => {
     setShowRedeemModal(false);
+    // 🔥 刷新钱包数据
+    refreshWallet();
     setRefreshTrigger(prev => prev + 1);
-  };
+    toast.success('充值成功！钻石已到账');
+  }, [refreshWallet]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     navigate(-1);
-  };
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -119,7 +104,7 @@ const Wallet: React.FC = () => {
           </p>
           <div className="flex items-baseline gap-2 mb-4">
             <span className="text-4xl font-bold text-gray-900 dark:text-white">
-              {(user?.diamonds || 0).toLocaleString()}
+              {(diamonds || 0).toLocaleString()}
             </span>
             <span className={`text-xl ${isDark ? 'text-purple-300' : 'text-purple-500'}`}>💎</span>
           </div>
@@ -129,7 +114,7 @@ const Wallet: React.FC = () => {
             <div className={`rounded-xl p-2 text-center ${isDark ? 'bg-white/10' : 'bg-white/60'}`}>
               <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>充值钻石</p>
               <p className={`text-lg font-semibold flex items-center justify-center gap-1 ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                {(user?.paidDiamonds || 0).toLocaleString()}
+                {(paidDiamonds || 0).toLocaleString()}
                 <span className="text-sm text-yellow-500">💎</span>
               </p>
               <p className="text-[10px] text-gray-500 dark:text-gray-400">可用于发红包</p>
@@ -137,7 +122,7 @@ const Wallet: React.FC = () => {
             <div className={`rounded-xl p-2 text-center ${isDark ? 'bg-white/10' : 'bg-white/60'}`}>
               <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>免费钻石</p>
               <p className={`text-lg font-semibold flex items-center justify-center gap-1 ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                {(user?.freeDiamonds || 0).toLocaleString()}
+                {(freeDiamonds || 0).toLocaleString()}
                 <span className="text-sm text-green-500">💎</span>
               </p>
               <p className="text-[10px] text-gray-500 dark:text-gray-400">签到/红包获得，仅可购物</p>
@@ -176,7 +161,7 @@ const Wallet: React.FC = () => {
           </p>
         </div>
 
-        {/* 🔥 标签页切换 */}
+        {/* 标签页切换 */}
         <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => setActiveTab('diamonds')}
@@ -200,14 +185,14 @@ const Wallet: React.FC = () => {
           </button>
         </div>
 
-        {/* 充值记录 */}
+        {/* 🔥 充值记录 - 使用全局 redeemHistory */}
         {activeTab === 'diamonds' && (
-          <RedemptionHistory records={historyRecords} totalReceived={totalReceived} />
+          <RedemptionHistory records={redeemHistory || []} totalReceived={totalReceived} />
         )}
 
-        {/* 🔥 交易流水 */}
+        {/* 🔥 交易流水 - 使用全局 transactions */}
         {activeTab === 'transactions' && (
-          <TransactionHistory />
+          <TransactionHistory transactions={transactions} />
         )}
       </div>
 

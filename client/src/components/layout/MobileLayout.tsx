@@ -1,10 +1,11 @@
 // client/src/components/layout/MobileLayout.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { authApi, type User, type Persona } from '../../services/api';
 import { roomApi } from '../../services/api';
+import { useAppData } from '../../contexts/AppDataContext';
 import DiamondBalance from '../diamond/DiamondBalance';
 import { useKeyboardHeight } from '../../hooks/useKeyboardHeight';
 import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
@@ -31,6 +32,14 @@ interface TabItem {
   path: string;
   icon: React.ReactNode;
   activeIcon?: React.ReactNode;
+}
+
+interface MenuItemConfig {
+  icon: React.ReactNode;
+  label: string;
+  action: string;
+  color: string;
+  badge?: number;
 }
 
 const getFrameNameFromUrl = (url: string | null | undefined): string | null => {
@@ -91,7 +100,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
   const [myPersonas, setMyPersonas] = useState<Persona[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [showSwitchPanel, setShowSwitchPanel] = useState(false);
   const [showSideMenu, setShowSideMenu] = useState(false);
   const switchPanelRef = useRef<HTMLDivElement>(null);
@@ -102,6 +110,9 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   const { isKeyboardOpen } = useKeyboardHeight();
   const { enterAFKManually, requestIOSPlayback } = useAFK();
   const { unreadCount: friendUnreadCount } = useFriend();
+  
+  // 🔥 从全局获取未读总数（自动轮询）
+  const { unreadTotal } = useAppData();
 
   // 好友相关状态
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
@@ -112,7 +123,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   // 🆕 手动进入 AFK 并处理 iOS 播放
   const handleEnterAFK = useCallback(() => {
     enterAFKManually();
-    // iOS 设备：进入后延迟请求播放
     if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
       setTimeout(() => {
         requestIOSPlayback?.();
@@ -120,7 +130,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     }
   }, [enterAFKManually, requestIOSPlayback]);
 
-  // 获取用户所有角色（用于申请添加好友时选择自己的角色）
+  // 获取用户所有角色
   useEffect(() => {
     const fetchMyPersonas = async () => {
       const token = localStorage.getItem('token');
@@ -140,7 +150,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     fetchMyPersonas();
   }, []);
 
-  // 获取所有已批准角色（用于角色切换面板）
+  // 获取所有已批准角色
   useEffect(() => {
     const fetchPersonas = async () => {
       const token = localStorage.getItem('token');
@@ -160,8 +170,8 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     fetchPersonas();
   }, []);
 
-  // 底部 Tab 配置（新增小说 Tab）
-  const tabs: TabItem[] = [
+  // 底部 Tab 配置（使用 useMemo 缓存）
+  const tabs: TabItem[] = useMemo(() => [
     {
       name: '聊天',
       path: '/chat',
@@ -186,7 +196,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       icon: <BookOpen className="w-5 h-5" />,
       activeIcon: <BookOpen className="w-5 h-5 fill-current" />,
     },
-  ];
+  ], []);
 
   // 加载用户数据
   useEffect(() => {
@@ -236,7 +246,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
   }, [refreshCurrentPersona]);
 
   // 切换角色
-  const handleSwitchPersona = async (persona: Persona) => {
+  const handleSwitchPersona = useCallback(async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
       setCurrentPersona(persona);
@@ -248,7 +258,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     } catch (error) {
       toast.error('切换失败');
     }
-  };
+  }, [refreshCurrentPersona]);
 
   // 点击外部关闭面板
   useEffect(() => {
@@ -263,29 +273,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // 获取未读消息总数
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      if (!user) return;
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/unread-total', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(Number(data.total) || 0);
-        }
-      } catch (error) {
-        console.error('获取未读消息失败:', error);
-      }
-    };
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
 
   // 根据路径同步活跃 Tab
   useEffect(() => {
@@ -306,7 +293,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     navigate(path);
   }, [navigate]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await auth.signOut();
       localStorage.removeItem('token');
@@ -315,7 +302,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     } catch (error) {
       console.error('登出失败:', error);
     }
-  };
+  }, [navigate]);
 
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
   const displayName = currentPersona?.displayName || currentPersona?.name || '未选择角色';
@@ -328,19 +315,29 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
     return Math.min((exp / expNeeded) * 100, 100);
   }, [currentPersona?.exp, currentPersona?.level]);
 
-  // 侧边菜单项
-  const menuItems = [
+  // 计算经验值文本
+  const expText = useMemo(() => {
+    const exp = currentPersona?.exp || 0;
+    const level = currentPersona?.level || 1;
+    const expNeeded = 50 + (level - 1) * 25;
+    return `${exp}/${expNeeded}`;
+  }, [currentPersona?.exp, currentPersona?.level]);
+
+  // 侧边菜单项（使用 useMemo 缓存，依赖 friendUnreadCount）
+  const menuItems: MenuItemConfig[] = useMemo(() => [
     { icon: <Users className="w-4 h-4" />, label: '好友列表', action: 'friends', color: 'from-green-500 to-emerald-500' },
     { icon: <UserPlus className="w-4 h-4" />, label: '添加好友', action: 'addFriend', color: 'from-purple-500 to-pink-500' },
     { icon: <Mail className="w-4 h-4" />, label: '好友申请', action: 'requests', color: 'from-amber-500 to-orange-500', badge: friendUnreadCount },
     { icon: <Search className="w-4 h-4" />, label: '搜索', action: 'search', color: 'from-blue-500 to-cyan-500' },
     { icon: <UserIcon className="w-4 h-4" />, label: '角色管理', action: 'persona', color: 'from-purple-500 to-pink-500' },
+    { icon: <BookOpen className="w-4 h-4" />, label: '墨香阁', action: 'novel', color: 'from-amber-500 to-orange-500' },
+    { icon: <Sparkles className="w-4 h-4" />, label: '天仪阁', action: 'tianyige', color: 'from-purple-500 to-indigo-500' },
     { icon: <ShoppingBag className="w-4 h-4" />, label: '商城', action: 'shop', color: 'from-blue-500 to-cyan-500' },
     { icon: <Wallet className="w-4 h-4" />, label: '钱包', action: 'wallet', color: 'from-amber-500 to-orange-500' },
     { icon: <Settings className="w-4 h-4" />, label: '账号设置', action: 'settings', color: 'from-gray-500 to-gray-600' },
-  ];
+  ], [friendUnreadCount]);
 
-  const handleMenuAction = (action: string) => {
+  const handleMenuAction = useCallback((action: string) => {
     setShowSideMenu(false);
     switch (action) {
       case 'friends':
@@ -358,6 +355,12 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
       case 'persona':
         navigate('/persona');
         break;
+      case 'novel':
+        navigate('/novel');
+        break;
+      case 'tianyige':
+        navigate('/tianyige');
+        break;
       case 'shop':
         navigate('/shop');
         break;
@@ -368,7 +371,12 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
         navigate('/settings');
         break;
     }
-  };
+  }, [navigate]);
+
+  // 判断底部 Tab 是否活跃
+  const isActiveTab = useCallback((tabName: string): boolean => {
+    return activeTab === tabName;
+  }, [activeTab]);
 
   return (
     <motion.div
@@ -405,7 +413,6 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
 
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-1">
-            {/* 🆕 隐私保护锁 */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleEnterAFK}
@@ -415,12 +422,10 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
               <Lock className="w-4 h-4" />
             </motion.button>
 
-            {/* 钻石余额 */}
             <div className="scale-90">
               <DiamondBalance size="sm" />
             </div>
 
-            {/* 菜单按钮 */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowSideMenu(true)}
@@ -476,24 +481,20 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
           </div>
         </div>
 
-        {/* 🆕 顶部栏角色信息（紧凑显示） - 仅在非键盘弹出时显示 */}
+        {/* 顶部栏角色信息（紧凑显示）- 仅在非键盘弹出时显示 */}
         {!isKeyboardOpen && currentPersona && (
           <div className="flex items-center justify-between px-3 pb-1.5 border-t border-gray-100/50 dark:border-gray-800/50 pt-1">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              {/* 角色名称 */}
               <span className="text-xs font-medium text-gray-600 dark:text-gray-300 truncate max-w-[120px]">
                 {displayName}
               </span>
-              {/* 🆕 等级徽章 */}
               <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
                 Lv.{currentPersona?.level || 1}
               </span>
-              {/* 🆕 头衔（仅当有空间时显示） */}
               <span className="text-[9px] text-gray-400 dark:text-gray-500 truncate hidden xs:inline max-w-[80px]">
                 {currentPersona?.title || '🌱 初入万物'}
               </span>
             </div>
-            {/* 🆕 经验条（紧凑版） */}
             <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
               <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <motion.div 
@@ -504,7 +505,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 />
               </div>
               <span className="text-[8px] text-gray-400 dark:text-gray-500 font-mono">
-                {currentPersona?.exp || 0}/{50 + ((currentPersona?.level || 1) - 1) * 25}
+                {expText}
               </span>
             </div>
           </div>
@@ -530,12 +531,12 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
         variants={tabBarVariants}
         initial="hidden"
         animate="visible"
-        className={`fixed left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-20 transition-all duration-300`}
+        className="fixed left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-20 transition-all duration-300"
         style={{ bottom: 'env(safe-area-inset-bottom, 0px)', height: '56px' }}
       >
         <div className="flex justify-around items-center h-full">
           {tabs.map((tab) => {
-            const isActiveTab = activeTab === tab.name.toLowerCase();
+            const active = isActiveTab(tab.name.toLowerCase());
             return (
               <motion.button
                 key={tab.name}
@@ -544,25 +545,25 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                 whileHover="hover"
                 onClick={() => handleTabChange(tab.name.toLowerCase(), tab.path)}
                 className={`flex flex-col items-center justify-center relative py-1 px-2 rounded-full transition-all duration-200 ${
-                  isActiveTab ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  active ? 'text-blue-500' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
               >
                 <div className="relative">
-                  {isActiveTab ? (tab.activeIcon || tab.icon) : tab.icon}
-                  {tab.name === '聊天' && unreadCount > 0 && !isActiveTab && (
+                  {active ? (tab.activeIcon || tab.icon) : tab.icon}
+                  {tab.name === '聊天' && unreadTotal > 0 && !active && (
                     <motion.span
                       variants={badgeVariants}
                       initial="initial"
                       animate="animate"
                       className="absolute -top-1 -right-2 min-w-[16px] h-[16px] bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center px-1 shadow-md"
                     >
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                      {unreadTotal > 99 ? '99+' : unreadTotal}
                     </motion.span>
                   )}
                 </div>
                 <motion.span 
-                  className={`text-[10px] mt-0.5 ${isActiveTab ? 'font-medium' : ''}`}
-                  animate={isActiveTab ? { scale: [1, 1.05, 1] } : {}}
+                  className={`text-[10px] mt-0.5 ${active ? 'font-medium' : ''}`}
+                  animate={active ? { scale: [1, 1.05, 1] } : {}}
                   transition={{ duration: 0.3 }}
                 >
                   {tab.name}
@@ -612,21 +613,17 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                     size="md"
                   />
                   <div className="flex-1 min-w-0">
-                    {/* 名称 + 等级徽章 */}
                     <div className="flex items-center gap-1.5">
                       <p className="font-semibold text-gray-800 dark:text-gray-200 text-lg truncate">
                         {displayName}
                       </p>
-                      {/* 🆕 等级徽章 */}
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
                         Lv.{currentPersona?.level || 1}
                       </span>
                     </div>
-                    {/* 🆕 头衔 */}
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {currentPersona?.title || '🌱 初入万物'}
                     </p>
-                    {/* 🆕 经验条 */}
                     <div className="mt-1.5 w-full">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -638,7 +635,7 @@ const MobileLayoutContent: React.FC<Props> = ({ children }) => {
                           />
                         </div>
                         <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono flex-shrink-0">
-                          {currentPersona?.exp || 0}/{50 + ((currentPersona?.level || 1) - 1) * 25}
+                          {expText}
                         </span>
                       </div>
                     </div>

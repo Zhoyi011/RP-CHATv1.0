@@ -1,5 +1,5 @@
 // client/src/components/layout/DesktopLayout.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { auth } from '../../firebase/config';
@@ -12,13 +12,14 @@ import toast from 'react-hot-toast';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import { useAFK } from '../../contexts/AFKContext';
 import { useFriend } from '../../contexts/FriendContext';
+import { useAppData } from '../../contexts/AppDataContext';
 import AddFriendModal from '../friends/AddFriendModal';
 import FriendList from '../friends/FriendList';
 import FriendRequests from '../friends/FriendRequests';
 import PrivateChat from '../chat/PrivateChat';
 import { 
   Users, UserPlus, Mail, LogOut, Settings, User as UserIcon, 
-  BookOpen, ChevronDown, Lock, Sparkles
+  BookOpen, ChevronDown, Lock
 } from 'lucide-react';
 
 interface Props {
@@ -66,11 +67,14 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const { enterAFKManually } = useAFK();
   const { unreadCount: friendUnreadCount } = useFriend();
+  
+  // 🔥 从全局获取未读总数（自动轮询）
+  const { unreadTotal } = useAppData();
+  
   const [userData, setUserData] = useState<User | null>(null);
   const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
   const [myPersonas, setMyPersonas] = useState<Persona[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -106,8 +110,8 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
     fetchMyPersonas();
   }, []);
 
-  // 页面标题映射
-  const getPageTitle = () => {
+  // 页面标题映射（使用 useMemo 缓存）
+  const pageTitle = useMemo(() => {
     const path = location.pathname;
     if (path === '/chat' || path.startsWith('/chat?')) return '聊天室';
     if (path === '/feed') return '动态广场';
@@ -122,9 +126,43 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
     if (path === '/novel') return '墨香阁';
     if (path === '/author/dashboard') return '作者控制台';
     return '万物阁';
-  };
+  }, [location.pathname]);
 
-  const navItems: NavItem[] = [
+  // 页面描述（使用 useMemo 缓存）
+  const pageDescription = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/chat') return '与你的角色们畅聊';
+    if (path === '/feed') return '看看大家都在聊什么';
+    if (path === '/home') return '欢迎回来';
+    if (path === '/persona') return '管理你的所有角色';
+    if (path === '/shop') return '装扮你的角色';
+    if (path === '/search') return '搜索角色、群聊或用户';
+    if (path === '/wallet') return '充值钻石，查看记录';
+    if (path === '/novel') return '阅读、创作、分享你的故事';
+    if (path === '/author/dashboard') return '管理你的作品';
+    return '✨ 享受角色扮演的乐趣';
+  }, [location.pathname]);
+
+  // 页面图标（使用 useMemo 缓存）
+  const pageIcon = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/chat' || path.startsWith('/chat?')) return '💬';
+    if (path === '/feed') return '📰';
+    if (path === '/home') return '🏠';
+    if (path === '/persona') return '🎭';
+    if (path === '/shop') return '🛒';
+    if (path === '/inventory') return '🎒';
+    if (path === '/search') return '🔍';
+    if (path === '/settings') return '⚙️';
+    if (path === '/changelog') return '📋';
+    if (path === '/wallet') return '💎';
+    if (path === '/novel') return '📚';
+    if (path === '/author/dashboard') return '✍️';
+    return '✨';
+  }, [location.pathname]);
+
+  // 导航项（使用 useMemo 缓存，依赖 unreadTotal）
+  const navItems: NavItem[] = useMemo(() => [
     {
       name: '聊天',
       path: '/chat',
@@ -133,7 +171,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       ),
-      badge: unreadCount,
+      badge: unreadTotal,
     },
     {
       name: '动态',
@@ -177,6 +215,15 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
       icon: <BookOpen className="w-5 h-5" />,
     },
     {
+      name: '天仪阁',
+      path: '/tianyige',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+    },
+    {
       name: '搜索',
       path: '/search',
       icon: (
@@ -194,7 +241,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
         </svg>
       ),
     },
-  ];
+  ], [unreadTotal]);
 
   // 加载用户数据
   useEffect(() => {
@@ -264,7 +311,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
   }, []);
 
   // 切换角色
-  const handleSwitchPersona = async (persona: Persona) => {
+  const handleSwitchPersona = useCallback(async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
       setCurrentPersona(persona);
@@ -276,8 +323,9 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
     } catch (error) {
       toast.error('切换失败');
     }
-  };
+  }, [refreshCurrentPersona]);
 
+  // 点击外部关闭面板
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (personaMenuRef.current && !personaMenuRef.current.contains(e.target as Node)) {
@@ -291,30 +339,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 获取未读消息数
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      if (!user) return;
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/unread-total', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(Number(data.total) || 0);
-        }
-      } catch (error) {
-        console.error('获取未读消息失败:', error);
-      }
-    };
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await auth.signOut();
       localStorage.removeItem('token');
@@ -323,28 +348,35 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
     } catch (error) {
       console.error('登出失败:', error);
     }
-  };
+  }, [navigate]);
 
-  const isActive = (path: string) => {
+  const isActive = useCallback((path: string) => {
     if (path === '/chat') return location.pathname === '/chat' || location.pathname.startsWith('/chat?');
     if (path === '/novel') return location.pathname === '/novel' || location.pathname.startsWith('/novel/');
     return location.pathname === path;
-  };
+  }, [location.pathname]);
 
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
 
   // 计算经验条百分比
-  const getExpPercentage = (): number => {
+  const getExpPercentage = useCallback((): number => {
     const exp = currentPersona?.exp || 0;
     const level = currentPersona?.level || 1;
-    // 公式: 50 + (level - 1) * 25
     const expNeeded = 50 + (level - 1) * 25;
     return Math.min((exp / expNeeded) * 100, 100);
-  };
+  }, [currentPersona?.exp, currentPersona?.level]);
+
+  // 计算经验值文本
+  const expText = useMemo(() => {
+    const exp = currentPersona?.exp || 0;
+    const level = currentPersona?.level || 1;
+    const expNeeded = 50 + (level - 1) * 25;
+    return `${exp} / ${expNeeded} 经验`;
+  }, [currentPersona?.exp, currentPersona?.level]);
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* 侧边栏 */}
+      {/* ========== 侧边栏 ========== */}
       <motion.aside 
         variants={sidebarVariants}
         animate={collapsed ? "collapsed" : "expanded"}
@@ -450,7 +482,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
           ))}
         </nav>
 
-        {/* 底部区域 */}
+        {/* ========== 底部区域 ========== */}
         <div className="border-t border-gray-100 dark:border-gray-800 p-3 space-y-2">
           {/* 好友按钮组 */}
           <div className="flex items-center gap-2 px-1">
@@ -555,7 +587,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
             )}
           </motion.button>
 
-          {/* 角色切换区域 */}
+          {/* ✅ 角色切换区域（侧边栏底部 - 唯一入口） */}
           <div className="relative" ref={personaMenuRef}>
             <motion.button
               onClick={() => setShowPersonaMenu(!showPersonaMenu)}
@@ -580,16 +612,13 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                       {currentPersona?.displayName || currentPersona?.name || '选择角色'}
                     </p>
-                    {/* 🆕 等级徽章 */}
                     <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
                       Lv.{currentPersona?.level || 1}
                     </span>
                   </div>
-                  {/* 🆕 头衔 */}
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
                     {currentPersona?.title || '🌱 初入万物'}
                   </p>
-                  {/* 🆕 经验条 */}
                   <div className="mt-1">
                     <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                       <motion.div 
@@ -601,7 +630,7 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
                     </div>
                   </div>
                   <p className="text-[8px] text-gray-400 dark:text-gray-500 mt-0.5">
-                    {currentPersona?.exp || 0} / {50 + ((currentPersona?.level || 1) - 1) * 25} 经验
+                    {expText}
                   </p>
                 </div>
               )}
@@ -725,53 +754,30 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
         </div>
       </motion.aside>
 
-      {/* 主内容区 */}
+      {/* ========== 主内容区 ========== */}
       <main className="flex-1 overflow-hidden flex flex-col">
-        {/* 顶部栏 */}
+        {/* ========== 顶部栏 ========== */}
         <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+          {/* 左侧 - 页面标题 */}
           <div className="flex items-center gap-3">
             <motion.div 
               className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30 flex items-center justify-center text-lg"
               whileHover={{ scale: 1.05, rotate: 5 }}
               transition={{ type: "spring", stiffness: 400 }}
             >
-              {(() => {
-                const path = location.pathname;
-                if (path === '/chat' || path.startsWith('/chat?')) return '💬';
-                if (path === '/feed') return '📰';
-                if (path === '/home') return '🏠';
-                if (path === '/persona') return '🎭';
-                if (path === '/shop') return '🛒';
-                if (path === '/inventory') return '🎒';
-                if (path === '/search') return '🔍';
-                if (path === '/settings') return '⚙️';
-                if (path === '/changelog') return '📋';
-                if (path === '/wallet') return '💎';
-                if (path === '/novel') return '📚';
-                if (path === '/author/dashboard') return '✍️';
-                return '✨';
-              })()}
+              {pageIcon}
             </motion.div>
             <div>
               <h1 className="text-lg font-semibold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-200 dark:to-gray-400 bg-clip-text text-transparent">
-                {getPageTitle()}
+                {pageTitle}
               </h1>
               <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                {location.pathname === '/chat' ? '与你的角色们畅聊' : 
-                 location.pathname === '/feed' ? '看看大家都在聊什么' :
-                 location.pathname === '/home' ? '欢迎回来' :
-                 location.pathname === '/persona' ? '管理你的所有角色' : 
-                 location.pathname === '/shop' ? '装扮你的角色' : 
-                 location.pathname === '/search' ? '搜索角色、群聊或用户' : 
-                 location.pathname === '/wallet' ? '充值钻石，查看记录' :
-                 location.pathname === '/novel' ? '阅读、创作、分享你的故事' :
-                 location.pathname === '/author/dashboard' ? '管理你的作品' :
-                 '✨ 享受角色扮演的乐趣'}
+                {pageDescription}
               </p>
             </div>
           </div>
           
-          {/* 右侧状态 */}
+          {/* ✅ 右侧 - 只保留必要按钮（无角色信息） */}
           <div className="flex items-center gap-2">
             {/* 墨香阁快捷入口 */}
             <motion.button
@@ -805,47 +811,16 @@ const DesktopLayoutContent: React.FC<Props> = ({ children }) => {
             
             {/* 钻石余额 */}
             <DiamondBalance size="sm" />
-
-            {/* 🆕 顶部栏角色切换按钮 */}
-            <div className="relative" ref={personaMenuRef}>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setShowPersonaMenu(!showPersonaMenu)}
-                className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-              >
-                <AvatarFrame
-                  avatarUrl={currentPersona?.avatar || ''}
-                  frameName={frameName}
-                  size="sm"
-                />
-                <div className="hidden lg:block text-left">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {currentPersona?.displayName || currentPersona?.name || '选择角色'}
-                    </p>
-                    {/* 🆕 顶部栏等级徽章 */}
-                    <span className="text-[8px] px-1 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold">
-                      Lv.{currentPersona?.level || 1}
-                    </span>
-                  </div>
-                  {/* 🆕 顶部栏头衔 */}
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                    {currentPersona?.title || '🌱 初入万物'}
-                  </p>
-                </div>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPersonaMenu ? 'rotate-180' : ''}`} />
-              </motion.button>
-            </div>
           </div>
         </div>
         
+        {/* 内容区域 */}
         <div className="flex-1 overflow-hidden">
           {children}
         </div>
       </main>
 
-      {/* 好友相关弹窗 */}
+      {/* ========== 好友相关弹窗 ========== */}
       <AddFriendModal 
         isOpen={showAddFriendModal}
         onClose={() => setShowAddFriendModal(false)}

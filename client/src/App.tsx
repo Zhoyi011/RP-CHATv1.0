@@ -7,6 +7,7 @@ import { AFKProvider } from './contexts/AFKContext';
 import { FriendProvider } from './contexts/FriendContext';
 import { AFKScreen } from './components/common/AFKScreen';
 import toast, { Toaster } from 'react-hot-toast';
+import { AppDataProvider } from './contexts/AppDataContext';
 
 // ============================================================
 // ✅ 公开页面（直接导入）
@@ -133,9 +134,9 @@ const useMaintenanceCheck = () => {
 
   useEffect(() => {
     checkMaintenance();
-    if (isTianyiGe) return; // ✅ 天仪阁不轮询
+    if (isTianyiGe) return;
     
-    const interval = setInterval(checkMaintenance, 30000); // ✅ 从 10s 改为 30s
+    const interval = setInterval(checkMaintenance, 30000);
     const handleMaintenanceToggle = () => checkMaintenance();
     window.addEventListener('maintenanceToggled', handleMaintenanceToggle);
     return () => {
@@ -152,7 +153,7 @@ const useMaintenanceCheck = () => {
 // ============================================================
 const ProtectedRoute: React.FC<{ 
   children: React.ReactNode;
-  skipExtra?: boolean;  // ✅ 新增：跳过额外请求
+  skipExtra?: boolean;
 }> = ({ children, skipExtra = false }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
@@ -175,7 +176,6 @@ const ProtectedRoute: React.FC<{
           return;
         }
 
-        // ✅ 最少认证请求（不加载额外数据）
         const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -364,9 +364,18 @@ function AppContent() {
         <Route path="/terms" element={<TermsOfService />} />
         
         {/* ==========================================================
-        墨香阁小说 - 公开首页
+        ✅ 墨香阁小说 - 公开访问（不需要登录）
         ========================================================== */}
         <Route path="/novel" element={isMobile ? <NovelMobileHome /> : <NovelHome />} />
+        
+        {/* ==========================================================
+        ✅ 天仪阁 - 公开访问（不需要登录）
+        ========================================================== */}
+        <Route path="/tianyige" element={
+          <Suspense fallback={<LazyLoadingFallback />}>
+            <TianyiGe />
+          </Suspense>
+        } />
         
         {/* ==========================================================
         墨香阁 - 需要登录的页面
@@ -419,7 +428,7 @@ function AppContent() {
           </ProtectedRoute>
         } />
         
-        <Route path="/persona/:personaId" element={
+        <Route path="/novel/author/:personaId" element={
           <ProtectedRoute>
             <UserProfile />
           </ProtectedRoute>
@@ -542,17 +551,6 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
-        {/* ==========================================================
-        ✅ 天仪阁 - 懒加载 + 跳过额外请求
-        ========================================================== */}
-        <Route path="/tianyige" element={
-          <ProtectedRoute skipExtra={true}>
-            <Suspense fallback={<LazyLoadingFallback />}>
-              <TianyiGe />
-            </Suspense>
-          </ProtectedRoute>
-        } />
-
         {/* 404 重定向 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -567,11 +565,13 @@ function App() {
   return (
     <ThemeProvider>
       <AFKProvider>
-        <FriendProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </FriendProvider>
+        <AppDataProvider>     
+          <FriendProvider>    
+            <Router>
+              <AppContent />
+            </Router>
+          </FriendProvider>
+        </AppDataProvider>
       </AFKProvider>
     </ThemeProvider>
   );

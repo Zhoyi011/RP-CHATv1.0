@@ -1,19 +1,12 @@
 // client/src/components/wallet/TransactionHistory.tsx
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, ArrowUp, ArrowDown, Gift, ShoppingBag, Coins, Calendar, Send, Heart } from 'lucide-react';
-import { getTransactionHistory } from '../../services/transactionApi';
+import { Loader2, Gift, ShoppingBag, Coins, Calendar, Send, Heart } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-interface Transaction {
-  _id: string;
-  type: string;
-  amount: number;
-  diamondType: 'paid' | 'free';
-  description: string;
-  relatedName: string;
-  balanceAfter: number;
-  createdAt: string;
+interface TransactionHistoryProps {
+  transactions?: any[];
+  loading?: boolean;
 }
 
 const typeConfig: Record<string, { icon: React.ReactNode; label: string; color: string; bg: string }> = {
@@ -60,14 +53,13 @@ const typeConfig: Record<string, { icon: React.ReactNode; label: string; color: 
     bg: 'bg-orange-100 dark:bg-orange-900/30'
   },
   refund: {
-    icon: <ArrowUp className="w-4 h-4" />,
+    icon: <Gift className="w-4 h-4" />,
     label: '退款',
     color: 'text-yellow-500',
     bg: 'bg-yellow-100 dark:bg-yellow-900/30'
   }
 };
 
-// 🔥 修改：显示完整时间
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   const year = date.getFullYear();
@@ -80,29 +72,12 @@ const formatDate = (dateStr: string) => {
   return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 };
 
-export const TransactionHistory: React.FC = () => {
+export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ 
+  transactions = [], 
+  loading = false 
+}) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
-
-  useEffect(() => {
-    loadTransactions();
-  }, []);
-
-  const loadTransactions = async () => {
-    setLoading(true);
-    try {
-      const res = await getTransactionHistory(50);
-      setTransactions(res.transactions);
-      setStats(res.stats);
-    } catch (error) {
-      console.error('加载交易记录失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -124,7 +99,7 @@ export const TransactionHistory: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {transactions.map((tx, index) => {
+      {transactions.map((tx: any, index: number) => {
         const config = typeConfig[tx.type] || {
           icon: <Coins className="w-4 h-4" />,
           label: '交易',
@@ -170,3 +145,6 @@ export const TransactionHistory: React.FC = () => {
     </div>
   );
 };
+
+// 🔥 添加默认导出
+export default TransactionHistory;

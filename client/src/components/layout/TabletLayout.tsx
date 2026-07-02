@@ -1,10 +1,11 @@
 // client/src/components/layout/TabletLayout.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { auth } from '../../firebase/config';
 import { authApi, type User, type Persona } from '../../services/api';
 import { roomApi } from '../../services/api';
+import { useAppData } from '../../contexts/AppDataContext';
 import DiamondBalance from '../diamond/DiamondBalance';
 import { ConnectionStatus } from '../common/ConnectionStatus';
 import PersonaSwitchPanel from '../common/PersonaSwitchPanel';
@@ -19,7 +20,7 @@ import PrivateChat from '../chat/PrivateChat';
 import { 
   Users, UserPlus, Mail, LogOut, Settings, User as UserIcon, 
   Home, MessageCircle, Newspaper, Search, ShoppingBag, Wallet,
-  Menu, X, Lock, BookOpen, ChevronDown, ChevronRight
+  Menu, Lock, BookOpen, ChevronDown, ChevronRight
 } from 'lucide-react';
 
 interface Props {
@@ -31,16 +32,6 @@ interface NavItem {
   path: string;
   icon: React.ReactNode;
   badge?: number;
-}
-
-interface CurrentPersona {
-  _id: string;
-  name: string;
-  displayName?: string;
-  avatar?: string;
-  sameNameNumber?: number;
-  avatarFrame?: string;
-  equipped?: { avatarFrame?: string };
 }
 
 // 辅助函数
@@ -78,22 +69,32 @@ const getExpPercentage = (persona: Persona | null): number => {
   return Math.min((exp / expNeeded) * 100, 100);
 };
 
+// 🆕 计算经验值文本
+const getExpText = (persona: Persona | null): string => {
+  const exp = persona?.exp || 0;
+  const level = persona?.level || 1;
+  const expNeeded = 50 + (level - 1) * 25;
+  return `${exp}/${expNeeded}`;
+};
+
 const TabletLayoutContent: React.FC<Props> = ({ children }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { enterAFKManually } = useAFK();
+  const { unreadCount: friendUnreadCount } = useFriend();
+  
+  // 🔥 从全局获取未读总数（自动轮询）
+  const { unreadTotal } = useAppData();
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userData, setUserData] = useState<User | null>(null);
   const [currentPersona, setCurrentPersona] = useState<Persona | null>(null);
   const [personasList, setPersonasList] = useState<Persona[]>([]);
   const [myPersonas, setMyPersonas] = useState<Persona[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const personaMenuRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-  const location = useLocation();
   const user = auth.currentUser;
-  
-  const { enterAFKManually } = useAFK();
-  const { unreadCount: friendUnreadCount } = useFriend();
 
   // 好友相关状态
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
@@ -101,7 +102,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [selectedPrivateChat, setSelectedPrivateChat] = useState<{ id: string; name: string; avatar?: string; number?: number } | null>(null);
 
-  // 获取用户所有角色（用于申请添加好友时选择自己的角色）
+  // 获取用户所有角色
   useEffect(() => {
     const fetchMyPersonas = async () => {
       const token = localStorage.getItem('token');
@@ -121,7 +122,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
     fetchMyPersonas();
   }, []);
 
-  // 获取所有已批准角色（用于角色切换面板）
+  // 获取所有已批准角色
   useEffect(() => {
     const fetchPersonas = async () => {
       const token = localStorage.getItem('token');
@@ -141,13 +142,13 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
     fetchPersonas();
   }, []);
 
-  // 导航项（包含墨香阁）
-  const navItems: NavItem[] = [
+  // 导航项（使用 useMemo 缓存，依赖 unreadTotal）
+  const navItems: NavItem[] = useMemo(() => [
     {
       name: '聊天',
       path: '/chat',
       icon: <MessageCircle className="w-5 h-5" />,
-      badge: unreadCount,
+      badge: unreadTotal,
     },
     {
       name: '动态',
@@ -175,6 +176,15 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
       icon: <BookOpen className="w-5 h-5" />,
     },
     {
+      name: '天仪阁',
+      path: '/tianyige',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+    },
+    {
       name: '搜索',
       path: '/search',
       icon: <Search className="w-5 h-5" />,
@@ -184,7 +194,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
       path: '/wallet',
       icon: <Wallet className="w-5 h-5" />,
     },
-  ];
+  ], [unreadTotal]);
 
   // 加载用户数据
   useEffect(() => {
@@ -234,7 +244,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
   }, [refreshCurrentPersona]);
 
   // 切换角色
-  const handleSwitchPersona = async (persona: Persona) => {
+  const handleSwitchPersona = useCallback(async (persona: Persona) => {
     try {
       await roomApi.setActivePersona(persona._id);
       setCurrentPersona(persona);
@@ -246,30 +256,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
     } catch (error) {
       toast.error('切换失败');
     }
-  };
-
-  // 获取未读消息总数
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      if (!user) return;
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      try {
-        const response = await fetch('https://rp-chatv1-0.onrender.com/api/room/unread-total', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(data.total || 0);
-        }
-      } catch (error) {
-        console.error('获取未读消息失败:', error);
-      }
-    };
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [user]);
+  }, [refreshCurrentPersona]);
 
   // 点击外部关闭侧边栏和角色面板
   useEffect(() => {
@@ -290,7 +277,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
     setSidebarOpen(false);
   }, [navigate]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await auth.signOut();
       localStorage.removeItem('token');
@@ -299,19 +286,20 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
     } catch (error) {
       console.error('登出失败:', error);
     }
-  };
+  }, [navigate]);
 
-  const isActive = (path: string) => {
+  const isActive = useCallback((path: string) => {
     if (path === '/chat') return location.pathname === '/chat' || location.pathname.startsWith('/chat?');
     if (path === '/novel') return location.pathname === '/novel' || location.pathname.startsWith('/novel/');
+    if (path === '/tianyige') return location.pathname === '/tianyige';
     return location.pathname === path;
-  };
+  }, [location.pathname]);
 
   const frameName = getFrameNameFromUrl(currentPersona?.avatarFrame || currentPersona?.equipped?.avatarFrame);
   const displayName = currentPersona?.displayName || currentPersona?.name || '选择角色';
 
-  // 页面标题映射（包含墨香阁）
-  const getPageTitle = () => {
+  // 页面标题映射（使用 useMemo 缓存）
+  const pageTitle = useMemo(() => {
     const path = location.pathname;
     if (path === '/chat' || path.startsWith('/chat?')) return '聊天室';
     if (path === '/feed') return '动态广场';
@@ -326,14 +314,16 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
     if (path === '/novel') return '墨香阁';
     if (path === '/author/dashboard') return '作者控制台';
     return '万物阁';
-  };
+  }, [location.pathname]);
+
+  // 计算经验值文本
+  const expText = useMemo(() => getExpText(currentPersona), [currentPersona]);
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex flex-col overflow-hidden">
       {/* 顶部导航栏（固定） */}
       <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm safe-top">
         <div className="flex items-center gap-3">
-          {/* 菜单按钮 */}
           <motion.button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="menu-trigger p-2 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
@@ -342,7 +332,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <Menu className="w-5 h-5" />
           </motion.button>
           
-          {/* Logo */}
           <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
           <h1 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent hidden sm:inline">
             万物阁
@@ -351,7 +340,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 墨香阁快捷入口 */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => navigate('/novel')}
@@ -366,7 +354,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <span className="text-sm font-medium hidden md:inline">墨香阁</span>
           </motion.button>
 
-          {/* 好友列表按钮 */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowFriendList(true)}
@@ -376,7 +363,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <Users className="w-4 h-4" />
           </motion.button>
 
-          {/* 添加好友按钮 */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowAddFriendModal(true)}
@@ -386,7 +372,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <UserPlus className="w-4 h-4" />
           </motion.button>
 
-          {/* 好友申请按钮 */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowFriendRequests(true)}
@@ -404,7 +389,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             )}
           </motion.button>
 
-          {/* 隐私保护锁 */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={enterAFKManually}
@@ -414,13 +398,10 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <Lock className="w-4 h-4" />
           </motion.button>
 
-          {/* 连接状态 */}
           <ConnectionStatus showText={false} />
           
-          {/* 钻石余额 */}
           <DiamondBalance size="sm" />
           
-          {/* 搜索按钮 */}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => navigate('/search')}
@@ -429,7 +410,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
             <Search className="w-5 h-5" />
           </motion.button>
 
-          {/* 🆕 角色切换区域（顶部栏右侧）- 添加等级显示 */}
+          {/* 🆕 角色切换区域（顶部栏右侧） */}
           <div className="relative" ref={personaMenuRef}>
             <motion.button
               whileTap={{ scale: 0.95 }}
@@ -446,12 +427,10 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                   <span className="text-sm text-gray-700 dark:text-gray-300">
                     {displayName}
                   </span>
-                  {/* 🆕 等级徽章 */}
                   <span className="text-[8px] px-1 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold">
                     Lv.{currentPersona?.level || 1}
                   </span>
                 </div>
-                {/* 🆕 头衔 */}
                 <p className="text-[10px] text-gray-400 dark:text-gray-500">
                   {currentPersona?.title || '🌱 初入万物'}
                 </p>
@@ -497,7 +476,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
               exit="exit"
               className="fixed left-0 top-0 bottom-0 w-80 bg-white dark:bg-gray-900 shadow-2xl z-30 flex flex-col safe-top"
             >
-              {/* 侧边栏头部 */}
               <div className="p-6 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20">
                 <div className="flex items-center gap-3">
                   <img src="/favicon.svg" alt="Logo" className="w-12 h-12" />
@@ -508,7 +486,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 </div>
               </div>
 
-              {/* 🆕 当前角色信息 - 添加等级/头衔/经验条 */}
+              {/* 当前角色信息 */}
               <div className="p-4 mx-4 mt-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-xl">
                 <div className="flex items-center gap-3">
                   <AvatarFrame
@@ -517,21 +495,17 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                     size="md"
                   />
                   <div className="flex-1 min-w-0">
-                    {/* 名称 + 等级徽章 */}
                     <div className="flex items-center gap-1.5">
                       <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">
                         {displayName}
                       </p>
-                      {/* 🆕 等级徽章 */}
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold flex-shrink-0">
                         Lv.{currentPersona?.level || 1}
                       </span>
                     </div>
-                    {/* 🆕 头衔 */}
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {currentPersona?.title || '🌱 初入万物'}
                     </p>
-                    {/* 🆕 经验条 */}
                     <div className="mt-1.5 w-full">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -543,7 +517,7 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                           />
                         </div>
                         <span className="text-[9px] text-gray-400 dark:text-gray-500 font-mono flex-shrink-0">
-                          {currentPersona?.exp || 0}/{50 + ((currentPersona?.level || 1) - 1) * 25}
+                          {expText}
                         </span>
                       </div>
                     </div>
@@ -585,10 +559,8 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                   </motion.button>
                 ))}
 
-                {/* 分割线 */}
                 <div className="border-t border-gray-100 dark:border-gray-800 my-2"></div>
 
-                {/* 好友相关菜单项 */}
                 <motion.button
                   custom={navItems.length}
                   variants={menuItemVariants}
@@ -647,7 +619,6 @@ const TabletLayoutContent: React.FC<Props> = ({ children }) => {
                 </motion.button>
               </nav>
 
-              {/* 底部区域 */}
               <div className="p-4 border-t border-gray-100 dark:border-gray-800 space-y-2 safe-bottom">
                 <motion.button
                   whileTap={{ scale: 0.98 }}

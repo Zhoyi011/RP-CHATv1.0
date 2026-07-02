@@ -26,6 +26,17 @@ const isAuthPage = (): boolean => {
   return path === '/' || path === '/login' || path === '/register' || path === '/invite';
 };
 
+// 🆕 判断是否在公开页面（访客可访问）
+const isPublicPage = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  // 墨香阁小说页面
+  if (path.startsWith('/novel')) return true;
+  // 天仪阁 3D 宇宙
+  if (path.startsWith('/tianyige')) return true;
+  return false;
+};
+
 // 处理队列中的请求
 const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue.forEach(prom => {
@@ -100,6 +111,12 @@ async function request<T>(
     // 处理 401 未授权错误
     if (response.status === 401) {
       console.warn('⚠️ token 无效或已过期', endpoint);
+      
+      // 🆕 如果在公开页面（墨香阁/天仪阁），不跳转登录，直接抛出错误
+      if (isPublicPage()) {
+        console.log('🔓 公开页面，401 不跳转登录');
+        throw new Error('请登录后操作');
+      }
       
       // 如果是刷新 token 接口本身失败，不再重试
       const isRefreshRequest = endpoint.includes('/auth/refresh');

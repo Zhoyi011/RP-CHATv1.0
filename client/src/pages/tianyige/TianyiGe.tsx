@@ -9,8 +9,10 @@ import { SearchBar } from "./components/SearchBar";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { planets } from "./data/planets";
 import * as THREE from "three";
-import { X, Info, Loader2 } from "lucide-react";
+import { X, Info, Loader2, ArrowLeft } from "lucide-react";
 import { setGlobalAFKDisabled } from "../../contexts/AFKContext";
+import { auth } from "../../firebase/config";
+import { useNavigate } from "react-router-dom";
 import "./TianyiGe.css";
 
 // ============================================================
@@ -33,9 +35,9 @@ const LoadingOverlay: React.FC<{ loading: boolean }> = ({ loading }) => {
 const StarField: React.FC<{ quality: "low" | "medium" | "high" }> = ({ quality }) => {
   const count = useMemo(() => {
     switch (quality) {
-      case "low": return 600;     // ✅ 超低
-      case "medium": return 1500; // ✅ 中等
-      default: return 3000;       // ✅ 高画质也不超过 3000
+      case "low": return 600;
+      case "medium": return 1500;
+      default: return 3000;
     }
   }, [quality]);
 
@@ -63,7 +65,6 @@ const StarField: React.FC<{ quality: "low" | "medium" | "high" }> = ({ quality }
     return [coords, cols];
   }, [count]);
 
-  // ✅ 粒子资源释放
   useEffect(() => {
     return () => {
       if (pointsRef.current) {
@@ -94,7 +95,7 @@ const StarField: React.FC<{ quality: "low" | "medium" | "high" }> = ({ quality }
         <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.4}  // ✅ 稍微缩小
+        size={0.4}
         sizeAttenuation
         vertexColors
         transparent
@@ -135,15 +136,38 @@ const MilkyWayBackground: React.FC = () => {
 // 主组件
 // ============================================================
 export const TianyiGe: React.FC = () => {
-  const [quality, setQuality] = useState<"low" | "medium" | "high">("low"); // ✅ 默认低画质
+  const navigate = useNavigate();
+  const [quality, setQuality] = useState<"low" | "medium" | "high">("low");
   const [showOrbit, setShowOrbit] = useState<boolean>(true);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [resetTrigger, setResetTrigger] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   const globalPositionsRef = useRef<Record<string, THREE.Vector3>>({});
   const mobileCheckRef = useRef<boolean>(false);
+
+  // ============================================================
+  // 检查登录状态
+  // ============================================================
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setIsLoggedIn(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ============================================================
+  // 返回按钮处理
+  // ============================================================
+  const handleBack = () => {
+    if (isLoggedIn) {
+      navigate('/chat');
+    } else {
+      navigate('/login');
+    }
+  };
 
   // ============================================================
   // 天仪阁禁用 AFK
@@ -212,13 +236,13 @@ export const TianyiGe: React.FC = () => {
   switch (quality) {
     case "low":
       return {
-        ambientIntensity: 0.08,      // ✅ 降低环境光（让太阳光主导）
-        sunIntensity: 50.0,          // ✅ 恢复太阳亮度
+        ambientIntensity: 0.08,
+        sunIntensity: 50.0,
         sunCastShadow: false,
-        fillLightIntensity: 0.3,     // ✅ 减少填充光
+        fillLightIntensity: 0.3,
         backLightIntensity: 0.2,
         coolFillIntensity: 0.1,
-        exposure: 1.2,               // ✅ 稍微增加曝光
+        exposure: 1.2,
       };
     case "medium":
       return {
@@ -249,6 +273,16 @@ export const TianyiGe: React.FC = () => {
 
       <header className="tianyige-header">
         <div className="header-left">
+          {/* 🔥 返回按钮 */}
+          <button 
+            className="back-to-chat-btn"
+            onClick={handleBack}
+            title={isLoggedIn ? "返回聊天" : "返回登录"}
+          >
+            <ArrowLeft size={18} />
+            <span>{isLoggedIn ? "返回聊天" : "返回登录"}</span>
+          </button>
+          
           <div className="logo">
             <div className="logo-dot" />
             <h1>天仪阁</h1>
@@ -266,8 +300,8 @@ export const TianyiGe: React.FC = () => {
           dpr={dpr}
           camera={{ position: [0, 28, 55], fov: 50 }}
           gl={{
-            antialias: quality === "high",  // ✅ 只有高画质才开抗锯齿
-            powerPreference: "low-power",   // ✅ 低功耗模式
+            antialias: quality === "high",
+            powerPreference: "low-power",
             toneMapping: THREE.ReinhardToneMapping,
             toneMappingExposure: lightingConfig.exposure,
             failIfMajorPerformanceCaveat: false,
